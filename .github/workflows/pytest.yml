@@ -1,0 +1,32 @@
+name: Python Testing with Pytest
+
+# Triggers the workflow on push or pull request events
+# for the main branch
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+# Defines the jobs that will run
+jobs:
+  build:
+    # The operating system to run the job on
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest
+    - name: Run tests with pytest
+      run: |
+        pytest tests/ -v
