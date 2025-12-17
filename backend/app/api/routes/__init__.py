@@ -4,10 +4,10 @@ API Route Aggregation Module
 
 from fastapi import APIRouter
 
-from .chat import router as chat_router
+from .resume import router as api_router
 
 router = APIRouter()
 
 # Register sub-routes
-router.include_router(chat_router, prefix="/chat", tags=["Chat"])
-
+# TODO: Route prefix and tags will be updated by RA-12
+router.include_router(api_router, prefix="/resume", tags=["Resume"])

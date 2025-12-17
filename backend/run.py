@@ -1,5 +1,5 @@
 """
-开发服务器启动脚本
+Development server startup script
 """
 
 import uvicorn
@@ -9,6 +9,5 @@ if __name__ == "__main__":
         "app.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,  # 开发模式热重载
+        reload=True,  # Hot reload for development
     )
-

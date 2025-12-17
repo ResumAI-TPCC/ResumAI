@@ -5,7 +5,7 @@ Defines the interface that all LLM Providers must implement
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import AsyncIterator, List, Optional
+from typing import List, Optional
 
 
 @dataclass
@@ -15,15 +15,15 @@ class LLMResponse:
     content: str
     model: str
     usage: Optional[dict] = None
-    finish_reason: Optional[str] = None
 
 
 @dataclass
-class Message:
-    """Message data class"""
+class MatchScoreResult:
+    """Match score result data class"""
 
-    role: str  # "system", "user", "assistant"
-    content: str
+    score: float  # 0.0 - 1.0
+    explanation: str
+    suggestions: List[str]
 
 
 class BaseLLMProvider(ABC):
@@ -31,47 +31,64 @@ class BaseLLMProvider(ABC):
     LLM Provider Abstract Base Class
 
     All LLM Provider implementations must inherit from this class and implement:
-    - chat: Synchronous chat completion
-    - chat_stream: Streaming chat completion
+    - optimize: Resume rewriting and optimization
+    - analyze: Analyze resume and generate suggestions
+    - match: Semantic comparison for match scoring
     """
 
     @abstractmethod
-    async def chat(
+    async def optimize(
         self,
-        messages: List[Message],
-        temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        resume_content: str,
+        job_description: str,
+        instructions: Optional[str] = None,
     ) -> LLMResponse:
         """
-        Send chat request and get complete response
+        Perform resume rewriting and optimization
 
         Args:
-            messages: List of messages
-            temperature: Temperature parameter, controls randomness
-            max_tokens: Maximum number of tokens to generate
+            resume_content: Original resume content
+            job_description: Target job description
+            instructions: Optional user instructions for optimization
 
         Returns:
-            LLMResponse: Contains response content and metadata
+            LLMResponse: Optimized resume content
         """
         pass
 
     @abstractmethod
-    async def chat_stream(
+    async def analyze(
         self,
-        messages: List[Message],
-        temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
-    ) -> AsyncIterator[str]:
+        resume_content: str,
+        job_description: str,
+    ) -> LLMResponse:
         """
-        Send chat request and return response as a stream
+        Analyze resume and generate improvement suggestions
 
         Args:
-            messages: List of messages
-            temperature: Temperature parameter
-            max_tokens: Maximum number of tokens to generate
+            resume_content: Resume content to analyze
+            job_description: Target job description
 
-        Yields:
-            str: Response text chunks
+        Returns:
+            LLMResponse: Analysis and suggestions
+        """
+        pass
+
+    @abstractmethod
+    async def match(
+        self,
+        resume_content: str,
+        job_description: str,
+    ) -> MatchScoreResult:
+        """
+        Provide semantic comparison for match scoring
+
+        Args:
+            resume_content: Resume content
+            job_description: Job description to match against
+
+        Returns:
+            MatchScoreResult: Score and detailed analysis
         """
         pass
 
@@ -80,4 +97,3 @@ class BaseLLMProvider(ABC):
     def provider_name(self) -> str:
         """Return provider name"""
         pass
-

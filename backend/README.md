@@ -19,9 +19,8 @@ backend/
 │   │
 │   ├── api/                    # API layer
 │   │   ├── __init__.py
-│   │   └── routes/             # Route modules
-│   │       ├── __init__.py     # Route aggregation
-│   │       └── chat.py         # Chat API
+│   │   └── routes/             # Route modules (implemented by RA-12)
+│   │       └── __init__.py
 │   │
 │   ├── core/                   # Core configuration
 │   │   ├── __init__.py
@@ -30,9 +29,8 @@ backend/
 │   ├── models/                 # Database models (reserved)
 │   │   └── __init__.py
 │   │
-│   ├── schemas/                # Pydantic schemas
-│   │   ├── __init__.py
-│   │   └── chat.py             # Chat request/response schemas
+│   ├── schemas/                # Pydantic schemas (implemented by RA-12)
+│   │   └── __init__.py
 │   │
 │   └── services/               # Business service layer
 │       ├── __init__.py
@@ -84,11 +82,12 @@ Server runs at http://localhost:8000 by default.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/health` | GET | Health check |
-| `/api/v1/chat/completions` | POST | Chat completion |
-| `/api/v1/chat/completions/stream` | POST | Streaming chat completion |
-| `/api/v1/docs` | GET | Swagger API documentation |
-| `/api/v1/redoc` | GET | ReDoc API documentation |
+| `/api/resume` | POST | Upload & parse resume file, initialize session |
+| `/api/resume/match` | POST | Calculate resume-job match score |
+| `/api/resume/optimize` | POST | Optimize and rewrite resume |
+| `/api/resume/analyze` | POST | Analyze resume and generate suggestions |
+
+> **Note**: Business API endpoints will be implemented by RA-12.
 
 ## LLM Provider Architecture
 
@@ -101,13 +100,18 @@ class BaseLLMProvider(ABC):
     """LLM Provider abstract base class"""
 
     @abstractmethod
-    async def chat(self, messages, temperature, max_tokens) -> LLMResponse:
-        """Synchronous chat completion"""
+    async def optimize(self, resume_content, job_description, instructions) -> LLMResponse:
+        """Resume rewriting and optimization"""
         pass
 
     @abstractmethod
-    async def chat_stream(self, messages, temperature, max_tokens) -> AsyncIterator[str]:
-        """Streaming chat completion"""
+    async def analyze(self, resume_content, job_description) -> LLMResponse:
+        """Analyze resume and generate suggestions"""
+        pass
+
+    @abstractmethod
+    async def match(self, resume_content, job_description) -> MatchScoreResult:
+        """Semantic comparison for match scoring"""
         pass
 
     @property

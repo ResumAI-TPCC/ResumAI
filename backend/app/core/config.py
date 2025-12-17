@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # API settings
-    api_prefix: str = "/api/v1"
+    api_prefix: str = "/api"
 
     # LLM Provider settings
     # Specific provider settings will be extended by each implementation
