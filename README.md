@@ -2,75 +2,47 @@
 
 AI-powered resume optimization platform that transforms your resume into a job-aligned professional document.
 
-## Project Structure
+## Frontend (React + Vite)
 
-```
-ResumAI/
-├── frontend/                    # React Frontend (Vite + Tailwind CSS)
-│   ├── src/
-│   │   ├── components/          # UI Components (Skeleton)
-│   │   │   ├── Sidebar.jsx
-│   │   │   ├── FileUpload.jsx
-│   │   │   ├── MatchAnalysis.jsx
-│   │   │   ├── ScoreCard.jsx
-│   │   │   ├── ScoringPrinciples.jsx
-│   │   │   ├── AnalysisReasoning.jsx
-│   │   │   └── ResumePreview.jsx
-│   │   ├── pages/
-│   │   │   └── MatchAnalysisPage.jsx
-│   │   └── utils/
-│   │       ├── api.js
-│   │       ├── storage.js
-│   │       └── filePreview.js
-│   └── package.json
-│
-├── backend/                     # Express Backend
-│   ├── server.js
-│   └── package.json
-│
-└── .github/workflows/           # CI/CD
-    └── ci.yml
-```
+### Tech Stack
 
-## Tech Stack
+* React 19
+* Vite 7
+* React Router DOM 7
 
-### Frontend
-- React 18
-- Vite
-- Tailwind CSS
-
-### Backend
-- Node.js
-- Express
-- Multer (file upload)
-
-## Getting Started
-
-### Frontend
+### Getting Started
 
 ```bash
-cd frontend
+# Install dependencies
 npm install
+
+# Start development server
 npm run dev
+
+# Build for production
+npm run build
 ```
 
-### Backend
+### Project Structure
 
-```bash
-cd backend
-npm install
-npm run start
+```
+src/
+├── components/
+│   └── common/
+│       ├── Layout.jsx    # Main layout wrapper
+│       ├── Navbar.jsx    # Navigation bar
+│       └── Footer.jsx    # Footer component
+├── pages/
+│   ├── Home.jsx          # Landing page with upload
+│   └── Workspace.jsx     # Split-screen editor
+├── App.jsx               # Route configuration
+└── main.jsx              # Entry point
 ```
 
-## Features (TODO)
+### Features
 
-- 📄 Resume upload (PDF, DOCX, TXT)
-- 💼 Job description matching
-- 🤖 AI-powered analysis
-- 📊 Match score & gap analysis
-- 📝 Resume optimization
-- ⬇️ Download optimized resume
-
-## Current Status
-
-**Skeleton Version** - Component placeholders are set up, implementation pending.
+* 📄 Resume upload (PDF, DOCX, TXT)
+* 💼 Optional job description for targeted optimization
+* 🤖 AI-powered chat assistant
+* 📝 Split-screen resume preview and editing
+* 🌙 Dark theme with coral accents
