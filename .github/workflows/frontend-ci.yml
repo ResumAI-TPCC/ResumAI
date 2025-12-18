@@ -5,10 +5,10 @@ name: Frontend CI (Minimal)
 
 # Trigger conditions
 # This workflow runs when a Pull Request
-# is opened or updated targeting "develop"
+# is opened or updated targeting "develop, main"
 on:
   pull_request:
-    branches: [develop]
+    branches: [develop, main]
 
 # Jobs definition
 # Each job runs on a fresh virtual machine
