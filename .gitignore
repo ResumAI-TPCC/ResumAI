@@ -1,124 +1,34 @@
-# ===================
-# Python / Backend
-# ===================
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
 
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[codz]
-*$py.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
+# Build outputs
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+build/
 
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py.cover
-.hypothesis/
-.pytest_cache/
-cover/
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Environments
+# Environment files
 .env
-.envrc
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+.env.local
+.env.*.local
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# Ruff stuff:
-.ruff_cache/
-
-# ===================
-# Node.js / Frontend
-# ===================
+# OS
+.DS_Store
+Thumbs.db
 
 # Logs
-logs
+*.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-# Dependencies
-node_modules
+# Testing
+coverage/
 
-# Build output
-dist
-dist-ssr
-*.local
+# Misc
+*.docx
 
-# ===================
-# Editor / IDE
-# ===================
-
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Cursor
-.cursorignore
-.cursorindexingignore

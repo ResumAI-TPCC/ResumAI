@@ -2,45 +2,75 @@
 
 AI-powered resume optimization platform that transforms your resume into a job-aligned professional document.
 
-## Frontend (React + Vite)
+## Project Structure
 
-### Tech Stack
-- React 19
-- Vite 7
-- React Router DOM 7
+```
+ResumAI/
+├── frontend/                    # React Frontend (Vite + Tailwind CSS)
+│   ├── src/
+│   │   ├── components/          # UI Components (Skeleton)
+│   │   │   ├── Sidebar.jsx
+│   │   │   ├── FileUpload.jsx
+│   │   │   ├── MatchAnalysis.jsx
+│   │   │   ├── ScoreCard.jsx
+│   │   │   ├── ScoringPrinciples.jsx
+│   │   │   ├── AnalysisReasoning.jsx
+│   │   │   └── ResumePreview.jsx
+│   │   ├── pages/
+│   │   │   └── MatchAnalysisPage.jsx
+│   │   └── utils/
+│   │       ├── api.js
+│   │       ├── storage.js
+│   │       └── filePreview.js
+│   └── package.json
+│
+├── backend/                     # Express Backend
+│   ├── server.js
+│   └── package.json
+│
+└── .github/workflows/           # CI/CD
+    └── ci.yml
+```
 
-### Getting Started
+## Tech Stack
+
+### Frontend
+- React 18
+- Vite
+- Tailwind CSS
+
+### Backend
+- Node.js
+- Express
+- Multer (file upload)
+
+## Getting Started
+
+### Frontend
 
 ```bash
-# Install dependencies
+cd frontend
 npm install
-
-# Start development server
 npm run dev
-
-# Build for production
-npm run build
 ```
 
-### Project Structure
+### Backend
 
-```
-src/
-├── components/
-│   └── common/
-│       ├── Layout.jsx    # Main layout wrapper
-│       ├── Navbar.jsx    # Navigation bar
-│       └── Footer.jsx    # Footer component
-├── pages/
-│   ├── Home.jsx          # Landing page with upload
-│   └── Workspace.jsx     # Split-screen editor
-├── App.jsx               # Route configuration
-└── main.jsx              # Entry point
+```bash
+cd backend
+npm install
+npm run start
 ```
 
-### Features
+## Features (TODO)
+
 - 📄 Resume upload (PDF, DOCX, TXT)
-- 💼 Optional job description for targeted optimization
-- 🤖 AI-powered chat assistant
-- 📝 Split-screen resume preview and editing
-- 🌙 Dark theme with coral accents
+- 💼 Job description matching
+- 🤖 AI-powered analysis
+- 📊 Match score & gap analysis
+- 📝 Resume optimization
+- ⬇️ Download optimized resume
+
+## Current Status
+
+**Skeleton Version** - Component placeholders are set up, implementation pending.
