@@ -1,7 +1,7 @@
-import MatchAnalysisPage from './pages/MatchAnalysisPage'
+import ResumeAnalysisPage from './pages/ResumeAnalysisPage'
 
 function App() {
-  return <MatchAnalysisPage />
+  return <ResumeAnalysisPage />
 }
 
 export default App

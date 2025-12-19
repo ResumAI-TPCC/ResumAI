@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 全局样式 */
+/* Global styles */
 * {
   margin: 0;
   padding: 0;
@@ -16,7 +16,7 @@ body {
   background-color: #f8fafc;
 }
 
-/* 滚动条样式 */
+/* Scrollbar styles */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -35,23 +35,23 @@ body {
   background: #9ca3af;
 }
 
-/* 输入框聚焦动画 */
+/* Input focus animation */
 input:focus,
 textarea:focus {
   transition: all 0.2s ease;
 }
 
-/* 按钮悬停效果 */
+/* Button hover effect */
 button {
   transition: all 0.2s ease;
 }
 
-/* 卡片悬停效果 */
+/* Card hover effect */
 .hover-lift:hover {
   transform: translateY(-2px);
 }
 
-/* 渐变动画 */
+/* Gradient animation */
 @keyframes gradient-shift {
   0% {
     background-position: 0% 50%;
@@ -69,7 +69,7 @@ button {
   animation: gradient-shift 3s ease infinite;
 }
 
-/* 淡入动画 */
+/* Fade-in animation */
 @keyframes fade-in {
   from {
     opacity: 0;
