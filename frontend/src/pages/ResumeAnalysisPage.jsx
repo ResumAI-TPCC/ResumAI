@@ -1,5 +1,5 @@
 import Sidebar from '../components/Sidebar'
-import MatchAnalysis from '../components/MatchAnalysis'
+import AnalysisOutput from '../components/AnalysisOutput'
 import ResumePreview from '../components/ResumePreview'
 
 function ResumeAnalysisPage() {
@@ -9,7 +9,7 @@ function ResumeAnalysisPage() {
       <Sidebar />
 
       {/* Center analysis area */}
-      <MatchAnalysis />
+      <AnalysisOutput />
 
       {/* Right preview area */}
       <ResumePreview />
