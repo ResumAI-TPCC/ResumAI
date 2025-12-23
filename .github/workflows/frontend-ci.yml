@@ -36,7 +36,13 @@ jobs:
       - name: Install deps
         working-directory: frontend
         run: npm ci
-      # 4. Run frontend tests
+      # 4. Run frontend lint
+      # Runs ESLint to check frontend code quality and coding standards.
+      # The workflow will fail if any linting errors are found.
+      - name: Run frontend lint
+        working-directory: frontend
+        run: npm run lint
+      # 5. Run frontend tests
       # Executes the "test" script defined in frontend/package.json
       # (currently runs Jest in CI mode)
       # If this step fails, the workflow will fail
