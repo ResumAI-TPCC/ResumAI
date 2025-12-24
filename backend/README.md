@@ -67,7 +67,7 @@ poetry install --no-root # Install dependencies from poetry.lock file
 
 ### 3. Configure Environment Variables
 
-Rename the `env.exmaple` file to `.env file` or run below command
+Rename the `env.exmaple` file to `.env` file or run below command
 ```bash
 cp env.example .env
 ```
