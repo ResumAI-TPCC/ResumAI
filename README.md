@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ## Running Tests Locally
 
 We use **pytest** for our unit and integration testing. Before submitting a Pull Request, please ensure all tests pass on your local machine.
@@ -16,3 +17,7 @@ To run the entire test suite, simply execute the following command from the proj
 
 ```
 pytest
+=======
+# ResumAI
+This is a repository for ResumAI.
+>>>>>>> 17fd9bb09c9eb937b7c272eb93bdf5c3f241dcdc
