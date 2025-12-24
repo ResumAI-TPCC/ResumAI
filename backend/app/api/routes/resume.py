@@ -1,8 +1,5 @@
 """
 Resume API Routes
-
-RA-12: Basic API endpoints implementation
-All endpoints return 200 OK with empty handlers
 """
 
 from fastapi import APIRouter
@@ -13,7 +10,7 @@ router = APIRouter()
 # ============================================================================
 # Endpoint 1: Upload & Parse Resume
 # ============================================================================
-@router.post("")
+@router.post("/")
 async def upload_resume():
     """
     Upload and parse resume file
@@ -21,7 +18,7 @@ async def upload_resume():
     Returns:
         dict: Success message with 200 OK
     """
-    return {"message": "Resume upload endpoint", "status": "ok"}
+    return {"message": "Resume upload endpoint", "status": "healthy"}
 
 
 # ============================================================================
@@ -35,7 +32,7 @@ async def match_resume():
     Returns:
         dict: Success message with 200 OK
     """
-    return {"message": "Resume match endpoint", "status": "ok"}
+    return {"message": "Resume match endpoint", "status": "healthy"}
 
 
 # ============================================================================
@@ -49,7 +46,7 @@ async def optimize_resume():
     Returns:
         dict: Success message with 200 OK
     """
-    return {"message": "Resume optimize endpoint", "status": "ok"}
+    return {"message": "Resume optimize endpoint", "status": "healthy"}
 
 
 # ============================================================================
@@ -63,4 +60,4 @@ async def analyze_resume():
     Returns:
         dict: Success message with 200 OK
     """
-    return {"message": "Resume analyze endpoint", "status": "ok"}
+    return {"message": "Resume analyze endpoint", "status": "healthy"}
