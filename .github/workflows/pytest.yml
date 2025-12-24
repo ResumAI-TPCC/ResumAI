@@ -4,9 +4,9 @@ name: Python Testing with Pytest
 # for the main branch
 on:
   push:
-    branches: [ "main" ]
+    branches: [ develop, main ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ develop, main ]
 
 # Defines the jobs that will run
 jobs:
