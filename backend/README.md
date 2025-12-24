@@ -60,14 +60,15 @@ source venv/bin/activate  # macOS/Linux
 ### 2. Install Dependencies
 
 ```bash
-pip install -r requirements.txt
+pip install poetry
+poetry install --no-root # Install dependencies from poetry.lock file
 ```
 
 ### 3. Configure Environment Variables
 
+Rename the `env.exmaple` file to `.env file` or run below command
 ```bash
 cp env.example .env
-# Edit .env file to configure required parameters
 ```
 
 ### 4. Start Server
@@ -83,60 +84,9 @@ Server runs at http://localhost:8000 by default.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/resume` | POST | Upload & parse resume file, initialize session |
+| `/api/resume/analyze` | POST | Analyze resume and generate suggestions |
 | `/api/resume/match` | POST | Calculate resume-job match score |
 | `/api/resume/optimize` | POST | Optimize and rewrite resume |
-| `/api/resume/analyze` | POST | Analyze resume and generate suggestions |
-
-> **Note**: Business API endpoints will be implemented by RA-12.
-
-## LLM Provider Architecture
-
-The project uses the Abstract Factory pattern for LLM Providers, making it easy to integrate different LLM services.
-
-### Core Interface
-
-```python
-class BaseLLMProvider(ABC):
-    """LLM Provider abstract base class"""
-
-    @abstractmethod
-    async def optimize(self, resume_content, job_description, instructions) -> LLMResponse:
-        """Resume rewriting and optimization"""
-        pass
-
-    @abstractmethod
-    async def analyze(self, resume_content, job_description) -> LLMResponse:
-        """Analyze resume and generate suggestions"""
-        pass
-
-    @abstractmethod
-    async def match(self, resume_content, job_description) -> MatchScoreResult:
-        """Semantic comparison for match scoring"""
-        pass
-
-    @property
-    @abstractmethod
-    def provider_name(self) -> str:
-        """Provider name"""
-        pass
-```
-
-### Adding a New Provider
-
-1. Create a new file under `app/services/llm/`, e.g., `openai_provider.py`
-2. Inherit from `BaseLLMProvider` and implement all abstract methods
-3. Register the provider at application startup:
-
-```python
-from app.services.llm import register_provider
-from app.services.llm.openai_provider import OpenAIProvider
-
-register_provider("openai", OpenAIProvider)
-```
-
-4. Set environment variable `LLM_PROVIDER=openai`
-
-## Development Guide
 
 ### Directory Responsibilities
 
@@ -147,9 +97,3 @@ register_provider("openai", OpenAIProvider)
 | `models/` | Database ORM models (reserved) |
 | `schemas/` | Pydantic request/response schema definitions |
 | `services/` | Business logic, external service integrations |
-
-### Code Standards
-
-- Use Type Hints for type annotations
-- Follow PEP 8 code style
-- Async-first approach (async/await)
