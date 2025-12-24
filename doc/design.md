@@ -45,7 +45,6 @@
 
 [**6. Infrastructure design**](#6-infrastructure-design)  
  [6.1 Flow diagram of system release & deployments](#61-flow-diagram-of-system-release--deployments)  
- [6.2 Infrastructure Component Selection: Cloud Run vs Compute Engine](#62-infrastructure-component-selection-cloud-run-vs-compute-engine)  
 
 ## 1. Introduction and overview
 
@@ -61,7 +60,7 @@ At the MVP stage, ResumAI supports the following user-facing functions:
 
 The product workflow remains intentionally simple to support fast user interaction:
 
-**1. Upload Resume → AI Analyzation → View General Score & Revision Suggestions**
+**1. Upload Resume → AI Analyzation → Revision Suggestions**
 
 **2. Upload Resume → Input JD → AI Analyzation → View Matching Score & Revision Suggestions**
 
@@ -75,7 +74,7 @@ The technical stack include:
 * Infra \-\> Deploy on Google Cloud  
 * CI/CD \-\> Automated deployment using GitHub Actions  
 * Architecture \-\> Monolithic backend  
-* Data Model \-\> Stateless or session-based user data
+* Data Model \-\> session-based user data
 
 ## 2. System architecture
 
@@ -93,6 +92,7 @@ The system architecture follows a client–server model with a monolithic FastAP
 * Add / Edit Job modals  
 * Chat input and message rendering  
 * Converts user actions into API call
+* Resume upload and download
 
 #### 2.2.2 Backend (FastAPI Monolithic Service)
 
@@ -187,26 +187,26 @@ Key Components:
 ### 3.2 How data is used for communication
 
 1. Between Frontend and Backend  
-   Requests:  
-* JSON for JD text, analysis requests, optimization requests  
-* multipart/form-data for resume uploads  
+   - Requests:  
+	 - JSON for JD text, analysis requests, optimization requests  
+	 - multipart/form-data for resume uploads  
   
-  Responses:  
-  JSON containing:  
-*   Analysis results (scores, suggestions)  
-*  Matching results (match score, gap analysis, JD-specific suggestions)  
-*   Optimization results (download URL, file metadata)  
-*   Session ID and status information
+   - Responses:  
+     - JSON containing:  
+       - Analysis results (scores, suggestions)  
+       - Matching results (match score, gap analysis, JD-specific suggestions)  
+       - Optimization results (download URL, file metadata)  
+       - Session ID and status information
 
-2. Between Backend and LLM Provider  
-* JSON payload containing:  
-  * Extracted resume text  
-  * JD text  
-  * Prompt  
-* LLM API returns optimized resume text and suggested score  
-3. Between Backend and Cloud Storage  
-* Temporary file objects written and retrieved via URLs  
-* Files are never publicly accessible and scoped per session
+2. Between Backend and LLM Provider
+   - JSON payload containing:  
+	 - Extracted resume text
+	 - JD text  
+     - Prompt  
+     - LLM API returns optimized resume text and suggested score  
+3. Between Backend and Cloud Storage
+   - Temporary file objects written and retrieved via URLs  
+   - Files are never publicly accessible and scoped per session
 
 ## 4. Interface design
 
@@ -234,21 +234,21 @@ Body (multipart/form-data):
 file: \<resume\_file\>  // PDF, DOCX, DOC, TXT (max 5MB)
 
 Response (201 Created):
+```
+{
 
-	{
-	
-	 "status": "success",
-	
-	 "data": {
-	
-	   "sid": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-	
-	   "timestamp": "2024-01-15T10:30:00Z"
-	
-	 "expireAt":
-	
-	}
+ "status": "success",
 
+ "data": {
+
+   "sid": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+
+   "timestamp": "2024-01-15T10:30:00Z"
+
+ "expireAt":
+
+}
+```
 Error Responses:
 
 * `400 Bad Request`: Invalid file format or size  
@@ -267,49 +267,49 @@ Request:
 Path Parameters:
 
 Body (JSON):
+```
+{
 
-	{
-	
-		sid:
-	
-	}
+	sid:
 
+}
+```
 Response (200 OK):
+```
+{
 
-	{
+ "status": "success",
+
+ "data": {
+
+   "suggestions": \[
+
+	 {
 	
-	 "status": "success",
+	   "category": "content",
 	
-	 "data": {
+	   "priority": "high",
 	
-	   "suggestions": \[
+	   "title": "Add quantifiable metrics",
 	
-	     {
-	    
-	       "category": "content",
-	    
-	       "priority": "high",
-	    
-	       "title": "Add quantifiable metrics",
-	    
-	       "description": "Several achievements lack specific numbers...",
-	    
-	       "example": "Instead of 'Improved performance', write 'Improved performance by 40%'"
-	    
-	     },
+	   "description": "Several achievements lack specific numbers...",
 	
-	{  
-	…  
-	}
-	
-	   \]
+	   "example": "Instead of 'Improved performance', write 'Improved performance by 40%'"
 	
 	 },
-	
-	 "timestamp": "2024-01-15T10:35:00Z"
-	
-	}
 
+{  
+…  
+}
+
+   \]
+
+ },
+
+ "timestamp": "2024-01-15T10:35:00Z"
+
+}
+```
 Error Responses:
 
 * `400 Bad Request`: Invalid focus areas  
@@ -333,125 +333,125 @@ Path Parameters:
 id: resume\_id (UUID)
 
 Body (JSON):
+```
+{
 
-	{
-	
-	 "job\_description": "We are seeking a Senior Software Engineer...",  // Required, 50-10000 chars
-	
-	 "job\_title": "Senior Software Engineer",  // Optional
-	
-	 "company\_name": "Tech Corp"  // Optional
-	
-	}
+ "job\_description": "We are seeking a Senior Software Engineer...",  // Required, 50-10000 chars
 
+ "job\_title": "Senior Software Engineer",  // Optional
+
+ "company\_name": "Tech Corp"  // Optional
+
+}
+```
 Response (200 OK):
+```
+{
 
-	{
+ "status": "success",
+
+ "body": {
+
+	 "job\_info": {
 	
-	 "status": "success",
+	 "job\_title": "Senior Software Engineer",
 	
-	 "body": {
+	 "company\_name": "Tech Corp"
+
+   },
+
+   "overall\_match\_score": 78,
+
+   "match\_breakdown": {
+
+	 "skills\_match": 85,
 	
-	     "job\_info": {
-	    
-	     "job\_title": "Senior Software Engineer",
-	    
-	     "company\_name": "Tech Corp"
+	 "experience\_match": 75,
 	
-	   },
+	 "education\_match": 90,
 	
-	   "overall\_match\_score": 78,
+	 "keywords\_match": 70
+
+   },
+
+   "matched\_skills": \[
+
+	 {
 	
-	   "match\_breakdown": {
+	   "skill": "Python",
 	
-	     "skills\_match": 85,
-	    
-	     "experience\_match": 75,
-	    
-	     "education\_match": 90,
-	    
-	     "keywords\_match": 70
+	   "relevance": "high",
 	
-	   },
+	   "found\_in\_resume": true,
 	
-	   "matched\_skills": \[
-	
-	     {
-	    
-	       "skill": "Python",
-	    
-	       "relevance": "high",
-	    
-	       "found\_in\_resume": true,
-	    
-	       "required\_in\_jd": true
-	    
-	     },
-	    
-	     {
-	    
-	       "skill": "React",
-	    
-	       "relevance": "high",
-	    
-	       "found\_in\_resume": true,
-	    
-	       "required\_in\_jd": true
-	    
-	     }
-	
-	   \],
-	
-	   "missing\_skills": \[
-	
-	     {
-	    
-	       "skill": "Kubernetes",
-	    
-	       "relevance": "high",
-	    
-	       "importance": "high",
-	    
-	       "recommendation": "Consider adding Kubernetes experience"
-	    
-	     }
-	
-	   \],
-	
-	   "suggestions": \[
-	
-	     {
-	    
-	       "category": "skills",
-	    
-	       "priority": "high",
-	    
-	       "title": "Highlight microservices experience",
-	    
-	       "description": "Make microservices more prominent...",
-	    
-	       "specific\_action": "Add 'Designed microservices' as key achievement"
-	    
-	     }
-	
-	   \],
-	
-	   "recommendation": {
-	
-	     "should\_apply": true,
-	    
-	     "confidence": "high",
-	    
-	     "summary": "You are a strong candidate with 78% match..."
-	
-	   }
+	   "required\_in\_jd": true
 	
 	 },
 	
-	 "timestamp": "2024-01-15T10:40:00Z"
+	 {
 	
-	}
+	   "skill": "React",
+	
+	   "relevance": "high",
+	
+	   "found\_in\_resume": true,
+	
+	   "required\_in\_jd": true
+	
+	 }
 
+   \],
+
+   "missing\_skills": \[
+
+	 {
+	
+	   "skill": "Kubernetes",
+	
+	   "relevance": "high",
+	
+	   "importance": "high",
+	
+	   "recommendation": "Consider adding Kubernetes experience"
+	
+	 }
+
+   \],
+
+   "suggestions": \[
+
+	 {
+	
+	   "category": "skills",
+	
+	   "priority": "high",
+	
+	   "title": "Highlight microservices experience",
+	
+	   "description": "Make microservices more prominent...",
+	
+	   "specific\_action": "Add 'Designed microservices' as key achievement"
+	
+	 }
+
+   \],
+
+   "recommendation": {
+
+	 "should\_apply": true,
+	
+	 "confidence": "high",
+	
+	 "summary": "You are a strong candidate with 78% match..."
+
+   }
+
+ },
+
+ "timestamp": "2024-01-15T10:40:00Z"
+
+}
+```
 Error Responses:
 
 * `400 Bad Request`: Missing/invalid job description  
@@ -475,53 +475,53 @@ Path Parameters:
 id: resume\_id (UUID)
 
 Body (JSON):
+```
+{
 
-	{
-	
-	 "job\_description": "We are seeking...",  // Optional (for JD-specific optimization)
-	
-	 "template": "modern"  // Optional: "modern" | "classic" | "minimal" | "creative"
-	
-	}
+ "job\_description": "We are seeking...",  // Optional (for JD-specific optimization)
 
+ "template": "modern"  // Optional: "modern" | "classic" | "minimal" | "creative"
+
+}
+```
 Response (200 OK):
+```
+{
 
-	{
-	
-	 "status": "success",
-	
-	 "data": {
-	
-	   "optimization\_template": "modern",
-	
-	   "changes\_summary": \[
-	
-	     {
-	    
-	       "section": "skills",
-	    
-	       "description": "Rewrote to emphasize relevant keywords"
-	    
-	     },
-	    
-	     {
-	    
-	       "section": "experience",
-	    
-	       "description": "Added quantifiable metrics and keywords"
-	    
-	     }
-	
-	   \],
-	
-	   "encoded\_file": "JVBERi0xLjQKJ…"  (base64)
-	
-	},
-	
-	 "timestamp": "2024-01-15T10:45:00Z"
-	
-	}
+ "status": "success",
 
+ "data": {
+
+   "optimization\_template": "modern",
+
+   "changes\_summary": \[
+
+	 {
+	
+	   "section": "skills",
+	
+	   "description": "Rewrote to emphasize relevant keywords"
+	
+	 },
+	
+	 {
+	
+	   "section": "experience",
+	
+	   "description": "Added quantifiable metrics and keywords"
+	
+	 }
+
+   \],
+
+   "encoded\_file": "JVBERi0xLjQKJ…"  (base64)
+
+},
+
+ "timestamp": "2024-01-15T10:45:00Z"
+
+}
+```
 Error Responses:
 
 * `400 Bad Request`: Invalid parameters  
@@ -564,9 +564,9 @@ Error Responses:
 2. Frontend sends the file via `multipart/form-data` to `POST /api/resume/upload`  
 3. Backend receives and parses the resume file  
 4. Backend stores the original file in Google Cloud Storage  
-5. Backend saves parsed resume data (skills, experience, education) to Database  
-6. Backend returns a structured Resume object with session ID  
-7. Frontend stores session ID and displays "Upload Successful"
+5. Backend parses the resume file to extract relevant information for internal processing  
+6. Backend returns an upload success response with a temporary identifier  
+7. Frontend stores the temporary identifier for the current workflow and displays "Upload Successful"
 
 **Data Stored:**
 
@@ -673,7 +673,6 @@ Error Responses:
 
 **Data Stored:**
 
-* Database: File URL, optimization metadata, JD reference (if applicable), timestamp  
 * Google Cloud Storage: Optimized resume file (PDF)
 
 **User Can:**
@@ -686,9 +685,7 @@ Error Responses:
 
 ### 6.1 Flow diagram of system release & deployments
 
-**要点：**  
-**测试和linting由什么action触发？-\> pull request on develop**  
-**构建和部署由什么action触发？-\> update on develop, main**  
-**部署involve哪些cloud resource？-\> image registry, cloud run**
-
-### 6.2 Infrastructure Component Selection: Cloud Run vs Compute Engine
+**Key Points:**  
+- **What triggers testing and linting?** → Pull requests to the `develop` branch  
+- **What triggers build and deployment?** → Updates to the `develop` and `main` branches  
+- **Which cloud resources are involved in deployment?** → Image registry and Cloud Run
