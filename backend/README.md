@@ -40,7 +40,8 @@ backend/
 │           └── factory.py      # Provider factory
 │
 ├── venv/                       # Python virtual environment
-├── requirements.txt            # Dependencies
+├── poetry.lock                 # Locked dependency list and details
+├── pyproject.toml              # Dependencies
 ├── run.py                      # Development server script
 ├── env.example                 # Environment variables template
 └── README.md
@@ -78,6 +79,15 @@ python run.py
 ```
 
 Server runs at http://localhost:8000 by default.
+
+### 5. Add a new package
+
+If any new package needs to be added to this project, please
+```bash
+poetry add <package-name>
+# this will automatically update poetry.lock and pyproject.toml
+# and also install the package to your environment
+```
 
 ## API Endpoints
 

@@ -3,7 +3,7 @@ name = "backend"
 version = "0.1.0"
 description = ""
 authors = [
-    {name = "JikunLiu101",email = "1015482278@qq.com"}
+    {name = "ResumAI-TPCC",email = "resumaitpcc@gmail.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.10"

@@ -1,7 +1,7 @@
 # Workflow name
 # This name will appear in GitHub Actions
 # and in the PR "Checks" section
-name: Frontend CI (Minimal)
+name: Frontend CI (Test and Lint)
 
 # Trigger conditions
 # This workflow runs when a Pull Request
