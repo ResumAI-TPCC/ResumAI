@@ -3,7 +3,6 @@
 // 只要存在这个文件，ESLint 就不会再读取 .eslintrc.* 旧格式配置
 
 // 引入 ESLint 官方提供的 JavaScript 基础推荐规则
-// 等价于老配置中的 "eslint:recommended"
 import js from '@eslint/js'
 
 // 引入 React 专用的 ESLint 插件（JSX/React 规则）
@@ -29,8 +28,6 @@ export default [
 
     // ------------------------------------------------------------
     // 2) 应用代码（src 等）：React + JSX + Browser 环境
-    //    - 让 ESLint 知道 document/window 等是存在的
-    //    - 启用 react/react-hooks 的推荐规则
     // ------------------------------------------------------------
     {
         files: ['src/**/*.{js,jsx}'],
@@ -47,7 +44,6 @@ export default [
             parserOptions: {
                 ecmaFeatures: { jsx: true },
             },
-            // ✅ Browser 全局变量：document / window / navigator 等
             globals: {
                 ...globals.browser,
             },
@@ -58,24 +54,30 @@ export default [
         },
 
         rules: {
-            // ✅ 真正启用 React / Hooks 推荐规则（之前你只是注册插件，没有启用规则）
             ...react.configs.recommended.rules,
             ...reactHooks.configs.recommended.rules,
-
-            // React 17+ 新 JSX Transform 不需要 import React
             'react/react-in-jsx-scope': 'off',
         },
     },
 
     // ------------------------------------------------------------
     // 3) 测试代码：Jest 环境
-    //    - 让 ESLint 知道 test/expect/describe/it 等是存在的
     // ------------------------------------------------------------
     {
         files: ['**/*.test.{js,jsx}', '**/__tests__/**/*.{js,jsx}'],
         languageOptions: {
             globals: {
                 ...globals.jest,
+            },
+        },
+    },
+
+    // 4) Node.js 脚本 (lint-summary.js 等)
+    {
+        files: ['lint-summary.js'],
+        languageOptions: {
+            globals: {
+                ...globals.node,
             },
         },
     },
