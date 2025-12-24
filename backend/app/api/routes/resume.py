@@ -18,7 +18,7 @@ async def upload_resume():
     Returns:
         dict: Success message with 200 OK
     """
-    return {"message": "Resume upload endpoint", "status": "healthy"}
+    return {"message": "Resume upload endpoint", "status": "ok"}
 
 
 # ============================================================================
@@ -32,7 +32,7 @@ async def match_resume():
     Returns:
         dict: Success message with 200 OK
     """
-    return {"message": "Resume match endpoint", "status": "healthy"}
+    return {"message": "Resume match endpoint", "status": "ok"}
 
 
 # ============================================================================
@@ -46,7 +46,7 @@ async def optimize_resume():
     Returns:
         dict: Success message with 200 OK
     """
-    return {"message": "Resume optimize endpoint", "status": "healthy"}
+    return {"message": "Resume optimize endpoint", "status": "ok"}
 
 
 # ============================================================================
@@ -60,4 +60,4 @@ async def analyze_resume():
     Returns:
         dict: Success message with 200 OK
     """
-    return {"message": "Resume analyze endpoint", "status": "healthy"}
+    return {"message": "Resume analyze endpoint", "status": "ok"}

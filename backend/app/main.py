@@ -55,7 +55,7 @@ app = create_app()
 async def health_check():
     """Health check endpoint"""
     return {
-        "status": "healthy",
+        "status": "ok",
         "app": settings.app_name,
         "version": settings.app_version,
     }
