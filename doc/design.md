@@ -44,7 +44,9 @@
  [5.2 Description of workflow and interaction](#52-description-of-workflow-and-interaction)  
 
 [**6. Infrastructure design**](#6-infrastructure-design)  
- [6.1 Flow diagram of system release & deployments](#61-flow-diagram-of-system-release--deployments)  
+ [6.1 Development Workflow](#61-development-workflow)  
+ [6.2 Continuous Integration with GitHub Actions](#62-continuous-integration-with-github-actions)  
+ [6.3 Continuous Deployment with GCP](#63-continuous-deployment-with-gcp)
 
 ## 1. Introduction and overview
 
@@ -68,13 +70,13 @@ The product workflow remains intentionally simple to support fast user interacti
 
 The technical stack include:
 
-* Backend \-\> FastAPI  
-* Frontend \-\> React  
-* AI integration \-\> LLM Provider or other API, instead of building NLP models  
-* Infra \-\> Deploy on Google Cloud  
-* CI/CD \-\> Automated deployment using GitHub Actions  
-* Architecture \-\> Monolithic backend  
-* Data Model \-\> session-based user data
+* Backend -> FastAPI  
+* Frontend -> React  
+* AI integration -> LLM Provider or other API, instead of building NLP models  
+* Infra -> Deploy on Google Cloud  
+* CI/CD -> Automated deployment using GitHub Actions  
+* Architecture -> Monolithic backend  
+* Data Model -> session-based user data
 
 ## 2. System architecture
 
@@ -82,7 +84,7 @@ The technical stack include:
 
 The system architecture follows a client–server model with a monolithic FastAPI backend, a React-based frontend, integration with an LLM provider for optimization, and Google Cloud components for hosting and temporary file storage. The architecture ensures stateless execution, simplified deployment, and scalability using Cloud Run.
 
-![System Architecture](./src/architecture.png)
+<img src="./src/architecture.png" alt="high level architecture diagram" height="400">
 
 ### 2.2 Description on each component
 
@@ -98,7 +100,7 @@ The system architecture follows a client–server model with a monolithic FastAP
 
 * Handles all business logic, routing, and API responses  
 * Manages temporary resume/JD data for each session  
-* Construct prompts using job \+ resume \+ chat history and send them to the LLM, then return responses  
+* Construct prompts using job + resume + chat history and send them to the LLM, then return responses  
 * Returns structured JSON data containing optimized content, allowing the frontend to handle rendering and file generation.  
 * Store and retrieve resume files from Google Cloud Storage  
 * Ensures file-level privacy for each session
@@ -129,8 +131,8 @@ Choice: Monolithic FastAPI server
 Reason: The MVP includes only three major functional areas:
 
 * Resume  
-  * Job Cards  
-  * Chat
+* Job Cards  
+* Chat
 
 Splitting them into separate microservices would add unnecessary overhead and slow down development.
 
@@ -165,24 +167,23 @@ Trade-off: No long-term data persistence until Phase 2
 ## 3. Data design
 ### 3.1 Data flow diagram and description
 
-![Data Flow 1](./src/data1.png)
+<img src="./src/data1.png" alt="data flow diagram 1" height="400">
 
-![Data Flow 2](./src/data2.png)
+<img src="./src/data2.png" alt="data flow diagram 2" height="400">
 
-Data flow1: upload resume, save to GCS, create id, return session\_id
+Data flow1: upload resume, save to GCS, create id, return session_id
 
 Data flow2: request from frontend, get resume from GCS at backend, request from backend, construct response from LLM, return response to frontend
 
 Key Components:
 
-* Request Router: Routes request to Mode A or Mode B based on JD presence  
-* Resume Parser: Extracts resume content  
-* JD Handler: Processes job description (Mode B only)  
-* Match Scoring: Calculates resume-JD compatibility (Mode B only)  
-* LLM Engine: Calls external LLM Provider for optimization  
-* Export Service: Generates final document  
-* Cloud Storage: Stores temporary files  
-* Pre-signed URL: Enables secure download
+* Request Router: Routes request to Mode A or Mode B based on JD presence
+* Resume Parser: Extracts resume content
+* JD Handler: Processes job description (Mode B only)
+* Match Scoring: Calculates resume-JD compatibility (Mode B only)
+* LLM Engine: Calls external LLM Provider for optimization
+* Export Service: Generates final document
+* Cloud Storage: Stores temporary files
 
 ### 3.2 How data is used for communication
 
@@ -191,11 +192,11 @@ Key Components:
 	 - JSON for JD text, analysis requests, optimization requests  
 	 - multipart/form-data for resume uploads  
   
-   - Responses:  
-     - JSON containing:  
-       - Analysis results (scores, suggestions)  
-       - Matching results (match score, gap analysis, JD-specific suggestions)  
-       - Optimization results (download URL, file metadata)  
+   - Responses:
+     - JSON containing:
+       - Analysis results (suggestions)
+       - Matching results (match score, suggestions)
+       - Optimization results (encoded_file)
        - Session ID and status information
 
 2. Between Backend and LLM Provider
@@ -203,7 +204,7 @@ Key Components:
 	 - Extracted resume text
 	 - JD text  
      - Prompt  
-     - LLM API returns optimized resume text and suggested score  
+     - LLM API returns optimized resume text  
 3. Between Backend and Cloud Storage
    - Temporary file objects written and retrieved via URLs  
    - Files are never publicly accessible and scoped per session
@@ -214,10 +215,10 @@ Key Components:
 
 | Method | Endpoint | Name | Request Body | Response |
 | ----- | ----- | ----- | ----- | ----- |
-| **POST** | `/api/resumes` | Upload Resume | File (multipart) | resume\_id, parsed\_data |
-| **POST** | `/api/resumes/{id}/analyze` | Analyze Resume | focus\_areas (optional) | scores, suggestions |
-| **POST** | `/api/resumes/{id}/match` | Match with JD | job\_description | match\_score, gaps |
-| **POST** | `/api/resumes/{id}/optimize` | Generate optimized file | JD (optional), format | file\_url, content |
+| **POST** | `/api/resumes` | Upload Resume | File (multipart) | session_id, expire_at |
+| **POST** | `/api/resumes/analyze` | Analyze Resume | session_id | suggestions |
+| **POST** | `/api/resumes/match` | Match with JD | session_id, job_description | match_score, suggestions |
+| **POST** | `/api/resumes/optimize` | Generate optimized file | session_id, JD (optional) | encoded_file |
 
 ### 4.2 API Endpoints
 
@@ -227,309 +228,143 @@ Endpoint: `POST /api/resumes`
 
 Description: Uploads and parses resume file, stores resume in GCS.
 
-Request:
-
-Body (multipart/form-data):
-
-file: \<resume\_file\>  // PDF, DOCX, DOC, TXT (max 5MB)
+Request Body (multipart/form-data):
+```
+file: <resume_file>  // PDF, DOCX, DOC, TXT (max 5MB)
+```
 
 Response (201 Created):
-```
+```json
 {
-
- "status": "success",
-
- "data": {
-
-   "sid": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-
-   "timestamp": "2024-01-15T10:30:00Z"
-
- "expireAt":
-
+  "status": "created",
+  "data": {
+    "session_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    "expire_at": "2024-01-15T11:30:00Z"
+  }
 }
 ```
-Error Responses:
 
-* `400 Bad Request`: Invalid file format or size  
+Error Responses:
+* `400 Bad Request`: Invalid file format or size
 * `500 Internal Server Error`: Server error
 
 ---
 
 #### 4.2.2 Analyze Resume
 
-Endpoint: `POST /api/resumes/{id}/analyze`
+Endpoint: `POST /api/resumes/analyze`
 
-Description: Analyzes resume quality using Gemini AI, returns scores and suggestions.
+Description: Analyzes resume quality using Gemini AI, returns suggestions.
 
-Request:
-
-Path Parameters:
-
-Body (JSON):
-```
+Request Body (JSON):
+```json
 {
-
-	sid:
-
+  "session_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 }
 ```
+
 Response (200 OK):
-```
+```json
 {
-
- "status": "success",
-
- "data": {
-
-   "suggestions": \[
-
-	 {
-	
-	   "category": "content",
-	
-	   "priority": "high",
-	
-	   "title": "Add quantifiable metrics",
-	
-	   "description": "Several achievements lack specific numbers...",
-	
-	   "example": "Instead of 'Improved performance', write 'Improved performance by 40%'"
-	
-	 },
-
-{  
-…  
-}
-
-   \]
-
- },
-
- "timestamp": "2024-01-15T10:35:00Z"
-
+  "status": "success",
+  "data": {
+    "suggestions": [
+      {
+        "category": "content",
+        "priority": "high",
+        "title": "Add quantifiable metrics",
+        "description": "Several achievements lack specific numbers...",
+        "example": "Instead of 'Improved performance', write 'Improved performance by 40%'"
+      }
+    ]
+  }
 }
 ```
-Error Responses:
 
-* `400 Bad Request`: Invalid focus areas  
-* `401 Unauthorized`: Invalid/missing token  
-* `404 Not Found`: Resume not found  
-* `502 Bad Gateway`: Gemini API error  
+Error Responses:
+* `400 Bad Request`: Invalid request
+* `404 Not Found`: Resume not found
 * `500 Internal Server Error`: Server error
 
 ---
 
 #### 4.2.3 Match Resume with Job Description
 
-Endpoint: `POST /api/resumes/{id}/match`
+Endpoint: `POST /api/resumes/match`
 
-Description: Matches resume against job description using Gemini AI, returns match score and gaps.
+Description: Matches resume against job description using Gemini AI, returns match score and suggestions.
 
-Request:
-
-Path Parameters:
-
-id: resume\_id (UUID)
-
-Body (JSON):
-```
+Request Body (JSON):
+```json
 {
-
- "job\_description": "We are seeking a Senior Software Engineer...",  // Required, 50-10000 chars
-
- "job\_title": "Senior Software Engineer",  // Optional
-
- "company\_name": "Tech Corp"  // Optional
-
+  "session_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "job_description": "We are seeking a Senior Software Engineer...",
+  "job_title": "Senior Software Engineer",
+  "company_name": "Tech Corp"
 }
 ```
+
 Response (200 OK):
-```
+```json
 {
-
- "status": "success",
-
- "body": {
-
-	 "job\_info": {
-	
-	 "job\_title": "Senior Software Engineer",
-	
-	 "company\_name": "Tech Corp"
-
-   },
-
-   "overall\_match\_score": 78,
-
-   "match\_breakdown": {
-
-	 "skills\_match": 85,
-	
-	 "experience\_match": 75,
-	
-	 "education\_match": 90,
-	
-	 "keywords\_match": 70
-
-   },
-
-   "matched\_skills": \[
-
-	 {
-	
-	   "skill": "Python",
-	
-	   "relevance": "high",
-	
-	   "found\_in\_resume": true,
-	
-	   "required\_in\_jd": true
-	
-	 },
-	
-	 {
-	
-	   "skill": "React",
-	
-	   "relevance": "high",
-	
-	   "found\_in\_resume": true,
-	
-	   "required\_in\_jd": true
-	
-	 }
-
-   \],
-
-   "missing\_skills": \[
-
-	 {
-	
-	   "skill": "Kubernetes",
-	
-	   "relevance": "high",
-	
-	   "importance": "high",
-	
-	   "recommendation": "Consider adding Kubernetes experience"
-	
-	 }
-
-   \],
-
-   "suggestions": \[
-
-	 {
-	
-	   "category": "skills",
-	
-	   "priority": "high",
-	
-	   "title": "Highlight microservices experience",
-	
-	   "description": "Make microservices more prominent...",
-	
-	   "specific\_action": "Add 'Designed microservices' as key achievement"
-	
-	 }
-
-   \],
-
-   "recommendation": {
-
-	 "should\_apply": true,
-	
-	 "confidence": "high",
-	
-	 "summary": "You are a strong candidate with 78% match..."
-
-   }
-
- },
-
- "timestamp": "2024-01-15T10:40:00Z"
-
+  "status": "success",
+  "data": {
+    "match_score": 78,
+    "match_breakdown": {
+      "skills_match": 85,
+      "experience_match": 75,
+      "education_match": 90,
+      "keywords_match": 70
+    },
+    "suggestions": [
+      {
+        "category": "skills",
+        "priority": "high",
+        "title": "Highlight microservices experience",
+        "description": "Make microservices more prominent...",
+        "action": "Add 'Designed microservices' as key achievement"
+      }
+    ]
+  }
 }
 ```
-Error Responses:
 
-* `400 Bad Request`: Missing/invalid job description  
-* `401 Unauthorized`: Invalid/missing token  
-* `404 Not Found`: Resume not found  
-* `502 Bad Gateway`: Gemini API error  
+Error Responses:
+* `400 Bad Request`: Missing/invalid job description
+* `404 Not Found`: Resume not found
 * `500 Internal Server Error`: Server error
 
 ---
 
 #### 4.2.4 Optimize Resume
 
-Endpoint: `POST /api/resumes/{id}/optimize`
+Endpoint: `POST /api/resumes/optimize`
 
-Description: Generates AI-optimized resume using Gemini AI, creates PDF/DOCX file, stores in GCS.
+Description: Generates AI-optimized resume using Gemini AI, returns encoded file.
 
-Request:
-
-Path Parameters:
-
-id: resume\_id (UUID)
-
-Body (JSON):
-```
+Request Body (JSON):
+```json
 {
-
- "job\_description": "We are seeking...",  // Optional (for JD-specific optimization)
-
- "template": "modern"  // Optional: "modern" | "classic" | "minimal" | "creative"
-
+  "session_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "job_description": "We are seeking...",
+  "template": "modern"
 }
 ```
+
 Response (200 OK):
-```
+```json
 {
-
- "status": "success",
-
- "data": {
-
-   "optimization\_template": "modern",
-
-   "changes\_summary": \[
-
-	 {
-	
-	   "section": "skills",
-	
-	   "description": "Rewrote to emphasize relevant keywords"
-	
-	 },
-	
-	 {
-	
-	   "section": "experience",
-	
-	   "description": "Added quantifiable metrics and keywords"
-	
-	 }
-
-   \],
-
-   "encoded\_file": "JVBERi0xLjQKJ…"  (base64)
-
-},
-
- "timestamp": "2024-01-15T10:45:00Z"
-
+  "status": "success",
+  "data": {
+    "encoded_file": "JVBERi0xLjQKJ..."
+  }
 }
 ```
-Error Responses:
 
-* `400 Bad Request`: Invalid parameters  
-* `401 Unauthorized`: Invalid/missing token  
-* `404 Not Found`: Resume not found  
-* `500 Internal Server Error`: File generation error  
-* `502 Bad Gateway`: Gemini API error  
-* `503 Service Unavailable`: GCS error
+Error Responses:
+* `400 Bad Request`: Invalid parameters
+* `404 Not Found`: Resume not found
+* `500 Internal Server Error`: Server error
 
 ### 4.3 HTTP Status Codes
 
@@ -546,8 +381,6 @@ Error Responses:
 | **502** | Bad Gateway | External service error |
 | **503** | Service Unavailable | Service down |
 
-\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
-
 ## 5. UI design
 
 ### 5.1 Simple wireframe for frontend components
@@ -560,18 +393,17 @@ Error Responses:
 
 **Flow:**
 
-1. User clicks "Upload Resume" button and selects a file  
-2. Frontend sends the file via `multipart/form-data` to `POST /api/resume/upload`  
-3. Backend receives and parses the resume file  
-4. Backend stores the original file in Google Cloud Storage  
-5. Backend parses the resume file to extract relevant information for internal processing  
-6. Backend returns an upload success response with a temporary identifier  
-7. Frontend stores the temporary identifier for the current workflow and displays "Upload Successful"
+1. User clicks "Upload Resume" button and selects a file
+2. Frontend sends the file via `multipart/form-data` to `POST /api/resumes`
+3. Backend receives and parses the resume file
+4. Backend stores the original file in Google Cloud Storage
+5. Backend returns session_id and expire_at
+6. Frontend stores session_id and expire_at in localStorage and displays "Upload Successful"
 
 **Data Stored:**
 
-* Database: Parsed resume data, session ID, timestamp  
 * Google Cloud Storage: Original resume file
+* Frontend localStorage: session_id, expire_at
 
 #### Scenario B: Analyzing Resume
 
@@ -579,23 +411,17 @@ Error Responses:
 
 **Flow:**
 
-1. User clicks "Analyze My Resume" button  
-2. Frontend sends `POST /api/resume/analyze` with session ID  
-3. Backend retrieves parsed resume data from Database using session ID  
-4. Backend constructs LLM prompt with resume content  
-5. Backend calls External LLM API (OpenAI/Claude) for analysis  
-6. LLM returns general score and revision suggestions  
-7. Backend saves analysis results (score, suggestions) to Database  
-8. Backend returns analysis results to Frontend  
-9. Frontend displays score and suggestions to user
-
-**Data Stored:**
-
-* Database: Revision suggestions, analysis timestamp
+1. User clicks "Analyze My Resume" button
+2. Frontend sends `POST /api/resumes/analyze` with session_id
+3. Backend retrieves resume file from Google Cloud Storage using session_id
+4. Backend constructs LLM prompt with resume content
+5. Backend calls External LLM API for analysis
+6. LLM returns revision suggestions
+7. Backend returns suggestions to Frontend
+8. Frontend displays suggestions to user
 
 **User Can:**
 
-* View results anytime by accessing session history  
 * Re-analyze the same resume without re-uploading
 
 #### Scenario C: Analyzing Resume with JD (Matching Score)
@@ -604,31 +430,19 @@ Error Responses:
 
 **Flow:**
 
-1. User enters or pastes job description text  
-2. User clicks "Analyze Match" button  
-3. Frontend sends `POST /api/resume/match` with session ID and JD text  
-4. Backend retrieves parsed resume data from Database using session ID  
-5. Backend parses and saves the job description to Database  
-6. Backend runs Match Scoring Module to calculate compatibility  
-7. Backend constructs LLM prompt with:  
-   * Resume content  
-   * Job description  
-   * Initial match score  
-8. Backend calls External LLM API for detailed matching analysis  
-9. LLM returns matching score and JD-specific revision suggestions  
-10. Backend saves matching results (score, suggestions, JD) to Database  
-11. Backend returns matching results to Frontend  
-12. Frontend displays matching score, gap analysis, and suggestions
-
-**Data Stored:**
-
-* Database: Job description, matching score, JD-specific suggestions, timestamp
+1. User enters or pastes job description text
+2. User clicks "Analyze Match" button
+3. Frontend sends `POST /api/resumes/match` with session_id and JD text
+4. Backend retrieves resume file from Google Cloud Storage using session_id
+5. Backend parses the job description
+6. Backend calls External LLM API for matching analysis
+7. LLM returns match score and suggestions
+8. Backend returns match results to Frontend
+9. Frontend displays match score and suggestions to user
 
 **User Can:**
 
-* Try different job descriptions with the same resume  
-* View history of all JD matches  
-* Compare scores across different JDs
+* Try different job descriptions with the same resume
 
 #### Scenario D: Optimizing and Downloading Resume
 
@@ -638,54 +452,56 @@ Error Responses:
 
 ##### Option 1: General Optimization (No JD)
 
-1. User clicks "Optimize & Download" button  
-2. Frontend sends `POST /api/resume/optimize` with session ID (no JD)  
-3. Backend retrieves parsed resume data from Database  
-4. Backend constructs LLM prompt for general optimization  
-5. Backend calls External LLM API for optimization  
-6. LLM returns optimized resume content  
-7. Backend generates PDF/DOCX file from optimized content  
-8. Backend uploads file to Google Cloud Storage  
-9. Backend saves file URL and metadata to Database  
-10. Backend returns download URL to Frontend  
-11. Frontend displays "Download Ready" with download button  
-12. User clicks download button  
-13. Frontend redirects to Google Cloud Storage pre-signed URL  
-14. User downloads the optimized resume file
+1. User clicks "Optimize & Download" button
+2. Frontend sends `POST /api/resumes/optimize` with session_id (no JD)
+3. Backend retrieves resume file from Google Cloud Storage
+4. Backend calls External LLM API for optimization
+5. LLM returns optimized resume content
+6. Backend generates file and encodes as base64
+7. Backend returns encoded_file to Frontend
+8. Frontend decodes the file and triggers download
 
 ##### Option 2: JD-Specific Optimization (With JD)
 
-1. User selects a previously analyzed JD from history (or enters new JD)  
-2. User clicks "Optimize for This Job & Download" button  
-3. Frontend sends `POST /api/resume/optimize` with session ID and JD ID (or JD text)  
-4. Backend retrieves resume data and JD from Database  
-5. Backend constructs LLM prompt with resume \+ JD for targeted optimization  
-6. Backend calls External LLM API for JD-specific optimization  
-7. LLM returns JD-optimized resume content  
-8. Backend generates PDF/DOCX file from optimized content  
-9. Backend uploads file to Google Cloud Storage  
-10. Backend saves file URL, JD reference, and metadata to Database  
-11. Backend returns download URL to Frontend  
-12. Frontend displays "Download Ready" with download button  
-13. User clicks download button  
-14. Frontend redirects to Google Cloud Storage pre-signed URL  
-15. User downloads the JD-optimized resume file
-
-**Data Stored:**
-
-* Google Cloud Storage: Optimized resume file (PDF)
+1. User enters job description text
+2. User clicks "Optimize for This Job & Download" button
+3. Frontend sends `POST /api/resumes/optimize` with session_id and JD text
+4. Backend retrieves resume file from Google Cloud Storage
+5. Backend calls External LLM API for JD-specific optimization
+6. LLM returns optimized resume content
+7. Backend generates file and encodes as base64
+8. Backend returns encoded_file to Frontend
+9. Frontend decodes the file and triggers download
 
 **User Can:**
 
-* Re-download the same file anytime from session history  
-* Generate multiple optimized versions (general vs. JD-specific)  
-* Compare different optimized versions
+* Generate optimized versions (general or JD-specific)
 
 ## 6. Infrastructure design
 
-### 6.1 Flow diagram of system release & deployments
+### 6.1 Development Workflow
 
-**Key Points:**  
-- **What triggers testing and linting?** → Pull requests to the `develop` branch  
-- **What triggers build and deployment?** → Updates to the `develop` and `main` branches  
-- **Which cloud resources are involved in deployment?** → Image registry and Cloud Run
+1. Team lead creates tasks in Jira and assigns to developers
+2. Developer creates a feature branch from `develop` (e.g., `feat/RA-19`)
+3. Developer implements the feature and pushes to their branch
+4. Developer creates a Pull Request to `develop` branch
+5. Code owner reviews the PR
+6. After approval, PR is merged to `develop`
+7. When ready for production release, `develop` is merged to `main`
+
+### 6.2 Continuous Integration with GitHub Actions
+
+GitHub Actions automates testing and linting on every pull request to ensure code quality before merging.
+
+* Triggered by: Pull requests to `develop` branch
+* Actions: Run unit tests, integration tests, and linting checks
+* Result: PR is blocked if tests fail; code owner review is required
+
+### 6.3 Continuous Deployment with GCP
+
+Google Cloud Platform handles build and deployment automation when changes are merged.
+
+* `develop` branch: Deploys to staging/development environment
+* `main` branch: Deploys to production environment
+* Build: Docker image is built and pushed to Google Container Registry
+* Deploy: Cloud Run automatically deploys the new image
