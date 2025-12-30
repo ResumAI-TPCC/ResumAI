@@ -10,6 +10,10 @@ on:
   pull_request:
     branches: [develop, main]
 
+# Limit GITHUB_TOKEN permissions following the principle of least privilege
+permissions:
+  contents: read
+
 # Jobs definition
 # Each job runs on a fresh virtual machine
 jobs:
