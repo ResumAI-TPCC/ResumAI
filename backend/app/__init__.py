@@ -1,2 +1,0 @@
-# ResumAI Backend Application
-
