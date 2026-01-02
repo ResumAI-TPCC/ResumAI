@@ -13,7 +13,9 @@ dependencies = [
     "httpx (==0.26.0)",
     "python-dotenv (==1.0.0)",
     "pydantic-settings (==2.1.0)",
-    "python-multipart (==0.0.18)"
+    "python-multipart (==0.0.18)",
+    "pytest (>=9.0.2,<10.0.0)",
+    "ruff (>=0.14.10,<0.15.0)"
 ]
 
 
