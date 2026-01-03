@@ -166,7 +166,7 @@ function ResumeUploadPage() {
               </button>
               
               <p className="text-xs text-gray-500 text-center">
-                After upload, we'll provide professional resume analysis and optimization suggestions
+                After upload, we&apos;ll provide professional resume analysis and optimization suggestions
               </p>
             </div>
           )}

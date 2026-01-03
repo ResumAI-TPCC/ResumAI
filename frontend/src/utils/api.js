@@ -43,14 +43,14 @@ export async function uploadResume(file, onProgress = null) {
         try {
           const response = JSON.parse(xhr.responseText)
           resolve(response)
-        } catch (e) {
+        } catch {
           reject(new Error('Invalid response format'))
         }
       } else {
         try {
           const errorData = JSON.parse(xhr.responseText)
           reject(new Error(errorData.detail || `Upload failed: ${xhr.status}`))
-        } catch (e) {
+        } catch {
           reject(new Error(`Upload failed: ${xhr.status}`))
         }
       }

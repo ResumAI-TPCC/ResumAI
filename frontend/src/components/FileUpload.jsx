@@ -1,21 +1,20 @@
 import { useState, useRef, useCallback } from 'react'
+import PropTypes from 'prop-types'
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+const ACCEPTED_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain'
+]
 
 function FileUpload({ onFileSelect, uploadedFile, onRemoveFile }) {
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState(null)
   const fileInputRef = useRef(null)
 
-  const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-  const ACCEPTED_TYPES = [
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'text/plain'
-  ]
-
-  const validateFile = (file) => {
-    setError(null)
-
+  const validateFile = useCallback((file) => {
     // Check file type
     const isValidType = ACCEPTED_TYPES.includes(file.type) || 
                        file.name.endsWith('.pdf') ||
@@ -24,24 +23,24 @@ function FileUpload({ onFileSelect, uploadedFile, onRemoveFile }) {
                        file.name.endsWith('.txt')
 
     if (!isValidType) {
-      setError('Unsupported file format. Please upload PDF, DOCX, DOC, or TXT files.')
-      return false
+      return { valid: false, error: 'Unsupported file format. Please upload PDF, DOCX, DOC, or TXT files.' }
     }
 
     // Check file size
     if (file.size > MAX_FILE_SIZE) {
-      setError('File size exceeds 5MB limit. Please upload a smaller file.')
-      return false
+      return { valid: false, error: 'File size exceeds 5MB limit. Please upload a smaller file.' }
     }
 
-    return true
-  }
+    return { valid: true, error: null }
+  }, [])
 
   const handleFile = useCallback((file) => {
-    if (validateFile(file)) {
+    const result = validateFile(file)
+    setError(result.error)
+    if (result.valid) {
       onFileSelect(file)
     }
-  }, [onFileSelect])
+  }, [onFileSelect, validateFile])
 
   const handleDragOver = (e) => {
     e.preventDefault()
@@ -248,6 +247,19 @@ function FileUpload({ onFileSelect, uploadedFile, onRemoveFile }) {
       )}
     </div>
   )
+}
+
+FileUpload.propTypes = {
+  onFileSelect: PropTypes.func.isRequired,
+  uploadedFile: PropTypes.shape({
+    name: PropTypes.string.isRequired,
+    size: PropTypes.number.isRequired,
+  }),
+  onRemoveFile: PropTypes.func.isRequired,
+}
+
+FileUpload.defaultProps = {
+  uploadedFile: null,
 }
 
 export default FileUpload
