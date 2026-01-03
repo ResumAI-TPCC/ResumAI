@@ -1,7 +1,7 @@
-import ResumeAnalysisPage from './pages/ResumeAnalysisPage'
+import ResumeUploadPage from './pages/ResumeUploadPage'
 
 function App() {
-  return <ResumeAnalysisPage />
+  return <ResumeUploadPage />
 }
 
 export default App
