@@ -1,0 +1,55 @@
+# Workflow name
+# This name will appear in GitHub Actions
+# and in the PR "Checks" section
+name: Frontend CI (Test and Lint)
+
+# Trigger conditions
+# This workflow runs when a Pull Request
+# is opened or updated targeting "develop, main"
+on:
+  pull_request:
+    branches: [develop, main]
+
+# Limit GITHUB_TOKEN permissions following the principle of least privilege
+permissions:
+  contents: read
+
+# Jobs definition
+# Each job runs on a fresh virtual machine
+jobs:
+  # Frontend test job
+  frontend-test:
+    # Use the latest Ubuntu runner provided by GitHub
+    runs-on: ubuntu-latest
+    # Steps executed in sequence
+    steps:
+      # 1. Checkout the repository code
+      # This pulls the PR's code into the runner
+      - name: Checkout code
+        uses: actions/checkout@v4
+      # 2. Set up the Node.js environment
+      # Ensures a consistent Node version with local development
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      # 3. Install frontend dependencies
+      # Runs inside the "frontend" directory
+      # npm ci installs dependencies strictly from package-lock.json
+      # which is recommended for CI environments
+      - name: Install deps
+        working-directory: frontend
+        run: npm ci
+      # 4. Run frontend lint
+      # Runs ESLint to check frontend code quality and coding standards.
+      # The workflow will fail if any linting errors are found.
+      - name: Run frontend lint
+        working-directory: frontend
+        run: npm run lint
+      # 5. Run frontend tests
+      # Executes the "test" script defined in frontend/package.json
+      # (currently runs Jest in CI mode)
+      # If this step fails, the workflow will fail
+      - name: Run frontend test
+        working-directory: frontend
+        run: npm test
