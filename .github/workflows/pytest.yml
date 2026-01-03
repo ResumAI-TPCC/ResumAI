@@ -40,7 +40,7 @@ jobs:
 
     - name: Lint with ruff
       run: |
-        poetry run ruff check --fix.
+        poetry run ruff check --fix
     
     - name: Run tests with pytest
       run: |
