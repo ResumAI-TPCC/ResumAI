@@ -1,4 +1,4 @@
-name: Python Testing with Pytest
+name: Backend CI (Test and Lint)
 
 # Triggers the workflow on push or pull request events
 # for the main branch
@@ -13,7 +13,7 @@ permissions:
 
 # Defines the jobs that will run
 jobs:
-  build:
+  backend-test:
     # The operating system to run the job on
     runs-on: ubuntu-latest
     
@@ -40,8 +40,8 @@ jobs:
 
     - name: Lint with ruff
       run: |
-        poetry run ruff check --fix
+        poetry run ruff check .
     
     - name: Run tests with pytest
       run: |
-        poetry run pytest -v
+        poetry run pytest tests/ -v
