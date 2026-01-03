@@ -1,28 +1,69 @@
 import { useState } from 'react'
 import FileUpload from '../components/FileUpload'
+import { useUpload, UploadStatus } from '../hooks/useUpload'
 
 function ResumeUploadPage() {
   const [uploadedFile, setUploadedFile] = useState(null)
-  const [isUploading, setIsUploading] = useState(false)
+  
+  const {
+    status,
+    progress,
+    error,
+    isUploading,
+    isSuccess,
+    upload,
+    reset,
+    clearError,
+  } = useUpload()
 
   const handleFileSelect = (file) => {
     setUploadedFile(file)
+    clearError() // Clear any previous errors
   }
 
   const handleUpload = async () => {
     if (!uploadedFile) return
+
+    const result = await upload(uploadedFile)
     
-    setIsUploading(true)
-    // Simulate upload process
-    setTimeout(() => {
-      setIsUploading(false)
-      // TODO: API call will be added here
-      console.log('File uploaded:', uploadedFile)
-    }, 1500)
+    if (result) {
+      // Upload successful
+      console.log('Upload successful:', result)
+      // TODO: Navigate to analysis page when routing is configured
+      // navigate('/analysis')
+    }
   }
 
   const handleRemoveFile = () => {
     setUploadedFile(null)
+    reset()
+  }
+
+  // Get button text based on status
+  const getButtonContent = () => {
+    switch (status) {
+      case UploadStatus.UPLOADING:
+        return (
+          <div className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>Uploading... {progress}%</span>
+          </div>
+        )
+      case UploadStatus.SUCCESS:
+        return (
+          <div className="flex items-center justify-center gap-2">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <span>Upload Complete! Redirecting...</span>
+          </div>
+        )
+      default:
+        return <span>Start Analysis</span>
+    }
   }
 
   return (
@@ -73,25 +114,55 @@ function ResumeUploadPage() {
             />
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl animate-fade-in">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="flex-1">
+                  <p className="text-sm text-red-700">{error}</p>
+                  <button 
+                    onClick={clearError}
+                    className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+                  >
+                    Try again
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Progress Bar */}
+          {isUploading && (
+            <div className="mb-6 animate-fade-in">
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Action Button */}
           {uploadedFile && (
             <div className="flex flex-col items-center gap-4 animate-fade-in">
               <button
                 onClick={handleUpload}
-                disabled={isUploading}
-                className="w-full max-w-md px-6 py-3.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-medium rounded-xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                disabled={isUploading || isSuccess}
+                className={`
+                  w-full max-w-md px-6 py-3.5 font-medium rounded-xl shadow-lg 
+                  transition-all duration-200
+                  ${isSuccess 
+                    ? 'bg-green-500 text-white' 
+                    : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:shadow-xl transform hover:scale-[1.02]'
+                  }
+                  disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none
+                `}
               >
-                {isUploading ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>Uploading...</span>
-                  </div>
-                ) : (
-                  <span>Start Analysis</span>
-                )}
+                {getButtonContent()}
               </button>
               
               <p className="text-xs text-gray-500 text-center">
@@ -154,4 +225,3 @@ function ResumeUploadPage() {
 }
 
 export default ResumeUploadPage
-
