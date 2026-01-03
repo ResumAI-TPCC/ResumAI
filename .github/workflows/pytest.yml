@@ -16,7 +16,11 @@ jobs:
   build:
     # The operating system to run the job on
     runs-on: ubuntu-latest
-
+    
+    defaults:
+      run:
+        working-directory: ./backend
+    
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
@@ -26,15 +30,18 @@ jobs:
       with:
         python-version: '3.10'
 
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+    
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install pytest ruff
+        poetry install
 
     - name: Lint with ruff
       run: |
-        ruff check --output-format=github .
+        poetry run ruff check --fix.
     
     - name: Run tests with pytest
       run: |
-        pytest tests/ -v
+        poetry run pytest tests/ -v
