@@ -1,5 +1,8 @@
 name: Deploy Pipeline
 
+permissions:
+  contents: read
+
 on:
   workflow_run:
     workflows:
