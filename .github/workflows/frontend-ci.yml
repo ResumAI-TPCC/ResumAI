@@ -27,12 +27,6 @@ jobs:
       # This pulls the PR's code into the runner
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-      - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v2
       # 2. Set up the Node.js environment
       # Ensures a consistent Node version with local development
       - name: Setup Node
