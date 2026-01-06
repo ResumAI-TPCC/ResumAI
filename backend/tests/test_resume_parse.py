@@ -2,7 +2,6 @@
 Tests for Resume Parsing Endpoint (RA-24)
 """
 
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
