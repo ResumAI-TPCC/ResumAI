@@ -32,7 +32,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
       # 3. Install frontend dependencies
       # Runs inside the "frontend" directory
       # npm ci installs dependencies strictly from package-lock.json
