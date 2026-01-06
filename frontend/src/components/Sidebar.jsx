@@ -1,3 +1,4 @@
+import PropTypes from 'prop-types'
 import FileUpload from './FileUpload'
 
 function Sidebar({ 
@@ -17,6 +18,9 @@ function Sidebar({
   onUpload,
   onClearSession 
 }) {
+  // sessionId reserved for future use
+  void sessionId
+
   const handleClearJD = () => {
     onJobDescriptionChange('')
   }
@@ -159,6 +163,30 @@ function Sidebar({
       </div>
     </aside>
   )
+}
+
+Sidebar.propTypes = {
+  sessionId: PropTypes.string,
+  companyName: PropTypes.string,
+  jobTitle: PropTypes.string,
+  jobDescription: PropTypes.string,
+  selectedFile: PropTypes.shape({
+    name: PropTypes.string,
+    size: PropTypes.number,
+  }),
+  uploadedFile: PropTypes.shape({
+    name: PropTypes.string,
+    size: PropTypes.number,
+  }),
+  isUploading: PropTypes.bool,
+  uploadError: PropTypes.string,
+  onCompanyNameChange: PropTypes.func.isRequired,
+  onJobTitleChange: PropTypes.func.isRequired,
+  onJobDescriptionChange: PropTypes.func.isRequired,
+  onFileSelect: PropTypes.func.isRequired,
+  onRemoveFile: PropTypes.func.isRequired,
+  onUpload: PropTypes.func.isRequired,
+  onClearSession: PropTypes.func.isRequired,
 }
 
 export default Sidebar

@@ -1,4 +1,10 @@
+import PropTypes from 'prop-types'
+
 function ResumePreview({ sessionId, uploadedFile }) {
+  // Props are reserved for future implementation
+  void sessionId
+  void uploadedFile
+
   return (
     <aside className="w-80 bg-white border-l border-gray-200 p-6 h-screen overflow-y-auto">
       <div className="text-gray-400 text-center">
@@ -7,6 +13,14 @@ function ResumePreview({ sessionId, uploadedFile }) {
       </div>
     </aside>
   )
+}
+
+ResumePreview.propTypes = {
+  sessionId: PropTypes.string,
+  uploadedFile: PropTypes.shape({
+    name: PropTypes.string,
+    size: PropTypes.number,
+  }),
 }
 
 export default ResumePreview

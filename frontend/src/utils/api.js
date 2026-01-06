@@ -1,16 +1,14 @@
 /**
-<<<<<<< HEAD
- * API Utility Functions - Resume Upload
+ * API Utility Functions - Connect to Backend Server
  * 
- * RA-22: Upload Logic Implementation
+ * RA-22: Upload Logic with progress tracking
  * Based on Design Doc: 4.2.1 Upload & Parse Resume
  */
 
-// API Base URL - defaults to localhost for development
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 /**
- * Upload resume file to backend
+ * Upload resume file to backend with progress tracking
  * 
  * Endpoint: POST /api/resumes
  * Request: multipart/form-data with 'file' field
@@ -21,87 +19,55 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
  * @returns {Promise<Object>} - Response with sid and metadata
  */
 export async function uploadResume(file, onProgress = null) {
-  const formData = new FormData()
-  formData.append('file', file)
+  const formData = new FormData();
+  formData.append('file', file);
 
   // Use XMLHttpRequest for progress tracking
   return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
+    const xhr = new XMLHttpRequest();
 
     // Track upload progress
     if (onProgress) {
       xhr.upload.addEventListener('progress', (event) => {
         if (event.lengthComputable) {
-          const percentComplete = Math.round((event.loaded / event.total) * 100)
-          onProgress(percentComplete)
+          const percentComplete = Math.round((event.loaded / event.total) * 100);
+          onProgress(percentComplete);
         }
-      })
+      });
     }
 
     // Handle completion
     xhr.addEventListener('load', () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
-          const response = JSON.parse(xhr.responseText)
-          resolve(response)
+          const response = JSON.parse(xhr.responseText);
+          resolve(response);
         } catch {
-          reject(new Error('Invalid response format'))
+          reject(new Error('Invalid response format'));
         }
       } else {
         try {
-          const errorData = JSON.parse(xhr.responseText)
-          reject(new Error(errorData.detail || `Upload failed: ${xhr.status}`))
+          const errorData = JSON.parse(xhr.responseText);
+          reject(new Error(errorData.detail || `Upload failed: ${xhr.status}`));
         } catch {
-          reject(new Error(`Upload failed: ${xhr.status}`))
+          reject(new Error(`Upload failed: ${xhr.status}`));
         }
       }
-    })
+    });
 
     // Handle errors
     xhr.addEventListener('error', () => {
-      reject(new Error('Network error occurred'))
-    })
+      reject(new Error('Network error occurred'));
+    });
 
     xhr.addEventListener('abort', () => {
-      reject(new Error('Upload cancelled'))
-    })
+      reject(new Error('Upload cancelled'));
+    });
 
     // Send request to /api/resumes (per design doc)
-    xhr.open('POST', `${API_BASE_URL}/resumes`)
-    xhr.send(formData)
-  })
-}
-
-// TODO: Other API functions to be implemented by respective owners
-// - analyzeResume() -> POST /api/resumes/{id}/analyze
-// - matchResumeWithJob() -> POST /api/resumes/{id}/match
-// - optimizeResume() -> POST /api/resumes/{id}/optimize
-=======
- * API Utility Functions - Connect to Backend Server
- */
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
-
-/**
- * Upload resume file to backend
- * @param {File} file - Resume file (PDF, DOCX, DOC, TXT)
- * @returns {Promise<Object>} Response with session_id and expire_at
- */
-export async function uploadResume(file) {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(`${API_BASE_URL}/resumes`, {
-    method: 'POST',
-    body: formData,
+    xhr.open('POST', `${API_BASE_URL}/resumes`);
+    xhr.send(formData);
   });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Upload failed' }));
-    throw new Error(error.message || `HTTP error! status: ${response.status}`);
-  }
-
-  return await response.json();
 }
 
 /**
@@ -183,4 +149,3 @@ export async function optimizeResume(sessionId, jobDescription = '', template = 
 
   return await response.json();
 }
->>>>>>> origin/feat/RA-21

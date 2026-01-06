@@ -1,12 +1,11 @@
 /**
  * Storage Utility Functions - Session Management
-<<<<<<< HEAD
  * 
  * Based on Design Doc: Session-Based Data
  * Uses 'sid' (session ID) as per API specification
  */
 
-const STORAGE_KEY = 'resumai_session'
+const STORAGE_KEY = 'resumai_session';
 
 /**
  * Session data structure (per design doc)
@@ -15,7 +14,7 @@ const STORAGE_KEY = 'resumai_session'
  * @property {string} fileName - Uploaded file name
  * @property {number} fileSize - File size in bytes
  * @property {string} timestamp - ISO timestamp from backend
- * @property {string} [expireAt] - Session expiration time
+ * @property {string} [expire_at] - Session expiration time
  * @property {string} [companyName] - Target company name
  * @property {string} [jobTitle] - Target job title
  * @property {string} [jobDescription] - Job description
@@ -23,25 +22,7 @@ const STORAGE_KEY = 'resumai_session'
 
 /**
  * Save session data to localStorage
- * @param {SessionData} data - Session data to save
- */
-export function saveSession(data) {
-  try {
-    const existing = loadSession() || {}
-    const updated = { ...existing, ...data }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
-    return true
-  } catch (e) {
-    console.error('Failed to save session:', e)
-    return false
-=======
- */
-
-const STORAGE_KEY = 'resumai_session';
-
-/**
- * Save session data to localStorage
- * @param {Object} sessionData - Session data object
+ * @param {SessionData} sessionData - Session data to save
  */
 export function saveSession(sessionData) {
   try {
@@ -50,26 +31,16 @@ export function saveSession(sessionData) {
       savedAt: new Date().toISOString(),
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    return true;
   } catch (error) {
     console.error('Failed to save session:', error);
->>>>>>> origin/feat/RA-21
+    return false;
   }
 }
 
 /**
  * Load session data from localStorage
-<<<<<<< HEAD
- * @returns {SessionData|null} - Session data or null if not found
- */
-export function loadSession() {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY)
-    return data ? JSON.parse(data) : null
-  } catch (e) {
-    console.error('Failed to load session:', e)
-    return null
-=======
- * @returns {Object|null} Session data or null if not found
+ * @returns {SessionData|null} - Session data or null if not found/expired
  */
 export function loadSession() {
   try {
@@ -92,7 +63,6 @@ export function loadSession() {
   } catch (error) {
     console.error('Failed to load session:', error);
     return null;
->>>>>>> origin/feat/RA-21
   }
 }
 
@@ -101,28 +71,21 @@ export function loadSession() {
  */
 export function clearSession() {
   try {
-<<<<<<< HEAD
-    localStorage.removeItem(STORAGE_KEY)
-    return true
-  } catch (e) {
-    console.error('Failed to clear session:', e)
-    return false
-=======
     localStorage.removeItem(STORAGE_KEY);
+    return true;
   } catch (error) {
     console.error('Failed to clear session:', error);
->>>>>>> origin/feat/RA-21
+    return false;
   }
 }
 
 /**
-<<<<<<< HEAD
  * Check if a valid session exists
  * @returns {boolean}
  */
 export function hasSession() {
-  const session = loadSession()
-  return session !== null && session.sid !== undefined
+  const session = loadSession();
+  return session !== null && session.sid !== undefined;
 }
 
 /**
@@ -130,20 +93,11 @@ export function hasSession() {
  * @returns {string|null}
  */
 export function getSessionId() {
-  const session = loadSession()
-  return session?.sid || null
+  const session = loadSession();
+  return session?.sid || null;
 }
 
 /**
- * Update specific fields in session
- * @param {Partial<SessionData>} updates - Fields to update
- */
-export function updateSession(updates) {
-  const session = loadSession()
-  if (session) {
-    saveSession({ ...session, ...updates })
-  }
-=======
  * Update specific session field
  * @param {string} key - Field name
  * @param {*} value - Field value
@@ -162,5 +116,4 @@ export function updateSessionField(key, value) {
 export function getSessionField(key) {
   const session = loadSession();
   return session ? session[key] : null;
->>>>>>> origin/feat/RA-21
 }

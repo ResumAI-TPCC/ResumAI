@@ -86,28 +86,6 @@ function FileUpload({ onFileSelect, uploadedFile, isUploaded = false, onRemoveFi
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
   }
 
-  const getFileIcon = (fileName) => {
-    if (fileName.endsWith('.pdf')) {
-      return (
-        <svg className="w-12 h-12 text-red-500" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
-        </svg>
-      )
-    } else if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
-      return (
-        <svg className="w-12 h-12 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
-        </svg>
-      )
-    } else {
-      return (
-        <svg className="w-12 h-12 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
-        </svg>
-      )
-    }
-  }
-
   // If file is uploaded/selected, show file info card with green checkmark (only if uploaded)
   if (uploadedFile) {
     return (
@@ -240,11 +218,13 @@ FileUpload.propTypes = {
     name: PropTypes.string.isRequired,
     size: PropTypes.number.isRequired,
   }),
+  isUploaded: PropTypes.bool,
   onRemoveFile: PropTypes.func.isRequired,
 }
 
 FileUpload.defaultProps = {
   uploadedFile: null,
+  isUploaded: false,
 }
 
 export default FileUpload
