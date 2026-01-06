@@ -9,7 +9,7 @@ const ACCEPTED_TYPES = [
   'text/plain'
 ]
 
-function FileUpload({ onFileSelect, uploadedFile, onRemoveFile }) {
+function FileUpload({ onFileSelect, uploadedFile, isUploaded = false, onRemoveFile }) {
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState(null)
   const fileInputRef = useRef(null)
@@ -108,44 +108,44 @@ function FileUpload({ onFileSelect, uploadedFile, onRemoveFile }) {
     }
   }
 
-  // If file is uploaded, show file info card
+  // If file is uploaded/selected, show file info card with green checkmark (only if uploaded)
   if (uploadedFile) {
     return (
       <div className="animate-fade-in">
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow">
-          <div className="flex items-start gap-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-3">
+          <div className="flex items-center gap-2.5">
             <div className="flex-shrink-0">
-              {getFileIcon(uploadedFile.name)}
+              {isUploaded ? (
+                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+              )}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1 truncate">
-                    {uploadedFile.name}
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    {formatFileSize(uploadedFile.size)}
-                  </p>
-                </div>
-                <button
-                  onClick={onRemoveFile}
-                  className="flex-shrink-0 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Remove file"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <div className="flex items-center gap-2 text-sm text-green-600">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="font-medium">File selected, ready to analyze</span>
-                </div>
-              </div>
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {uploadedFile.name}
+              </p>
+              <p className="text-xs text-gray-500">
+                {formatFileSize(uploadedFile.size)}
+              </p>
             </div>
+            <button
+              onClick={onRemoveFile}
+              className="flex-shrink-0 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+              title="Remove file"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
@@ -161,11 +161,11 @@ function FileUpload({ onFileSelect, uploadedFile, onRemoveFile }) {
         onDrop={handleDrop}
         onClick={handleClick}
         className={`
-          relative border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer
+          relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer
           transition-all duration-200
           ${isDragging 
-            ? 'border-blue-500 bg-blue-50 scale-[1.02]' 
-            : 'border-gray-300 bg-white hover:border-blue-400 hover:bg-blue-50/50'
+            ? 'border-blue-500 bg-blue-50' 
+            : 'border-gray-300 bg-gray-50 hover:border-blue-400 hover:bg-blue-50/50'
           }
         `}
       >
@@ -180,16 +180,16 @@ function FileUpload({ onFileSelect, uploadedFile, onRemoveFile }) {
         <div className="flex flex-col items-center">
           {/* Upload Icon */}
           <div className={`
-            w-20 h-20 rounded-full flex items-center justify-center mb-6
+            w-12 h-12 rounded-full flex items-center justify-center mb-3
             transition-colors duration-200
             ${isDragging 
               ? 'bg-blue-100' 
-              : 'bg-gray-100'
+              : 'bg-gray-200'
             }
           `}>
             <svg 
-              className={`w-10 h-10 transition-colors duration-200 ${
-                isDragging ? 'text-blue-600' : 'text-gray-400'
+              className={`w-6 h-6 transition-colors duration-200 ${
+                isDragging ? 'text-blue-600' : 'text-gray-500'
               }`}
               fill="none" 
               stroke="currentColor" 
@@ -205,43 +205,28 @@ function FileUpload({ onFileSelect, uploadedFile, onRemoveFile }) {
           </div>
 
           {/* Text Content */}
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            {isDragging ? 'Release to upload file' : 'Drag and drop file here or click to upload'}
-          </h3>
-          <p className="text-sm text-gray-500 mb-1">
-            Supports PDF, DOCX, DOC, TXT formats
+          <p className="text-sm text-gray-600 mb-1">
+            {isDragging ? 'Release to upload file' : 'Click to upload or drag and drop'}
           </p>
-          <p className="text-xs text-gray-400">
-            Maximum file size: 5MB
+          <p className="text-xs text-gray-500">
+            PDF, DOCX, DOC, TXT (Max 5MB)
           </p>
-
-          {/* Upload Button */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              handleClick()
-            }}
-            className="mt-6 px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            Select File
-          </button>
         </div>
 
         {/* Drag Overlay */}
         {isDragging && (
-          <div className="absolute inset-0 bg-blue-500/10 rounded-2xl pointer-events-none" />
+          <div className="absolute inset-0 bg-blue-500/10 rounded-lg pointer-events-none" />
         )}
       </div>
 
       {/* Error Message */}
       {error && (
-        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl animate-fade-in">
-          <div className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg animate-fade-in">
+          <div className="flex items-start gap-2">
+            <svg className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-sm text-red-700">{error}</p>
+            <p className="text-xs text-red-700">{error}</p>
           </div>
         </div>
       )}
