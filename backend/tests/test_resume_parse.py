@@ -172,3 +172,28 @@ def test_parse_resume_schema_validation(client):
     )
 
     assert response.status_code == 422  # Validation error
+
+
+def test_parse_resume_path_traversal_protection(client):
+    """Test protection against path traversal attacks"""
+    # Attempt path traversal
+    malicious_paths = [
+        "../../etc/passwd",
+        "../../../etc/passwd",
+        "storage/resumes/../../etc/passwd",
+        "storage/resumes/../../../etc/passwd",
+    ]
+
+    for malicious_path in malicious_paths:
+        request_data = {
+            "file_id": "test-malicious",
+            "storage_path": malicious_path,
+        }
+
+        response = client.post(
+            f"{settings.api_prefix}/resume/parse", json=request_data
+        )
+
+        # Should be blocked with 403 Forbidden
+        assert response.status_code == 403, f"Path traversal not blocked: {malicious_path}"
+        assert "access denied" in response.json()["detail"].lower() or "invalid" in response.json()["detail"].lower()

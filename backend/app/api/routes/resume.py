@@ -50,18 +50,38 @@ async def parse_resume(request: ResumeParseRequest):
     Raises:
         404: File not found
         400: Unsupported file format or parsing error
+        403: Path traversal attempt detected
     """
+    # Define allowed base directory
+    backend_root = Path(__file__).resolve().parents[3]
+    storage_base = backend_root / "storage" / "resumes"
+
     # Construct file path
     file_path = Path(request.storage_path)
     if not file_path.is_absolute():
         # Relative path, resolve from backend root
-        file_path = Path(__file__).resolve().parents[3] / request.storage_path
+        file_path = backend_root / request.storage_path
+        
+        # Security: For relative paths, ensure they're within storage directory
+        try:
+            file_path = file_path.resolve()
+            storage_base = storage_base.resolve()
+            # Check if file_path is under storage_base
+            file_path.relative_to(storage_base)
+        except (ValueError, RuntimeError):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Invalid file path",
+            )
+    else:
+        # For absolute paths, resolve to prevent symlink attacks
+        file_path = file_path.resolve()
 
     # Verify file exists
     if not file_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Resume file not found: {request.storage_path}",
+            detail="Resume file not found",
         )
 
     # Extract filename from path
