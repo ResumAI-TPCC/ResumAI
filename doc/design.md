@@ -236,7 +236,8 @@ file: <resume_file>  // PDF, DOCX, DOC, TXT (max 5MB)
 Response (201 Created):
 ```json
 {
-  "status": "created",
+  "code": 201,
+  "status": "ok",
   "data": {
     "session_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
     "expire_at": "2024-01-15T11:30:00Z"
@@ -266,7 +267,8 @@ Request Body (JSON):
 Response (200 OK):
 ```json
 {
-  "status": "success",
+  "code": 200,
+  "status": "ok",
   "data": {
     "suggestions": [
       {
@@ -307,7 +309,8 @@ Request Body (JSON):
 Response (200 OK):
 ```json
 {
-  "status": "success",
+  "code": 200,
+  "status": "ok",
   "data": {
     "match_score": 78,
     "match_breakdown": {
@@ -354,7 +357,8 @@ Request Body (JSON):
 Response (200 OK):
 ```json
 {
-  "status": "success",
+  "code": 200,
+  "status": "ok",
   "data": {
     "encoded_file": "JVBERi0xLjQKJ..."
   }
@@ -384,6 +388,45 @@ Error Responses:
 ## 5. UI design
 
 ### 5.1 Simple wireframe for frontend components
+
+The frontend consists of a single-page application with the following layout:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Header / Logo                           │
+├──────────────┬──────────────────────────────────────────────────┤
+│              │                                                  │
+│   Sidebar    │              Main Content Area                   │
+│              │                                                  │
+│  ┌────────┐  │  ┌────────────────────────────────────────────┐  │
+│  │Upload  │  │  │                                            │  │
+│  │Resume  │  │  │         Resume Preview Panel               │  │
+│  └────────┘  │  │                                            │  │
+│              │  │  - Displays uploaded resume content        │  │
+│  ┌────────┐  │  │  - Shows parsing status                    │  │
+│  │Enter   │  │  │                                            │  │
+│  │JD      │  │  └────────────────────────────────────────────┘  │
+│  └────────┘  │                                                  │
+│              │  ┌────────────────────────────────────────────┐  │
+│  ┌────────┐  │  │                                            │  │
+│  │Analyze │  │  │         Analysis Output Panel              │  │
+│  └────────┘  │  │                                            │  │
+│              │  │  - Match score (if JD provided)            │  │
+│  ┌────────┐  │  │  - AI suggestions list                     │  │
+│  │Optimize│  │  │  - Download optimized resume button        │  │
+│  └────────┘  │  │                                            │  │
+│              │  └────────────────────────────────────────────┘  │
+└──────────────┴──────────────────────────────────────────────────┘
+```
+
+**Components:**
+
+| Component | Description |
+| --------- | ----------- |
+| **Sidebar** | Navigation and action buttons (Upload, Enter JD, Analyze, Optimize) |
+| **FileUpload** | Drag-and-drop or click to upload resume (PDF, DOCX, TXT) |
+| **ResumePreview** | Displays the content of uploaded resume |
+| **AnalysisOutput** | Shows AI analysis results, match score, and suggestions |
 
 ### 5.2 Description of workflow and interaction
 
