@@ -14,9 +14,6 @@ from app.services.resume_parser import ResumeParserService
 
 router = APIRouter()
 
-# Storage root path (matches RA-23)
-STORAGE_ROOT = Path(__file__).resolve().parents[3] / "storage" / "resumes"
-
 
 # ============================================================================
 # Endpoint 1: Upload & Parse Resume
