@@ -2,4 +2,20 @@
 Pydantic Schemas Module
 """
 
-# Schemas will be implemented by RA-12
+from .resume import (
+    ContactInfo,
+    Education,
+    ResumeData,
+    ResumeParseRequest,
+    ResumeParseResponse,
+    WorkExperience,
+)
+
+__all__ = [
+    "ResumeParseRequest",
+    "ResumeParseResponse",
+    "ResumeData",
+    "ContactInfo",
+    "Education",
+    "WorkExperience",
+]
