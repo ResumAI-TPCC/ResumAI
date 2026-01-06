@@ -5,6 +5,7 @@ RA-12: Basic API endpoints implementation
 RA-24: Resume parsing implementation
 """
 
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, status
@@ -52,32 +53,37 @@ async def parse_resume(request: ResumeParseRequest):
         400: Unsupported file format or parsing error
         403: Path traversal attempt detected
     """
-    # Define allowed base directory
-    backend_root = Path(__file__).resolve().parents[3]
-    storage_base = backend_root / "storage" / "resumes"
-
-    # Construct file path
-    file_path = Path(request.storage_path)
-    if not file_path.is_absolute():
-        # Relative path, resolve from backend root
-        file_path = backend_root / request.storage_path
-        
-        # Security: For relative paths, ensure they're within storage directory
-        try:
-            file_path = file_path.resolve()
-            storage_base = storage_base.resolve()
-            # Check if file_path is under storage_base
-            file_path.relative_to(storage_base)
-        except (ValueError, RuntimeError):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied: Invalid file path",
-            )
+    # Get backend root - allow override for testing
+    backend_root = os.getenv("BACKEND_ROOT")
+    if backend_root:
+        backend_root = Path(backend_root).resolve()
     else:
-        # For absolute paths, resolve to prevent symlink attacks
-        file_path = file_path.resolve()
+        backend_root = Path(__file__).resolve().parents[3]
+    
+    storage_base = (backend_root / "storage" / "resumes").resolve()
 
-    # Verify file exists
+    # Construct and validate file path
+    input_path = Path(request.storage_path)
+    
+    # Convert to absolute path if relative
+    if not input_path.is_absolute():
+        file_path = (backend_root / request.storage_path).resolve()
+    else:
+        file_path = input_path.resolve()
+    
+    # Security: Validate path is within allowed directory
+    # This prevents path traversal attacks (../../../etc/passwd)
+    try:
+        # Check if the resolved path is within storage_base
+        file_path.relative_to(storage_base)
+    except ValueError:
+        # Path is outside allowed directory - could be path traversal attack
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Invalid file path",
+        )
+
+    # Verify file exists (safe to use after validation)
     if not file_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

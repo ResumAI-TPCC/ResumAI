@@ -19,7 +19,12 @@ def client():
 
 @pytest.fixture
 def sample_pdf_path(tmp_path):
-    """Create a sample PDF file for testing"""
+    """Create a sample PDF file for testing in proper storage structure"""
+    # Create storage directory structure
+    backend_root = tmp_path / "backend"
+    storage_dir = backend_root / "storage" / "resumes" / "test-id"
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    
     pdf_content = b"""%PDF-1.4
 1 0 obj
 <<
@@ -70,9 +75,11 @@ startxref
 306
 %%EOF"""
 
-    pdf_file = tmp_path / "test_resume.pdf"
+    pdf_file = storage_dir / "test_resume.pdf"
     pdf_file.write_bytes(pdf_content)
-    return pdf_file
+    
+    # Return backend root and relative path from backend root
+    return backend_root, "storage/resumes/test-id/test_resume.pdf"
 
 
 def test_parse_resume_missing_file(client):
@@ -88,15 +95,23 @@ def test_parse_resume_missing_file(client):
     assert "not found" in response.json()["detail"].lower()
 
 
-def test_parse_resume_invalid_format(client, tmp_path):
+def test_parse_resume_invalid_format(client, tmp_path, monkeypatch):
     """Test parsing with unsupported file format"""
+    # Create proper storage structure
+    backend_root = tmp_path / "backend"
+    storage_dir = backend_root / "storage" / "resumes" / "test-id-456"
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    
     # Create a text file
-    txt_file = tmp_path / "test.txt"
+    txt_file = storage_dir / "test.txt"
     txt_file.write_text("This is a text file")
+    
+    # Set BACKEND_ROOT environment variable for testing
+    monkeypatch.setenv("BACKEND_ROOT", str(backend_root))
 
     request_data = {
         "file_id": "test-id-456",
-        "storage_path": str(txt_file),
+        "storage_path": "storage/resumes/test-id-456/test.txt",
     }
 
     response = client.post(f"{settings.api_prefix}/resume/parse", json=request_data)
@@ -105,11 +120,16 @@ def test_parse_resume_invalid_format(client, tmp_path):
     assert "unsupported" in response.json()["detail"].lower()
 
 
-def test_parse_resume_pdf_success(client, sample_pdf_path):
+def test_parse_resume_pdf_success(client, sample_pdf_path, monkeypatch):
     """Test successful PDF parsing"""
+    backend_root, relative_path = sample_pdf_path
+    
+    # Set BACKEND_ROOT environment variable for testing
+    monkeypatch.setenv("BACKEND_ROOT", str(backend_root))
+    
     request_data = {
         "file_id": "test-id-789",
-        "storage_path": str(sample_pdf_path),
+        "storage_path": relative_path,
     }
 
     response = client.post(f"{settings.api_prefix}/resume/parse", json=request_data)
@@ -129,8 +149,13 @@ def test_parse_resume_pdf_success(client, sample_pdf_path):
     assert isinstance(parsed_data["skills"], list)
 
 
-def test_parse_resume_docx_success(client, tmp_path):
+def test_parse_resume_docx_success(client, tmp_path, monkeypatch):
     """Test successful DOCX parsing"""
+    # Create proper storage structure
+    backend_root = tmp_path / "backend"
+    storage_dir = backend_root / "storage" / "resumes" / "test-id-999"
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    
     # Create a minimal DOCX file
     from docx import Document
 
@@ -140,12 +165,15 @@ def test_parse_resume_docx_success(client, tmp_path):
     doc.add_paragraph("+1-555-1234")
     doc.add_paragraph("Skills: Python, FastAPI, Docker")
 
-    docx_file = tmp_path / "test_resume.docx"
+    docx_file = storage_dir / "test_resume.docx"
     doc.save(str(docx_file))
+    
+    # Set BACKEND_ROOT environment variable for testing
+    monkeypatch.setenv("BACKEND_ROOT", str(backend_root))
 
     request_data = {
         "file_id": "test-id-999",
-        "storage_path": str(docx_file),
+        "storage_path": "storage/resumes/test-id-999/test_resume.docx",
     }
 
     response = client.post(f"{settings.api_prefix}/resume/parse", json=request_data)

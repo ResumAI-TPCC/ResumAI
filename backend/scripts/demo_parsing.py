@@ -83,13 +83,13 @@ def demo_parsing():
     
     print(f"\n📝 Full Name: {result.full_name}")
     
-    print(f"\n📧 Contact Information:")
+    print("\n📧 Contact Information:")
     print(f"   Email: {result.contact_info.email}")
     print(f"   Phone: {result.contact_info.phone}")
     print(f"   LinkedIn: {result.contact_info.linkedin}")
     
     if result.summary:
-        print(f"\n💼 Summary:")
+        print("\n💼 Summary:")
         print(f"   {result.summary[:100]}...")
     
     print(f"\n🛠️  Skills ({len(result.skills)}):")
