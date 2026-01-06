@@ -62,22 +62,31 @@ async def parse_resume(request: ResumeParseRequest):
     
     storage_base = (backend_root / "storage" / "resumes").resolve()
 
-    # Construct and validate file path
-    input_path = Path(request.storage_path)
-    
-    # Convert to absolute path if relative
-    if not input_path.is_absolute():
-        file_path = (backend_root / request.storage_path).resolve()
-    else:
-        file_path = input_path.resolve()
-    
-    # Security: Validate path is within allowed directory
+    # Security: Validate input path before any file system operations
     # This prevents path traversal attacks (../../../etc/passwd)
+    input_str = str(request.storage_path)
+    
+    # Block obvious path traversal patterns
+    if ".." in input_str or input_str.startswith("/"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Invalid file path",
+        )
+    
+    # Only allow paths under storage/resumes
+    if not input_str.startswith("storage/resumes/") and not input_str.startswith("storage\\resumes\\"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Path must be under storage/resumes/",
+        )
+    
+    # Now safe to construct the file path
+    file_path = (backend_root / input_str).resolve()
+    
+    # Double-check the resolved path is still within storage_base
     try:
-        # Check if the resolved path is within storage_base
         file_path.relative_to(storage_base)
     except ValueError:
-        # Path is outside allowed directory - could be path traversal attack
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: Invalid file path",
