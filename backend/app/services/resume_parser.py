@@ -269,19 +269,26 @@ class MemoryResumeParser:
         Returns:
             ResumeData: Extracted resume information
         """
-        import io
         import tempfile
         from pathlib import Path
         
-        # Determine file extension
-        if filename.endswith('.pdf'):
+        # Security: Extract only the basename to prevent path traversal
+        # This removes any directory components from the filename
+        safe_filename = Path(filename).name
+        
+        # Validate filename doesn't contain path traversal patterns
+        if ".." in safe_filename or safe_filename.startswith(("/", "\\")):
+            raise ValueError("Invalid filename")
+        
+        # Determine file extension from safe filename
+        if safe_filename.endswith('.pdf'):
             suffix = '.pdf'
-        elif filename.endswith('.docx'):
+        elif safe_filename.endswith('.docx'):
             suffix = '.docx'
-        elif filename.endswith('.txt'):
+        elif safe_filename.endswith('.txt'):
             suffix = '.txt'
         else:
-            raise ValueError(f"Unsupported file format: {filename}")
+            raise ValueError(f"Unsupported file format: {safe_filename}")
         
         # For PDF/DOCX, we need to use temporary file
         if suffix in ['.pdf', '.docx']:
@@ -291,13 +298,13 @@ class MemoryResumeParser:
                 tmp_path = Path(tmp.name)
             
             try:
-                return ResumeParserService.parse_file(tmp_path, filename)
+                return ResumeParserService.parse_file(tmp_path, safe_filename)
             finally:
                 tmp_path.unlink(missing_ok=True)
         else:
             # For text files, parse directly
             raw_text = file_content.decode('utf-8', errors='ignore')
-            return ResumeParserService._extract_structured_data(raw_text, filename)
+            return ResumeParserService._extract_structured_data(raw_text, safe_filename)
 
 
 def get_resume_parser():
