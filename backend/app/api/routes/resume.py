@@ -1,165 +1,124 @@
 """
 Resume API Routes
-
-RA-12: Basic API endpoints implementation
-RA-24: Resume parsing implementation
 """
 
-import os
+import time
 from pathlib import Path
+from fastapi import APIRouter, File, UploadFile, HTTPException, status
 
-from fastapi import APIRouter, HTTPException, status
-
-from app.schemas.resume import ResumeParseRequest, ResumeParseResponse
-from app.services.resume_parser import ResumeParserService
+from app.schemas.resume import ResumeUploadResponse
+from app.services.resume_parser import get_resume_parser
 
 router = APIRouter()
 
 
-# ============================================================================
-# Endpoint 1: Upload & Parse Resume
-# ============================================================================
-@router.post("/")
-async def upload_resume():
+@router.post("/", response_model=ResumeUploadResponse)
+async def upload_resume(
+    file: UploadFile = File(..., description="Resume file (PDF, DOCX, or TXT)")
+):
     """
     Upload and parse resume file
-
-    Returns:
-        dict: Success message with 200 OK
-    """
-    return {"message": "Resume upload endpoint", "status": "ok"}
-
-
-# ============================================================================
-# Endpoint 1b: Parse Uploaded Resume (RA-24)
-# ============================================================================
-@router.post("/parse", response_model=ResumeParseResponse)
-async def parse_resume(request: ResumeParseRequest):
-    """
-    Parse an uploaded resume file and extract structured information
-
-    This endpoint takes a file_id and storage_path from the upload endpoint
-    and returns extracted resume data including contact info, education,
-    work experience, and skills.
-
+    
+    Accepts PDF, DOCX, or TXT files and extracts structured resume data including:
+    - Contact information (email, phone, LinkedIn, GitHub)
+    - Personal summary
+    - Skills
+    - Work experience
+    - Education
+    - Projects
+    - Languages
+    - Certifications
+    
     Args:
-        request: ResumeParseRequest with file_id and storage_path
-
+        file: Resume file to parse
+    
     Returns:
-        ResumeParseResponse: Parsed resume data
-
+        ResumeUploadResponse: Parsed resume data with metadata
+    
     Raises:
-        404: File not found
-        400: Unsupported file format or parsing error
-        403: Path traversal attempt detected
+        400: Unsupported file format
+        422: File parsing failed
+        500: Internal server error
     """
-    # Get backend root - allow override for testing
-    backend_root = os.getenv("BACKEND_ROOT")
-    if backend_root:
-        backend_root = Path(backend_root).resolve()
-    else:
-        backend_root = Path(__file__).resolve().parents[3]
+    start_time = time.time()
     
-    storage_base = (backend_root / "storage" / "resumes").resolve()
-
-    # Security: Validate input path before any file system operations
-    # This prevents path traversal attacks (../../../etc/passwd)
-    input_str = str(request.storage_path)
+    # Validate file size (10MB limit)
+    max_file_size = 10 * 1024 * 1024
+    file_content = await file.read()
     
-    # Block obvious path traversal patterns
-    if ".." in input_str or input_str.startswith("/"):
+    if len(file_content) > max_file_size:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Invalid file path",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File too large. Maximum size is {max_file_size // (1024 * 1024)}MB"
         )
     
-    # Only allow paths under storage/resumes
-    if not input_str.startswith("storage/resumes/") and not input_str.startswith("storage\\resumes\\"):
+    # Detect file type from extension
+    file_ext = '.' + file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+    
+    if file_ext not in ['.pdf', '.docx', '.txt']:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Path must be under storage/resumes/",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file format: {file_ext}. Supported formats: PDF, DOCX, TXT"
         )
     
-    # Now safe to construct the file path
-    file_path = (backend_root / input_str).resolve()
+    # Security: Extract only the basename to prevent path traversal
+    safe_filename = Path(file.filename).name
+    if ".." in safe_filename or safe_filename.startswith(("/", "\\")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid filename"
+        )
     
-    # Double-check the resolved path is still within storage_base
     try:
-        file_path.relative_to(storage_base)
+        parser = get_resume_parser()
+        parsed_data = await parser.parse_file(
+            file_content=file_content,
+            filename=safe_filename,
+            file_type=file.content_type
+        )
+        
+        processing_time = int((time.time() - start_time) * 1000)
+        
+        return ResumeUploadResponse(
+            success=True,
+            message="Resume parsed successfully",
+            data=parsed_data,
+            file_type=file_ext.lstrip('.'),
+            processing_time_ms=processing_time
+        )
+        
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Invalid file path",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file format or content"
         )
-
-    # Verify file exists (safe to use after validation)
-    if not file_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Resume file not found",
-        )
-
-    # Extract filename from path
-    filename = file_path.name
-
-    # Parse the resume
-    try:
-        parsed_data = ResumeParserService.parse_file(file_path, filename)
-
-        return ResumeParseResponse(
-            file_id=request.file_id,
-            filename=filename,
-            parsed_data=parsed_data,
-            status="success",
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        ) from e
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to parse resume: {str(e)}",
-        ) from e
+        processing_time = int((time.time() - start_time) * 1000)
+        print(f"Resume parsing error: {str(e)}")
+        
+        return ResumeUploadResponse(
+            success=False,
+            message="Failed to parse resume",
+            data=None,
+            file_type=file_ext.lstrip('.'),
+            processing_time_ms=processing_time,
+            error="An error occurred while processing the file"
+        )
 
 
-# ============================================================================
-# Endpoint 2: Calculate Match Score
-# ============================================================================
 @router.post("/match")
 async def match_resume():
-    """
-    Calculate match score between resume and job description
-    
-    Returns:
-        dict: Success message with 200 OK
-    """
+    """Calculate match score between resume and job description"""
     return {"message": "Resume match endpoint", "status": "ok"}
 
 
-# ============================================================================
-# Endpoint 3: Optimize Resume
-# ============================================================================
 @router.post("/optimize")
 async def optimize_resume():
-    """
-    Optimize resume content
-    
-    Returns:
-        dict: Success message with 200 OK
-    """
+    """Optimize resume content"""
     return {"message": "Resume optimize endpoint", "status": "ok"}
 
 
-# ============================================================================
-# Endpoint 4: Analyze & Generate Suggestions
-# ============================================================================
 @router.post("/analyze")
 async def analyze_resume():
-    """
-    Analyze resume and generate improvement suggestions
-    
-    Returns:
-        dict: Success message with 200 OK
-    """
+    """Analyze resume and generate improvement suggestions"""
     return {"message": "Resume analyze endpoint", "status": "ok"}
