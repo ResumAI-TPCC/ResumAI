@@ -61,3 +61,14 @@ class ResumeParseResponse(BaseModel):
     filename: str = Field(..., description="Original filename")
     parsed_data: ResumeData = Field(..., description="Extracted resume information")
     status: str = Field(default="success", description="Parse status")
+
+
+class ResumeUploadResponse(BaseModel):
+    """Response schema for resume upload and parse"""
+
+    success: bool = Field(..., description="Whether the operation was successful")
+    message: str = Field(..., description="Response message")
+    data: Optional[ResumeData] = Field(None, description="Parsed resume data")
+    file_type: str = Field(..., description="File type (pdf, docx, txt)")
+    processing_time_ms: int = Field(..., description="Processing time in milliseconds")
+    error: Optional[str] = Field(None, description="Error message if failed")
