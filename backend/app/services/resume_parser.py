@@ -276,8 +276,8 @@ class MemoryResumeParser:
         # This removes any directory components from the filename
         safe_filename = Path(filename).name
         
-        # Validate filename doesn't contain path traversal patterns
-        if ".." in safe_filename or safe_filename.startswith(("/", "\\")):
+        # Validate filename for unsafe characters (e.g., null bytes, control chars)
+        if "\x00" in safe_filename or any(ord(ch) < 32 for ch in safe_filename):
             raise ValueError("Invalid filename")
         
         # Determine file extension from safe filename
