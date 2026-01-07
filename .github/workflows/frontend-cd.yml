@@ -36,3 +36,4 @@ jobs:
           firebaseServiceAccount: ${{ secrets.GCP_SA_KEY }}
           projectId: resumai-platform
           channelId: live
+          entryPoint: frontend
