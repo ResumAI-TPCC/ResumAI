@@ -57,7 +57,9 @@ class ResumeParserService:
 
             return "\n".join(text_parts)
         except Exception as e:
-            raise ValueError(f"Failed to parse PDF: {str(e)}")
+            # Log full error internally, return generic message to client
+            print(f"PDF parsing error: {str(e)}")
+            raise ValueError("Failed to parse PDF file")
 
     @staticmethod
     def _extract_text_from_docx(file_path: Path) -> str:
@@ -72,7 +74,9 @@ class ResumeParserService:
 
             return "\n".join(text_parts)
         except Exception as e:
-            raise ValueError(f"Failed to parse DOCX: {str(e)}")
+            # Log full error internally, return generic message to client
+            print(f"DOCX parsing error: {str(e)}")
+            raise ValueError("Failed to parse DOCX file")
 
     @staticmethod
     def _extract_structured_data(raw_text: str, filename: str) -> ResumeData:
@@ -89,9 +93,11 @@ class ResumeParserService:
         emails = re.findall(email_pattern, raw_text)
         email = emails[0] if emails else None
 
-        # Extract phone number (simplified pattern)
-        phone_pattern = r"[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}"
-        phones = re.findall(phone_pattern, raw_text)
+        # Extract phone number with validation
+        phone_pattern = r"\b(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{3,4}\b"
+        raw_phones = re.findall(phone_pattern, raw_text)
+        # Filter to valid phone numbers (7-15 digits)
+        phones = [p for p in raw_phones if 7 <= len(re.sub(r"\D", "", p)) <= 15]
         phone = phones[0] if phones else None
 
         # Extract LinkedIn URL
@@ -138,8 +144,8 @@ class ResumeParserService:
         skills = []
 
         # Look for skills section
-        skills_pattern = r"(?:skills?|technical skills?|core competencies)[\s:]*([^\n]+(?:\n(?!\n)[^\n]+)*)"
-        match = re.search(skills_pattern, text, re.IGNORECASE)
+        skills_pattern = r"(?:skills?|technical skills?|core competencies)[\s:]*\n((?:[^\n]+\n?)+?)(?:\n\n|experience|employment|work history|education|$)"
+        match = re.search(skills_pattern, text, re.IGNORECASE | re.DOTALL)
 
         if match:
             skills_text = match.group(1)
@@ -163,21 +169,45 @@ class ResumeParserService:
             edu_text = match.group(1)
             lines = [line.strip() for line in edu_text.split("\n") if line.strip()]
 
-            # Simple heuristic: every 2-4 lines form one education entry
+            # Intelligent field classification
             current_entry = []
             for line in lines:
                 current_entry.append(line)
                 if len(current_entry) >= 3:
-                    education_list.append(
-                        Education(
-                            institution=current_entry[0] if len(current_entry) > 0 else None,
-                            degree=current_entry[1] if len(current_entry) > 1 else None,
-                            field=current_entry[2] if len(current_entry) > 2 else None,
-                        )
-                    )
+                    education_list.append(ResumeParserService._classify_education_fields(current_entry))
                     current_entry = []
+            
+            # Process remaining partial entry
+            if current_entry:
+                education_list.append(ResumeParserService._classify_education_fields(current_entry))
 
         return education_list[:5]  # Limit to 5 entries
+    
+    @staticmethod
+    def _classify_education_fields(entry_lines: list[str]) -> Education:
+        """Classify education entry fields by content patterns"""
+        institution = None
+        degree = None
+        field = None
+        
+        for line in entry_lines:
+            lower_line = line.lower()
+            if institution is None and re.search(r"\b(university|college|institute|school)\b", lower_line):
+                institution = line
+            elif degree is None and re.search(r"\b(bachelor|master|ph\.?d|phd|b\.?sc|m\.?sc|ba|bs|beng|meng|mba)\b", lower_line):
+                degree = line
+            elif field is None:
+                field = line
+        
+        # Fallback to positional mapping if classification failed
+        if institution is None and len(entry_lines) > 0:
+            institution = entry_lines[0]
+        if degree is None and len(entry_lines) > 1:
+            degree = entry_lines[1]
+        if field is None and len(entry_lines) > 2:
+            field = entry_lines[2]
+        
+        return Education(institution=institution, degree=degree, field=field)
 
     @staticmethod
     def _extract_work_experience(text: str) -> list[WorkExperience]:
@@ -212,8 +242,8 @@ class ResumeParserService:
     def _extract_summary(text: str) -> Optional[str]:
         """Extract professional summary"""
         # Look for summary/objective section
-        summary_pattern = r"(?:summary|objective|profile|about)[\s:]*\n([^\n]+(?:\n(?!\n)[^\n]+)*)"
-        match = re.search(summary_pattern, text, re.IGNORECASE)
+        summary_pattern = r"(?:summary|objective|profile|about)[\s:]*\n((?:[^\n]+\n?)+?)(?:\n\n|experience|employment|work history|education|skills|$)"
+        match = re.search(summary_pattern, text, re.IGNORECASE | re.DOTALL)
 
         if match:
             summary = match.group(1).strip()
@@ -221,3 +251,55 @@ class ResumeParserService:
             return summary[:500] if len(summary) > 500 else summary
 
         return None
+
+
+class MemoryResumeParser:
+    """Adapter for parsing resume from memory (file content)"""
+    
+    @staticmethod
+    async def parse_file(file_content: bytes, filename: str, file_type: str) -> ResumeData:
+        """
+        Parse resume from memory buffer
+        
+        Args:
+            file_content: File content as bytes
+            filename: Original filename
+            file_type: MIME type
+            
+        Returns:
+            ResumeData: Extracted resume information
+        """
+        import io
+        import tempfile
+        from pathlib import Path
+        
+        # Determine file extension
+        if filename.endswith('.pdf'):
+            suffix = '.pdf'
+        elif filename.endswith('.docx'):
+            suffix = '.docx'
+        elif filename.endswith('.txt'):
+            suffix = '.txt'
+        else:
+            raise ValueError(f"Unsupported file format: {filename}")
+        
+        # For PDF/DOCX, we need to use temporary file
+        if suffix in ['.pdf', '.docx']:
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp.write(file_content)
+                tmp.flush()
+                tmp_path = Path(tmp.name)
+            
+            try:
+                return ResumeParserService.parse_file(tmp_path, filename)
+            finally:
+                tmp_path.unlink(missing_ok=True)
+        else:
+            # For text files, parse directly
+            raw_text = file_content.decode('utf-8', errors='ignore')
+            return ResumeParserService._extract_structured_data(raw_text, filename)
+
+
+def get_resume_parser():
+    """Factory function to get resume parser instance"""
+    return MemoryResumeParser()
