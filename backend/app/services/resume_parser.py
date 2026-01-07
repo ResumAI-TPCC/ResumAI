@@ -167,19 +167,28 @@ class ResumeParserService:
 
         if match:
             edu_text = match.group(1)
-            lines = [line.strip() for line in edu_text.split("\n") if line.strip()]
+            raw_lines = edu_text.split("\n")
 
-            # Intelligent field classification
+            # Intelligent field classification with flexible entry boundaries
             current_entry = []
-            for line in lines:
+            for raw_line in raw_lines:
+                line = raw_line.strip()
+                # Blank line indicates end of one education entry
+                if not line:
+                    if current_entry:
+                        education_list.append(
+                            ResumeParserService._classify_education_fields(current_entry)
+                        )
+                        current_entry = []
+                    continue
+
                 current_entry.append(line)
-                if len(current_entry) >= 3:
-                    education_list.append(ResumeParserService._classify_education_fields(current_entry))
-                    current_entry = []
             
-            # Process remaining partial entry
+            # Process remaining partial entry (if text didn't end with a blank line)
             if current_entry:
-                education_list.append(ResumeParserService._classify_education_fields(current_entry))
+                education_list.append(
+                    ResumeParserService._classify_education_fields(current_entry)
+                )
 
         return education_list[:5]  # Limit to 5 entries
     
