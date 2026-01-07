@@ -3,7 +3,7 @@ import Sidebar from '../components/Sidebar'
 import AnalysisOutput from '../components/AnalysisOutput'
 import ResumePreview from '../components/ResumePreview'
 import { uploadResume } from '../utils/api'
-import { saveSession, loadSession, clearSession as clearStorageSession, updateSessionField } from '../utils/storage'
+import { saveSession, loadSession, clearSession as clearStorageSession } from '../utils/storage'
 
 function ResumeAnalysisPage() {
   const [sessionId, setSessionId] = useState(null)
@@ -50,7 +50,8 @@ function ResumeAnalysisPage() {
         setSessionId(newSessionId)
         setUploadedFile(selectedFile)
         
-        // Save session to localStorage
+        // Save session to localStorage only on upload success
+        // Include current form values for session restore
         saveSession({
           session_id: newSessionId,
           expire_at: expireAt,
@@ -73,19 +74,18 @@ function ResumeAnalysisPage() {
     setSessionId(null)
   }
 
+  // Simple state updates without localStorage writes
+  // localStorage is only written on upload success or explicit save actions
   const handleCompanyNameChange = (value) => {
     setCompanyName(value)
-    updateSessionField('companyName', value)
   }
 
   const handleJobTitleChange = (value) => {
     setJobTitle(value)
-    updateSessionField('jobTitle', value)
   }
 
   const handleJobDescriptionChange = (value) => {
     setJobDescription(value)
-    updateSessionField('jobDescription', value)
   }
 
   const handleClearSession = () => {
