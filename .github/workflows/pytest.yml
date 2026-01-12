@@ -1,0 +1,47 @@
+name: Backend CI (Test and Lint)
+
+# Triggers the workflow on push or pull request events
+# for the main branch
+on:
+  push:
+    branches: [ develop, main ]
+  pull_request:
+    branches: [ develop, main ]
+
+permissions:
+  contents: read
+
+# Defines the jobs that will run
+jobs:
+  backend-test:
+    # The operating system to run the job on
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./backend
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+    
+    - name: Install dependencies
+      run: |
+        poetry install --no-root
+
+    - name: Lint with ruff
+      run: |
+        poetry run ruff check .
+    
+    - name: Run tests with pytest
+      run: |
+        poetry run pytest tests/ -v
