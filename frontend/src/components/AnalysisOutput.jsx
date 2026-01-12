@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import PropTypes from 'prop-types'
-import { analyzeResume, matchResumeWithJob } from '../utils/api'
+import { matchResumeWithJob } from '../utils/api'
 
 function AnalysisOutput({ sessionId, jobDescription, companyName, jobTitle }) {
   const [analysisData, setAnalysisData] = useState(null)
