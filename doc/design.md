@@ -396,7 +396,7 @@ The frontend consists of a single-page application with a three-column layout:
 │      SIDEBAR       │         MAIN CONTENT            │   RESUME PREVIEW     │
 │                    │                                 │                      │
 │  ┌──────────────┐  │  ┌─────────────────────────┐    │  ┌────────────────┐  │
-│  │   ResumAI    │  │  │    Match Analysis       │    │  │  MATCH SCORE   │  │
+│  │   ResumAI    │  │  │    AnalysisOutput       │    │  │  MATCH SCORE   │  │
 │  │   Logo       │  │  │                         │    │  │    68/100      │  │
 │  └──────────────┘  │  │  ┌───────────────────┐  │    │  └────────────────┘  │
 │                    │  │  │ JD Match Score    │  │    │                      │
@@ -434,7 +434,7 @@ The frontend consists of a single-page application with a three-column layout:
 | --------- | ----------- |
 | **Sidebar** | Input panel with Company Name, Job Title, Job Description, Resume Upload, and Clear Session |
 | **FileUpload** | Drag-and-drop or click to upload resume (PDF, DOCX, TXT), shows upload status |
-| **MatchAnalysis** | Main content area showing JD Match Score, Scoring Principles, and Analysis Reasoning |
+| **AnalysisOutput** | Main content area showing JD Match Score, Scoring Principles, and Analysis Reasoning |
 | **ResumePreview** | Right panel with Match Score badge, document preview, and Download Polished Resume button |
 
 ### 5.2 Description of workflow and interaction
