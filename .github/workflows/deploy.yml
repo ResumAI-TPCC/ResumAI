@@ -23,7 +23,7 @@ jobs:
       - name: Checkout repository at workflow commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_commit.id }}
+          ref: ${{ github.event.workflow_run.head_branch }}
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
