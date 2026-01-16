@@ -28,7 +28,11 @@ class Settings(BaseSettings):
 
     # LLM Provider settings
     # Specific provider settings will be extended by each implementation
-    llm_provider: str = ""
+    llm_provider: str = "gemini"
+
+    # Gemini specific settings
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
 
 
 @lru_cache
