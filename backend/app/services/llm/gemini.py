@@ -33,18 +33,18 @@ class GeminiProvider(BaseLLMProvider):
         job_description: str,
         instructions: Optional[str] = None,
     ) -> LLMResponse:
-        """优化简历内容"""
-        prompt = f"""你是一位专业的简历优化专家。请根据目标职位描述优化以下简历。
+        """Optimize resume content"""
+        prompt = f"""You are a professional resume optimization expert. Please optimize the following resume based on the target job description.
 
-目标职位描述：
+Target Job Description:
 {job_description}
 
-原始简历：
+Original Resume:
 {resume_content}
 
-{f"用户特别要求：{instructions}" if instructions else ""}
+{f"Special Instructions: {instructions}" if instructions else ""}
 
-请提供优化后的简历内容，保持专业格式，突出与职位相关的技能和经验。
+Please provide the optimized resume content, maintaining a professional format and highlighting skills and experience relevant to the position.
 """
 
         response = await self.client.aio.models.generate_content(
@@ -69,20 +69,20 @@ class GeminiProvider(BaseLLMProvider):
         resume_content: str,
         job_description: str,
     ) -> LLMResponse:
-        """分析简历并生成改进建议"""
-        prompt = f"""你是一位专业的简历分析师。请分析以下简历与目标职位的匹配情况，并提供改进建议。
+        """Analyze resume and generate improvement suggestions"""
+        prompt = f"""You are a professional resume analyst. Please analyze how well the following resume matches the target job description and provide improvement suggestions.
 
-目标职位描述：
+Target Job Description:
 {job_description}
 
-简历内容：
+Resume Content:
 {resume_content}
 
-请提供：
-1. 简历优势分析
-2. 需要改进的地方
-3. 具体的优化建议
-4. 关键词建议
+Please provide:
+1. Resume strengths analysis
+2. Areas that need improvement
+3. Specific optimization suggestions
+4. Keyword recommendations
 """
 
         response = await self.client.aio.models.generate_content(
@@ -107,23 +107,23 @@ class GeminiProvider(BaseLLMProvider):
         resume_content: str,
         job_description: str,
     ) -> MatchScoreResult:
-        """计算简历与职位的匹配度"""
-        prompt = f"""你是一位专业的招聘专家。请评估以下简历与职位描述的匹配程度。
+        """Calculate the match score between resume and job description"""
+        prompt = f"""You are a professional recruiting expert. Please evaluate how well the following resume matches the job description.
 
-职位描述：
+Job Description:
 {job_description}
 
-简历内容：
+Resume Content:
 {resume_content}
 
-请以 JSON 格式返回评估结果：
+Please return the evaluation result in JSON format:
 {{
-    "score": 0.0-1.0之间的匹配分数,
-    "explanation": "详细的匹配度解释",
-    "suggestions": ["改进建议1", "改进建议2", "改进建议3"]
+    "score": a match score between 0.0 and 1.0,
+    "explanation": "detailed explanation of the match",
+    "suggestions": ["suggestion 1", "suggestion 2", "suggestion 3"]
 }}
 
-只返回 JSON，不要有其他内容。
+Return only JSON, no other content.
 """
 
         response = await self.client.aio.models.generate_content(
@@ -131,9 +131,9 @@ class GeminiProvider(BaseLLMProvider):
             contents=prompt,
         )
 
-        # 解析 JSON 响应
+        # Parse JSON response
         try:
-            # 清理可能的 markdown 代码块标记
+            # Clean up possible markdown code block markers
             text = response.text.strip()
             if text.startswith("```json"):
                 text = text[7:]
@@ -150,9 +150,9 @@ class GeminiProvider(BaseLLMProvider):
                 suggestions=result.get("suggestions", []),
             )
         except (json.JSONDecodeError, KeyError):
-            # 如果解析失败，返回默认结果
+            # Return default result if parsing fails
             return MatchScoreResult(
                 score=0.5,
-                explanation=f"解析响应时出错: {response.text}",
-                suggestions=["无法解析 AI 响应，请重试"],
+                explanation=f"Error parsing response: {response.text}",
+                suggestions=["Unable to parse AI response, please try again"],
             )

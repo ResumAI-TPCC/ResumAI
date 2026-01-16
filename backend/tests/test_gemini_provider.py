@@ -12,7 +12,7 @@ from app.services.llm.base import LLMResponse, MatchScoreResult
 def mock_settings():
     with patch("app.services.llm.gemini.settings") as mock:
         mock.gemini_api_key = "test_api_key"
-        mock.gemini_model = "gemini-1.5-flash"
+        mock.gemini_model = "gemini-2.5-flash"
         yield mock
 
 
@@ -44,7 +44,7 @@ class TestGeminiProvider:
 
         # Verify client was created with API key
         mock_genai.Client.assert_called_once_with(api_key="test_api_key")
-        assert provider.model_name == "gemini-1.5-flash"
+        assert provider.model_name == "gemini-2.5-flash"
 
     @pytest.mark.asyncio
     async def test_optimize(self, mock_settings, mock_genai):
@@ -77,7 +77,7 @@ class TestGeminiProvider:
 
         assert isinstance(result, LLMResponse)
         assert result.content == "Optimized resume content"
-        assert result.model == "gemini-1.5-flash"
+        assert result.model == "gemini-2.5-flash"
         assert result.usage["total_tokens"] == 300
 
     @pytest.mark.asyncio
@@ -110,7 +110,7 @@ class TestGeminiProvider:
 
         assert isinstance(result, LLMResponse)
         assert result.content == "Analysis results"
-        assert result.model == "gemini-1.5-flash"
+        assert result.model == "gemini-2.5-flash"
 
     @pytest.mark.asyncio
     async def test_match(self, mock_settings, mock_genai):
@@ -195,4 +195,4 @@ class TestGeminiProvider:
         # Should return default result on parse failure
         assert isinstance(result, MatchScoreResult)
         assert result.score == 0.5
-        assert "解析响应时出错" in result.explanation
+        assert "Error parsing response" in result.explanation
