@@ -1,6 +1,7 @@
 name: Frontend CD (Firebase)
 
 on:
+  workflow_dispatch:  # Allow manual trigger
   workflow_run:
     workflows:
       - "Frontend CI (Test and Lint)"
@@ -11,7 +12,8 @@ on:
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    # Deploy when CI succeeds, regardless of whether it was triggered by push or PR merge
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     permissions:
       contents: read
     runs-on: ubuntu-latest
