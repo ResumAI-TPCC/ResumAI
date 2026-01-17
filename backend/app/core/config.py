@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     # Specific provider settings will be extended by each implementation
     llm_provider: str = ""
 
+    # GCP / GCS settings
+    gcp_project_id: str = ""
+    gcs_bucket_name: str = ""
+    gcs_object_prefix: str = "resumes"
+    gcs_credentials_path: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

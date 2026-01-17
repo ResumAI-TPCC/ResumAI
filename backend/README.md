@@ -72,6 +72,12 @@ Rename the `env.exmaple` file to `.env` file or run below command
 cp env.example .env
 ```
 
+GCS upload requires additional variables:
+- `GCP_PROJECT_ID`
+- `GCS_BUCKET_NAME`
+- `GCS_OBJECT_PREFIX` (default: `resumes`)
+- `GCS_CREDENTIALS_PATH` (optional if `GOOGLE_APPLICATION_CREDENTIALS` is set)
+
 ### 4. Start Server
 
 ```bash
@@ -91,19 +97,19 @@ poetry add <package-name>
 
 ## API Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/resume` | POST | Upload & parse resume file, initialize session |
-| `/api/resume/analyze` | POST | Analyze resume and generate suggestions |
-| `/api/resume/match` | POST | Calculate resume-job match score |
-| `/api/resume/optimize` | POST | Optimize and rewrite resume |
+| Endpoint               | Method | Description                                    |
+| ---------------------- | ------ | ---------------------------------------------- |
+| `/api/resume`          | POST   | Upload & parse resume file, initialize session |
+| `/api/resume/analyze`  | POST   | Analyze resume and generate suggestions        |
+| `/api/resume/match`    | POST   | Calculate resume-job match score               |
+| `/api/resume/optimize` | POST   | Optimize and rewrite resume                    |
 
 ### Directory Responsibilities
 
-| Directory | Responsibility |
-|-----------|----------------|
+| Directory     | Responsibility                                        |
+| ------------- | ----------------------------------------------------- |
 | `api/routes/` | HTTP routing, request validation, response formatting |
-| `core/` | Application configuration, common dependencies |
-| `models/` | Database ORM models (reserved) |
-| `schemas/` | Pydantic request/response schema definitions |
-| `services/` | Business logic, external service integrations |
+| `core/`       | Application configuration, common dependencies        |
+| `models/`     | Database ORM models (reserved)                        |
+| `schemas/`    | Pydantic request/response schema definitions          |
+| `services/`   | Business logic, external service integrations         |
