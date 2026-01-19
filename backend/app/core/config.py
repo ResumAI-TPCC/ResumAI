@@ -34,7 +34,6 @@ class Settings(BaseSettings):
     gcp_project_id: str = ""
     gcs_bucket_name: str = ""
     gcs_object_prefix: str = "resumes"
-    gcs_credentials_path: str = ""
 
 
 @lru_cache

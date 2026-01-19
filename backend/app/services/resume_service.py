@@ -27,13 +27,8 @@ def _get_gcs_client() -> storage.Client:
     if _gcs_client is not None:
         return _gcs_client
 
-    if settings.gcs_credentials_path:
-        _gcs_client = storage.Client.from_service_account_json(
-            settings.gcs_credentials_path,
-            project=settings.gcp_project_id or None,
-        )
-    else:
-        _gcs_client = storage.Client(project=settings.gcp_project_id or None)
+    # Use Application Default Credentials (ADC)
+    _gcs_client = storage.Client(project=settings.gcp_project_id or None)
     return _gcs_client
 
 

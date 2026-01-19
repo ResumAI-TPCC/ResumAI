@@ -76,9 +76,21 @@ GCS upload requires additional variables:
 - `GCP_PROJECT_ID`
 - `GCS_BUCKET_NAME`
 - `GCS_OBJECT_PREFIX` (default: `resumes`)
-- `GCS_CREDENTIALS_PATH` (optional if `GOOGLE_APPLICATION_CREDENTIALS` is set)
 
-### 4. Start Server
+### 4. Authentication for Local Development (Google Cloud)
+
+Team members need to set up Application Default Credentials (ADC) on their local machines:
+
+1. Install [Google Cloud SDK](https://cloud.google.com/sdk/docs/install).
+2. Run the following command in your terminal:
+   ```bash
+   gcloud auth application-default login
+   ```
+3. Follow the browser prompts to log in with your Google account.
+
+This allows the backend to securely access GCS without sharing JSON key files.
+
+### 5. Start Server
 
 ```bash
 python run.py
