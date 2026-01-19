@@ -72,7 +72,25 @@ Rename the `env.exmaple` file to `.env` file or run below command
 cp env.example .env
 ```
 
-### 4. Start Server
+GCS upload requires additional variables:
+- `GCP_PROJECT_ID`
+- `GCS_BUCKET_NAME`
+- `GCS_OBJECT_PREFIX` (default: `resumes`)
+
+### 4. Authentication for Local Development (Google Cloud)
+
+Team members need to set up Application Default Credentials (ADC) on their local machines:
+
+1. Install [Google Cloud SDK](https://cloud.google.com/sdk/docs/install).
+2. Run the following command in your terminal:
+   ```bash
+   gcloud auth application-default login
+   ```
+3. Follow the browser prompts to log in with your Google account.
+
+This allows the backend to securely access GCS without sharing JSON key files.
+
+### 5. Start Server
 
 ```bash
 python run.py
@@ -91,19 +109,19 @@ poetry add <package-name>
 
 ## API Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/resume` | POST | Upload & parse resume file, initialize session |
-| `/api/resume/analyze` | POST | Analyze resume and generate suggestions |
-| `/api/resume/match` | POST | Calculate resume-job match score |
-| `/api/resume/optimize` | POST | Optimize and rewrite resume |
+| Endpoint               | Method | Description                                    |
+| ---------------------- | ------ | ---------------------------------------------- |
+| `/api/resume`          | POST   | Upload & parse resume file, initialize session |
+| `/api/resume/analyze`  | POST   | Analyze resume and generate suggestions        |
+| `/api/resume/match`    | POST   | Calculate resume-job match score               |
+| `/api/resume/optimize` | POST   | Optimize and rewrite resume                    |
 
 ### Directory Responsibilities
 
-| Directory | Responsibility |
-|-----------|----------------|
+| Directory     | Responsibility                                        |
+| ------------- | ----------------------------------------------------- |
 | `api/routes/` | HTTP routing, request validation, response formatting |
-| `core/` | Application configuration, common dependencies |
-| `models/` | Database ORM models (reserved) |
-| `schemas/` | Pydantic request/response schema definitions |
-| `services/` | Business logic, external service integrations |
+| `core/`       | Application configuration, common dependencies        |
+| `models/`     | Database ORM models (reserved)                        |
+| `schemas/`    | Pydantic request/response schema definitions          |
+| `services/`   | Business logic, external service integrations         |
