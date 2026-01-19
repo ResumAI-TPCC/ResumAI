@@ -27,8 +27,16 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api"
 
     # LLM Provider settings
-    # Specific provider settings will be extended by each implementation
-    LLM_PROVIDER: str = ""
+    LLM_PROVIDER: str = "gemini"
+
+    # Gemini settings
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_TEMPERATURE: float = 0.7
+    GEMINI_MAX_TOKENS: int = 2048
+    GEMINI_TIMEOUT: float = 60.0
+    GEMINI_MAX_RETRIES: int = 3
+    GEMINI_RETRY_DELAY: float = 1.0
 
     # GCP / GCS settings
     GCP_PROJECT_ID: str  # Mandatory, fail early if missing
