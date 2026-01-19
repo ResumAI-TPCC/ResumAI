@@ -1,18 +1,11 @@
 """
-Resume Schemas - Request/Response Models
-RA-24: Resume parsing schemas
+Resume Schemas
+RA-24: Resume parsing data models
 """
 
 from typing import Optional
 
 from pydantic import BaseModel, Field
-
-
-class ResumeParseRequest(BaseModel):
-    """Request schema for parsing uploaded resume"""
-
-    file_id: str = Field(..., description="Unique file identifier from upload")
-    storage_path: str = Field(..., description="Path to stored resume file")
 
 
 class ContactInfo(BaseModel):
@@ -52,15 +45,6 @@ class ResumeData(BaseModel):
     education: list[Education] = Field(default_factory=list)
     work_experience: list[WorkExperience] = Field(default_factory=list)
     raw_text: str = Field(..., description="Full extracted text from resume")
-
-
-class ResumeParseResponse(BaseModel):
-    """Response schema for parsed resume"""
-
-    file_id: str = Field(..., description="File identifier")
-    filename: str = Field(..., description="Original filename")
-    parsed_data: ResumeData = Field(..., description="Extracted resume information")
-    status: str = Field(default="success", description="Parse status")
 
 
 class ResumeUploadResponse(BaseModel):
