@@ -4,7 +4,6 @@ Uses pydantic-settings to manage environment variables and configuration
 """
 
 from functools import lru_cache
-from typing import Optional
 
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict

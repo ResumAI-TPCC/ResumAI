@@ -71,9 +71,9 @@ async def demo():
     match_result = await provider.match(resume, job_description)
 
     print(f"\n   🎯 匹配分数: {match_result.score * 100:.0f}%")
-    print(f"\n   📝 详细分析:")
+    print("\n   📝 详细分析:")
     print(f"   {match_result.explanation}")
-    print(f"\n   💡 改进建议:")
+    print("\n   💡 改进建议:")
     for i, suggestion in enumerate(match_result.suggestions, 1):
         print(f"      {i}. {suggestion}")
 
@@ -84,7 +84,7 @@ async def demo():
 
     analyze_result = await provider.analyze(resume, job_description)
 
-    print(f"\n   📄 分析结果:")
+    print("\n   📄 分析结果:")
     print("-" * 40)
     # 只显示前 500 字符，避免太长
     analysis_preview = analyze_result.content[:800]
@@ -94,7 +94,7 @@ async def demo():
 
     # 显示 token 使用情况
     if analyze_result.usage:
-        print(f"\n   📈 Token 使用统计:")
+        print("\n   📈 Token 使用统计:")
         print(f"      - 输入 tokens: {analyze_result.usage.get('prompt_tokens', 'N/A')}")
         print(
             f"      - 输出 tokens: {analyze_result.usage.get('completion_tokens', 'N/A')}"
