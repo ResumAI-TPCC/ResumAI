@@ -31,9 +31,17 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = ""
 
     # GCP / GCS settings
-    GCP_PROJECT_ID: str  # Mandatory, fail early if missing
-    GCS_BUCKET_NAME: str  # Mandatory, fail early if missing
+    GCP_PROJECT_ID: str = ""  # Optional, can be set via environment
+    GCS_BUCKET_NAME: str = ""  # Optional, can be set via environment
     GCS_OBJECT_PREFIX: str = "resumes"
+
+    def __getattr__(self, name: str):
+        """Support lowercase attribute access for convenience"""
+        if name.islower():
+            upper_name = name.upper()
+            if hasattr(self, upper_name):
+                return getattr(self, upper_name)
+        raise AttributeError(f"'Settings' object has no attribute '{name}'")
 
 
 @lru_cache
