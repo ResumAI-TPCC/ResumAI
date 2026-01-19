@@ -15,21 +15,21 @@ from app.core.config import settings
 async def lifespan(app: FastAPI):
     """Application lifecycle management"""
     # Startup
-    print(f"🚀 {settings.app_name} v{settings.app_version} starting...")
+    print(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} starting...")
     yield
     # Shutdown
-    print(f"👋 {settings.app_name} shutting down...")
+    print(f"👋 {settings.APP_NAME} shutting down...")
 
 
 def create_app() -> FastAPI:
     """Create FastAPI application instance"""
     app = FastAPI(
-        title=settings.app_name,
-        version=settings.app_version,
+        title=settings.APP_NAME,
+        version=settings.APP_VERSION,
         description="ResumAI - AI-powered Resume Optimization Assistant",
-        docs_url=f"{settings.api_prefix}/docs",
-        redoc_url=f"{settings.api_prefix}/redoc",
-        openapi_url=f"{settings.api_prefix}/openapi.json",
+        docs_url=f"{settings.API_PREFIX}/docs",
+        redoc_url=f"{settings.API_PREFIX}/redoc",
+        openapi_url=f"{settings.API_PREFIX}/openapi.json",
         lifespan=lifespan,
     )
 
@@ -43,7 +43,7 @@ def create_app() -> FastAPI:
     )
 
     # Register routes
-    app.include_router(api_router, prefix=settings.api_prefix)
+    app.include_router(api_router, prefix=settings.API_PREFIX)
 
     return app
 
@@ -56,6 +56,6 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "ok",
-        "app": settings.app_name,
-        "version": settings.app_version,
+        "app": settings.APP_NAME,
+        "version": settings.APP_VERSION,
     }
