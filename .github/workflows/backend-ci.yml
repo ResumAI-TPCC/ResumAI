@@ -45,3 +45,7 @@ jobs:
     - name: Run tests with pytest
       run: |
         poetry run pytest tests/ -v
+      env:
+        GCP_PROJECT_ID: "test-project-id"
+        GCS_BUCKET_NAME: "test-bucket-name"
+        GCS_OBJECT_PREFIX: "test-resumes"
