@@ -5,7 +5,7 @@ Sends prompts to Gemini API and handles responses
 
 import asyncio
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 import httpx
 
