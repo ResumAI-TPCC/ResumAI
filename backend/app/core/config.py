@@ -27,8 +27,16 @@ class Settings(BaseSettings):
     api_prefix: str = "/api"
 
     # LLM Provider settings
-    # Specific provider settings will be extended by each implementation
-    llm_provider: str = ""
+    llm_provider: str = "gemini"
+
+    # Gemini settings
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-1.5-flash"
+    gemini_temperature: float = 0.7
+    gemini_max_tokens: int = 2048
+    gemini_timeout: float = 60.0
+    gemini_max_retries: int = 3
+    gemini_retry_delay: float = 1.0
 
 
 @lru_cache
