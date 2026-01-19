@@ -9,10 +9,12 @@ from app.services.llm.base import LLMResponse, MatchScoreResult
 
 
 @pytest.fixture
-def mock_settings():
-    with patch("app.services.llm.gemini.settings") as mock:
-        mock.gemini_api_key = "test_api_key"
-        mock.gemini_model = "gemini-2.5-flash"
+def mock_env_config():
+    """Mock env_config with nested structure"""
+    with patch("app.services.llm.gemini.env_config") as mock:
+        # Create nested mock structure
+        mock.llm.gemini.api_key = "test_api_key"
+        mock.llm.gemini.model = "gemini-2.5-flash"
         yield mock
 
 
@@ -23,31 +25,31 @@ def mock_genai():
 
 
 class TestGeminiProvider:
-    def test_provider_name(self, mock_settings, mock_genai):
+    def test_provider_name(self, mock_env_config, mock_genai):
         from app.services.llm.gemini import GeminiProvider
 
         provider = GeminiProvider()
         assert provider.provider_name == "gemini"
 
     def test_init_without_api_key(self):
-        with patch("app.services.llm.gemini.settings") as mock_settings:
-            mock_settings.gemini_api_key = ""
+        with patch("app.services.llm.gemini.env_config") as mock_env_config:
+            mock_env_config.llm.gemini.api_key = ""
             with pytest.raises(ValueError, match="GEMINI_API_KEY is required"):
                 from app.services.llm.gemini import GeminiProvider
 
                 GeminiProvider()
 
-    def test_client_initialized_with_api_key(self, mock_settings, mock_genai):
+    def test_client_initialized_with_api_key(self, mock_env_config, mock_genai):
         from app.services.llm.gemini import GeminiProvider
 
         provider = GeminiProvider()
 
-        # Verify client was created with API key
+        # Verify client was created with API key from env_config
         mock_genai.Client.assert_called_once_with(api_key="test_api_key")
         assert provider.model_name == "gemini-2.5-flash"
 
     @pytest.mark.asyncio
-    async def test_optimize(self, mock_settings, mock_genai):
+    async def test_optimize(self, mock_env_config, mock_genai):
         from app.services.llm.gemini import GeminiProvider
 
         # Setup mock response
@@ -81,7 +83,7 @@ class TestGeminiProvider:
         assert result.usage["total_tokens"] == 300
 
     @pytest.mark.asyncio
-    async def test_analyze(self, mock_settings, mock_genai):
+    async def test_analyze(self, mock_env_config, mock_genai):
         from app.services.llm.gemini import GeminiProvider
 
         # Setup mock response
@@ -113,7 +115,7 @@ class TestGeminiProvider:
         assert result.model == "gemini-2.5-flash"
 
     @pytest.mark.asyncio
-    async def test_match(self, mock_settings, mock_genai):
+    async def test_match(self, mock_env_config, mock_genai):
         from app.services.llm.gemini import GeminiProvider
 
         # Setup mock response with valid JSON
@@ -142,7 +144,7 @@ class TestGeminiProvider:
         assert "Add more keywords" in result.suggestions
 
     @pytest.mark.asyncio
-    async def test_match_with_markdown_json(self, mock_settings, mock_genai):
+    async def test_match_with_markdown_json(self, mock_env_config, mock_genai):
         from app.services.llm.gemini import GeminiProvider
 
         # Setup mock response with JSON wrapped in markdown code block
@@ -169,7 +171,7 @@ class TestGeminiProvider:
         assert result.score == 0.75
 
     @pytest.mark.asyncio
-    async def test_match_invalid_json(self, mock_settings, mock_genai):
+    async def test_match_invalid_json(self, mock_env_config, mock_genai):
         from app.services.llm.gemini import GeminiProvider
 
         # Setup mock response with invalid JSON

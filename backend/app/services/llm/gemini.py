@@ -8,7 +8,7 @@ from typing import Optional
 
 from google import genai
 
-from app.core.config import settings
+from app.core.config import env_config
 
 from .base import BaseLLMProvider, LLMResponse, MatchScoreResult
 
@@ -17,11 +17,14 @@ class GeminiProvider(BaseLLMProvider):
     """Google Gemini LLM Provider"""
 
     def __init__(self):
-        if not settings.gemini_api_key:
+        # Access Gemini config through unified env_config
+        gemini_config = env_config.llm.gemini
+
+        if not gemini_config.api_key:
             raise ValueError("GEMINI_API_KEY is required")
 
-        self.client = genai.Client(api_key=settings.gemini_api_key)
-        self.model_name = settings.gemini_model
+        self.client = genai.Client(api_key=gemini_config.api_key)
+        self.model_name = gemini_config.model
 
     @property
     def provider_name(self) -> str:
