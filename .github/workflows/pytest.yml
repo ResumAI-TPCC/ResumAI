@@ -21,11 +21,6 @@ jobs:
       run:
         working-directory: ./backend
     
-    # Environment variables for the entire job
-    env:
-      GCP_PROJECT_ID: mock-project-id
-      GCS_BUCKET_NAME: mock-bucket-name
-
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
