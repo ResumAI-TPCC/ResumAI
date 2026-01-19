@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, UploadFile, HTTPException, status
 
 from app.schemas.resume import ResumeUploadResponse
-from app.services.resume_parser import get_resume_parser
+from app.services.resume_service import parse_file_from_bytes
 
 router = APIRouter()
 
@@ -70,8 +70,7 @@ async def upload_resume(
         )
     
     try:
-        parser = get_resume_parser()
-        parsed_data = await parser.parse_file(
+        parsed_data = await parse_file_from_bytes(
             file_content=file_content,
             filename=safe_filename,
             file_type=file.content_type
