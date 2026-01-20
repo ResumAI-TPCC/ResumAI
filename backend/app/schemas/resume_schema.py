@@ -1,6 +1,8 @@
 """
 Resume Schemas
-RA-24: Resume parsing data models
+
+RA-23: Resume upload response (file_id, filename, storage_path)
+RA-24: Resume parsing models (extracted structured data)
 """
 
 from typing import Optional
@@ -36,7 +38,7 @@ class WorkExperience(BaseModel):
 
 
 class ResumeData(BaseModel):
-    """Parsed resume data structure"""
+    """Parsed resume data structure (RA-24)"""
 
     full_name: Optional[str] = Field(None, description="Full name of candidate")
     contact_info: ContactInfo = Field(default_factory=ContactInfo)
@@ -48,11 +50,17 @@ class ResumeData(BaseModel):
 
 
 class ResumeUploadResponse(BaseModel):
-    """Response schema for resume upload and parse"""
+    """Response schema for resume upload and parse
+    
+    Combines RA-23 (GCS upload) and RA-24 (file parsing).
+    Always returns file_id/session_id from upload.
+    Returns parsed_data only if parsing was successful.
+    """
 
-    success: bool = Field(..., description="Whether the operation was successful")
-    message: str = Field(..., description="Response message")
-    data: Optional[ResumeData] = Field(None, description="Parsed resume data")
-    file_type: str = Field(..., description="File type (pdf, docx, txt)")
-    processing_time_ms: int = Field(..., description="Processing time in milliseconds")
-    error: Optional[str] = Field(None, description="Error message if failed")
+    # RA-23: Upload info (always present)
+    file_id: str = Field(..., description="File ID (UUID) from GCS upload")
+    filename: str = Field(..., description="Original filename")
+    storage_path: str = Field(..., description="GCS storage path (gs://bucket/...)")
+    
+    # RA-24: Parsing info (optional, only if parsing succeeded)
+    parsed_data: Optional[ResumeData] = Field(None, description="Parsed resume data (RA-24)")

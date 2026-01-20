@@ -2,7 +2,7 @@
 Pydantic Schemas Module
 """
 
-from .resume import (
+from .resume_schema import (
     ContactInfo,
     Education,
     ResumeData,

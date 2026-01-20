@@ -1,91 +1,123 @@
 """
-Resume Parser Service
-RA-24: Parse PDF and DOCX resume files and extract structured data
+Resume Service Layer
+
+RA-23: Upload resume to GCS and return file_id
+RA-24: Parse resume file and extract structured data
 """
+
+from __future__ import annotations
 
 import re
 import tempfile
+import uuid
 from pathlib import Path
 from typing import Optional
 
 from docx import Document
+from fastapi import HTTPException, UploadFile, status
+from google.cloud import storage
 from pypdf import PdfReader
+from starlette.concurrency import run_in_threadpool
 
-from app.schemas.resume import ContactInfo, Education, ResumeData, WorkExperience
+from app.core.config import settings
+from app.schemas.resume_schema import (
+    ContactInfo,
+    Education,
+    ResumeData,
+    ResumeUploadResponse,
+    WorkExperience,
+)
 
+# Configuration
+ALLOWED_EXTS = {".pdf", ".doc", ".docx", ".txt"}
+MAX_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
 
-def parse_file(file_path: Path, filename: str) -> ResumeData:
-    """
-    Parse resume file and extract structured data
-
-    Args:
-        file_path: Path to the resume file
-        filename: Original filename
-
-    Returns:
-        ResumeData: Structured resume information
-
-    Raises:
-        ValueError: If file format is not supported
-    """
-    suffix = file_path.suffix.lower()
-
-    if suffix == ".pdf":
-        raw_text = _extract_text_from_pdf(file_path)
-    elif suffix in [".docx", ".doc"]:
-        raw_text = _extract_text_from_docx(file_path)
-    else:
-        raise ValueError(f"Unsupported file format: {suffix}")
-
-    # Extract structured data from raw text
-    return _extract_structured_data(raw_text, filename)
+# Global GCS client instance for reuse
+_gcs_client: Optional[storage.Client] = None
 
 
-async def parse_file_from_bytes(file_content: bytes, filename: str, file_type: str) -> ResumeData:
-    """
-    Parse resume from memory buffer
-    
-    Args:
-        file_content: File content as bytes
-        filename: Original filename
-        file_type: MIME type
-        
-    Returns:
-        ResumeData: Extracted resume information
-    """
-    # Security: Extract only the basename to prevent path traversal
-    # This removes any directory components from the filename
-    safe_filename = Path(filename).name
-    
-    # Validate filename for unsafe characters (e.g., null bytes, control chars)
-    if "\x00" in safe_filename or any(ord(ch) < 32 for ch in safe_filename):
-        raise ValueError("Invalid filename")
-    
-    # Determine file extension from safe filename
-    if safe_filename.endswith('.pdf'):
-        suffix = '.pdf'
-    elif safe_filename.endswith('.docx'):
-        suffix = '.docx'
-    elif safe_filename.endswith('.txt'):
-        suffix = '.txt'
-    else:
-        raise ValueError(f"Unsupported file format: {safe_filename}")
-    
-    # For PDF/DOCX, we need to use temporary file
-    if suffix in ['.pdf', '.docx']:
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            tmp.write(file_content)
-            tmp.flush()
-            tmp_path = Path(tmp.name)
-        
-        try:
-            return parse_file(tmp_path, safe_filename)
-        finally:
-            tmp_path.unlink(missing_ok=True)
-    else:
-        # For text files, parse directly
-        raw_text = file_content.decode('utf-8', errors='ignore')
-        return _extract_structured_data(raw_text, safe_filename)
+# ============================================================================
+# RA-23: GCS Upload Functions
+# ============================================================================
+
+
+def _get_gcs_client() -> storage.Client:
+    """Get or create a GCS client instance."""
+    global _gcs_client
+    if _gcs_client is not None:
+        return _gcs_client
+
+    # Use Application Default Credentials (ADC)
+    _gcs_client = storage.Client(project=settings.GCP_PROJECT_ID or None)
+    return _gcs_client
+
+
+def _validate_filename(filename: str) -> None:
+    """Validate file extension and name."""
+    if not filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Missing filename"
+        )
+
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_EXTS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file type: {ext}. Allowed: {sorted(ALLOWED_EXTS)}",
+        )
+
+
+def _build_object_name(file_id: str, filename: str) -> str:
+    """Build GCS object path."""
+    safe_name = Path(filename).name
+    prefix = settings.GCS_OBJECT_PREFIX.strip("/")
+    if prefix:
+        return f"{prefix}/{file_id}/{safe_name}"
+    return f"{file_id}/{safe_name}"
+
+
+async def _read_file_content(file: UploadFile) -> bytes:
+    """Read file content with size limit check."""
+    size = 0
+    chunks = []
+    try:
+        while True:
+            chunk = await file.read(1024 * 1024)  # 1MB
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > MAX_SIZE_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"File too large. Max {MAX_SIZE_BYTES // (1024 * 1024)}MB",
+                )
+            chunks.append(chunk)
+    finally:
+        await file.close()
+    return b"".join(chunks)
+
+
+def _do_gcs_upload(
+    content: bytes, object_name: str, content_type: Optional[str]
+) -> None:
+    """Synchronous GCS upload operation."""
+    if not settings.GCS_BUCKET_NAME:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="GCS bucket not configured",
+        )
+
+    client = _get_gcs_client()
+    bucket = client.bucket(settings.GCS_BUCKET_NAME)
+    blob = bucket.blob(object_name)
+    blob.upload_from_string(
+        content, content_type=content_type or "application/octet-stream"
+    )
+
+
+# ============================================================================
+# RA-24: File Parsing Functions
+# ============================================================================
 
 
 def _extract_text_from_pdf(file_path: Path) -> str:
@@ -101,7 +133,6 @@ def _extract_text_from_pdf(file_path: Path) -> str:
 
         return "\n".join(text_parts)
     except Exception as e:
-        # Log full error internally, return generic message to client
         print(f"PDF parsing error: {str(e)}")
         raise ValueError("Failed to parse PDF file")
 
@@ -118,7 +149,6 @@ def _extract_text_from_docx(file_path: Path) -> str:
 
         return "\n".join(text_parts)
     except Exception as e:
-        # Log full error internally, return generic message to client
         print(f"DOCX parsing error: {str(e)}")
         raise ValueError("Failed to parse DOCX file")
 
@@ -127,10 +157,8 @@ def _extract_structured_data(raw_text: str, filename: str) -> ResumeData:
     """
     Extract structured information from raw text using regex patterns
 
-    Note: This is a basic implementation. For production, consider using:
-    - NLP libraries (spaCy, NLTK)
-    - LLM-based extraction
-    - Specialized resume parsing services
+    Note: This is a basic implementation using regex.
+    For production, consider using NLP or LLM-based extraction.
     """
     # Extract email
     email_pattern = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
@@ -169,7 +197,7 @@ def _extract_structured_data(raw_text: str, filename: str) -> ResumeData:
         email=email,
         phone=phone,
         linkedin=linkedin,
-        location=None,  # TODO: Implement location extraction
+        location=None,
     )
 
     return ResumeData(
@@ -227,7 +255,7 @@ def _extract_education(text: str) -> list[Education]:
                 continue
 
             current_entry.append(line)
-        
+
         # Process remaining partial entry (if text didn't end with a blank line)
         if current_entry:
             education_list.append(
@@ -242,7 +270,7 @@ def _classify_education_fields(entry_lines: list[str]) -> Education:
     institution = None
     degree = None
     field = None
-    
+
     for line in entry_lines:
         lower_line = line.lower()
         if institution is None and re.search(r"\b(university|college|institute|school)\b", lower_line):
@@ -251,7 +279,7 @@ def _classify_education_fields(entry_lines: list[str]) -> Education:
             degree = line
         elif field is None:
             field = line
-    
+
     # Fallback to positional mapping if classification failed
     if institution is None and len(entry_lines) > 0:
         institution = entry_lines[0]
@@ -259,7 +287,7 @@ def _classify_education_fields(entry_lines: list[str]) -> Education:
         degree = entry_lines[1]
     if field is None and len(entry_lines) > 2:
         field = entry_lines[2]
-    
+
     return Education(institution=institution, degree=degree, field=field)
 
 
@@ -304,3 +332,134 @@ def _extract_summary(text: str) -> Optional[str]:
         return summary[:500] if len(summary) > 500 else summary
 
     return None
+
+
+async def _parse_file_from_bytes(
+    file_content: bytes, filename: str
+) -> ResumeData:
+    """
+    Parse resume from memory buffer
+
+    Args:
+        file_content: File content as bytes
+        filename: Original filename
+
+    Returns:
+        ResumeData: Extracted resume information
+    """
+    # Security: Extract only the basename to prevent path traversal
+    safe_filename = Path(filename).name
+
+    # Validate filename for unsafe characters (e.g., null bytes, control chars)
+    if "\x00" in safe_filename or any(ord(ch) < 32 for ch in safe_filename):
+        raise ValueError("Invalid filename")
+
+    # Determine file extension from safe filename
+    if safe_filename.endswith(".pdf"):
+        suffix = ".pdf"
+    elif safe_filename.endswith(".docx"):
+        suffix = ".docx"
+    elif safe_filename.endswith(".txt"):
+        suffix = ".txt"
+    else:
+        raise ValueError(f"Unsupported file format: {safe_filename}")
+
+    # For PDF/DOCX, we need to use temporary file
+    if suffix in [".pdf", ".docx"]:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(file_content)
+            tmp.flush()
+            tmp_path = Path(tmp.name)
+
+        try:
+            # Extract text based on file type
+            if suffix == ".pdf":
+                raw_text = _extract_text_from_pdf(tmp_path)
+            else:  # .docx
+                raw_text = _extract_text_from_docx(tmp_path)
+
+            return _extract_structured_data(raw_text, safe_filename)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+    else:
+        # For text files, parse directly
+        raw_text = file_content.decode("utf-8", errors="ignore")
+        return _extract_structured_data(raw_text, safe_filename)
+
+
+# ============================================================================
+# Main Integration Function
+# ============================================================================
+
+
+async def upload_and_parse_resume(file: UploadFile) -> ResumeUploadResponse:
+    """
+    Upload resume to GCS and attempt to parse it (RA-23 + RA-24).
+
+    Always uploads the file and returns file_id + storage_path (RA-23).
+    Attempts to parse and returns parsed_data if successful (RA-24).
+
+    Args:
+        file: Resume file to upload and parse
+
+    Returns:
+        ResumeUploadResponse:
+            - file_id: Session ID from GCS upload (always present)
+            - filename: Original filename (always present)
+            - storage_path: GCS storage path (always present)
+            - parsed_data: Extracted resume data (only if parsing succeeded)
+
+    Raises:
+        HTTPException: On file validation or GCS upload errors
+    """
+    # Step 1: Validate filename (RA-23)
+    _validate_filename(file.filename)
+
+    if not settings.GCS_BUCKET_NAME:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="GCS bucket not configured",
+        )
+
+    # Step 2: Generate file ID and read file content
+    file_id = str(uuid.uuid4())
+    object_name = _build_object_name(file_id, file.filename)
+
+    # Read file content with size validation
+    content = await _read_file_content(file)
+
+    # Step 3: Upload to GCS (RA-23)
+    try:
+        await run_in_threadpool(
+            _do_gcs_upload,
+            content=content,
+            object_name=object_name,
+            content_type=file.content_type,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"GCS upload failed: {exc}",
+        ) from exc
+
+    storage_path = f"gs://{settings.GCS_BUCKET_NAME}/{object_name}"
+
+    # Step 4: Attempt to parse file (RA-24)
+    parsed_data: Optional[ResumeData] = None
+    try:
+        parsed_data = await _parse_file_from_bytes(
+            file_content=content,
+            filename=file.filename,
+        )
+    except Exception as e:
+        # Log parsing error but don't fail the upload
+        print(f"Resume parsing error: {str(e)}")
+        # parsed_data remains None
+
+    # Step 5: Return response with upload info (always) + parse data (if successful)
+    return ResumeUploadResponse(
+        file_id=file_id,
+        filename=file.filename,
+        storage_path=storage_path,
+        parsed_data=parsed_data,
+    )
