@@ -1,6 +1,6 @@
 """
 LLM Service Module
-Provides unified LLM Provider interface and factory methods
+Provides unified LLM Provider interface, service layer, and factory methods
 """
 
 from .base import BaseLLMProvider, LLMResponse, MatchScoreResult
@@ -14,6 +14,14 @@ from .exceptions import (
     LLMServiceUnavailableError,
 )
 from .gemini_provider import GeminiProvider, send_to_gemini
+from .schemas import (
+    Suggestion,
+    AnalyzeResult,
+    MatchBreakdown,
+    MatchResult,
+    OptimizeResult,
+)
+from .llm_service import LLMService, get_llm_service
 
 # Register Gemini provider
 register_provider("gemini", GeminiProvider)
@@ -37,4 +45,13 @@ __all__ = [
     # Providers
     "GeminiProvider",
     "send_to_gemini",
+    # Schemas
+    "Suggestion",
+    "AnalyzeResult",
+    "MatchBreakdown",
+    "MatchResult",
+    "OptimizeResult",
+    # Service
+    "LLMService",
+    "get_llm_service",
 ]
