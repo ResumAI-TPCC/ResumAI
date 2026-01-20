@@ -16,8 +16,6 @@ from .schemas import (
     MatchResult,
     OptimizeResult,
 )
-from .exceptions import LLMResponseError
-
 logger = logging.getLogger(__name__)
 
 
