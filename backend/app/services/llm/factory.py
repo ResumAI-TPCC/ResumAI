@@ -50,11 +50,11 @@ def get_llm_provider() -> BaseLLMProvider:
             "No LLM Provider registered. Please use register_provider() first."
         )
 
-    provider_class = _provider_registry.get(settings.LLM_PROVIDER)
+    provider_class = _provider_registry.get(settings.llm_provider)
 
     if provider_class is None:
         raise ValueError(
-            f"Unsupported LLM Provider: {settings.LLM_PROVIDER}. "
+            f"Unsupported LLM Provider: {settings.llm_provider}. "
             f"Registered options: {list(_provider_registry.keys())}"
         )
 
