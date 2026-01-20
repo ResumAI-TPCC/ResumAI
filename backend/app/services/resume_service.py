@@ -28,7 +28,7 @@ def _get_gcs_client() -> storage.Client:
         return _gcs_client
 
     # Use Application Default Credentials (ADC)
-    _gcs_client = storage.Client(project=settings.GCP_PROJECT_ID or None)
+    _gcs_client = storage.Client(project=settings.gcp_project_id or None)
     return _gcs_client
 
 
@@ -48,7 +48,7 @@ def _validate_filename(filename: str) -> None:
 
 def _build_object_name(file_id: str, filename: str) -> str:
     safe_name = Path(filename).name
-    prefix = settings.GCS_OBJECT_PREFIX.strip("/")
+    prefix = settings.gcs_object_prefix.strip("/")
     if prefix:
         return f"{prefix}/{file_id}/{safe_name}"
     return f"{file_id}/{safe_name}"
@@ -62,7 +62,7 @@ async def upload_resume_to_gcs(file: UploadFile) -> Dict[str, str]:
     """
     _validate_filename(file.filename)
 
-    if not settings.GCS_BUCKET_NAME:
+    if not settings.gcs_bucket_name:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="GCS bucket not configured",
@@ -88,7 +88,7 @@ async def upload_resume_to_gcs(file: UploadFile) -> Dict[str, str]:
             detail=f"GCS upload failed: {exc}",
         ) from exc
 
-    storage_path = f"gs://{settings.GCS_BUCKET_NAME}/{object_name}"
+    storage_path = f"gs://{settings.gcs_bucket_name}/{object_name}"
     return {"file_id": file_id, "filename": file.filename, "storage_path": storage_path}
 
 
@@ -118,7 +118,7 @@ def _do_gcs_upload(
 ) -> None:
     """Synchronous GCS upload operation."""
     client = _get_gcs_client()
-    bucket = client.bucket(settings.GCS_BUCKET_NAME)
+    bucket = client.bucket(settings.gcs_bucket_name)
     blob = bucket.blob(object_name)
     blob.upload_from_string(
         content, content_type=content_type or "application/octet-stream"
