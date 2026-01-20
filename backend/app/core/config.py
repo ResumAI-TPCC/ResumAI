@@ -19,12 +19,12 @@ class Settings(BaseSettings):
     )
 
     # Application settings
-    app_name: str = "ResumAI"
-    app_version: str = "0.1.0"
-    debug: bool = False
+    APP_NAME: str = "ResumAI"
+    APP_VERSION: str = "0.1.0"
+    DEBUG: bool = False
 
     # API settings
-    api_prefix: str = "/api"
+    API_PREFIX: str = "/api"
 
     # LLM Provider settings
     llm_provider: str = "gemini"
@@ -46,4 +46,3 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-

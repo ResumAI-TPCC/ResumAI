@@ -144,6 +144,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Secrets
+backend/.secrets/
+
 # Spyder project settings
 .spyderproject
 .spyproject
