@@ -4,7 +4,7 @@ Defines the structured data formats for API responses
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict
+from typing import List, Optional
 
 
 @dataclass
