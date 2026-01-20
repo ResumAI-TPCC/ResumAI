@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     gemini_max_retries: int = 3
     gemini_retry_delay: float = 1.0
 
+    # GCP / GCS settings
+    gcp_project_id: str = ""  # Mandatory, fail early if missing
+    gcs_bucket_name: str = ""  # Mandatory, fail early if missing
+    gcs_object_prefix: str = "resumes"
+
 
 @lru_cache
 def get_settings() -> Settings:
