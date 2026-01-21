@@ -52,15 +52,15 @@ def test_resume_upload_success_pdf(monkeypatch):
     r = client.post(f"{settings.API_PREFIX}/resume/", files=files)
 
     assert r.status_code == 201, r.text
-    93|    res = r.json()
-    94|    assert res["status"] == "ok"
-    95|    assert "session_id" in res["data"]
-    96|    assert "expire_at" in res["data"]
-    97|    # storage_path and filename should NOT be in the top level anymore
-    98|    assert "file_id" not in res
-    99|    assert "filename" not in res
-   100|    assert fake_client.bucket_name == "test-bucket"
-   101|    assert fake_client.bucket_obj.blobs
+    res = r.json()
+    assert res["status"] == "ok"
+    assert "session_id" in res["data"]
+    assert "expire_at" in res["data"]
+    # storage_path and filename should NOT be in the top level anymore
+    assert "file_id" not in res
+    assert "filename" not in res
+    assert fake_client.bucket_name == "test-bucket"
+    assert fake_client.bucket_obj.blobs
 
 
 def test_resume_upload_success_docx(monkeypatch):
