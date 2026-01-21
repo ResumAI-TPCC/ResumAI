@@ -52,16 +52,18 @@ def test_resume_upload_success_pdf(monkeypatch):
     r = client.post(f"{settings.API_PREFIX}/resume/", files=files)
 
     assert r.status_code == 201, r.text
-    data = r.json()
-    assert "file_id" in data
-    assert data["filename"] == "test.pdf"
-    # storage_path should NOT be in the response anymore (DTO filtering)
-    assert "storage_path" not in data
-    assert fake_client.bucket_name == "test-bucket"
-    assert fake_client.bucket_obj.blobs
+    93|    res = r.json()
+    94|    assert res["status"] == "ok"
+    95|    assert "session_id" in res["data"]
+    96|    assert "expire_at" in res["data"]
+    97|    # storage_path and filename should NOT be in the top level anymore
+    98|    assert "file_id" not in res
+    99|    assert "filename" not in res
+   100|    assert fake_client.bucket_name == "test-bucket"
+   101|    assert fake_client.bucket_obj.blobs
 
 
-def test_resume_upload_success_txt(monkeypatch):
+def test_resume_upload_success_docx(monkeypatch):
     app = create_app()
     client = TestClient(app)
 
@@ -70,11 +72,11 @@ def test_resume_upload_success_txt(monkeypatch):
     monkeypatch.setattr(resume_service.settings, "GCS_BUCKET_NAME", "test-bucket")
     monkeypatch.setattr(resume_service.settings, "GCP_PROJECT_ID", "test-project")
 
-    files = {"file": ("test.txt", b"hello world", "text/plain")}
+    files = {"file": ("test.docx", b"fake docx content", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
     r = client.post(f"{settings.API_PREFIX}/resume/", files=files)
 
     assert r.status_code == 201, r.text
-    assert r.json()["filename"] == "test.txt"
+    assert r.json()["data"]["session_id"]
 
 
 def test_resume_upload_reject_exe(monkeypatch):
