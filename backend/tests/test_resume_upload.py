@@ -43,13 +43,15 @@ def test_resume_upload_success_pdf(monkeypatch):
 
     fake_client = FakeClient()
     monkeypatch.setattr(resume_service, "_get_gcs_client", lambda: fake_client)
-    monkeypatch.setattr(resume_service.settings, "gcs_bucket_name", "test-bucket")
-    monkeypatch.setattr(resume_service.settings, "gcs_object_prefix", "resumes")
-    # Also need to ensure gcp_project_id is present to avoid validation error
-    monkeypatch.setattr(resume_service.settings, "gcp_project_id", "test-project")
+    monkeypatch.setattr(resume_service.settings, "GCS_BUCKET_NAME", "test-bucket")
+    monkeypatch.setattr(resume_service.settings, "GCS_OBJECT_PREFIX", "resumes")
+    monkeypatch.setattr(resume_service.settings, "GCP_PROJECT_ID", "test-project")
+
+    # Mock _validate_pdf_content to avoid pypdf parsing errors with fake content
+    monkeypatch.setattr(resume_service, "_validate_pdf_content", lambda content: None)
 
     files = {"file": ("test.pdf", b"%PDF-1.4\nfake\n", "application/pdf")}
-    r = client.post(f"{settings.API_PREFIX}/resume/", files=files)
+    r = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
 
     assert r.status_code == 201, r.text
     res = r.json()
@@ -69,11 +71,11 @@ def test_resume_upload_success_docx(monkeypatch):
 
     fake_client = FakeClient()
     monkeypatch.setattr(resume_service, "_get_gcs_client", lambda: fake_client)
-    monkeypatch.setattr(resume_service.settings, "gcs_bucket_name", "test-bucket")
-    monkeypatch.setattr(resume_service.settings, "gcp_project_id", "test-project")
+    monkeypatch.setattr(resume_service.settings, "GCS_BUCKET_NAME", "test-bucket")
+    monkeypatch.setattr(resume_service.settings, "GCP_PROJECT_ID", "test-project")
 
     files = {"file": ("test.docx", b"fake docx content", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
-    r = client.post(f"{settings.API_PREFIX}/resume/", files=files)
+    r = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
 
     assert r.status_code == 201, r.text
     assert r.json()["data"]["session_id"]
@@ -84,10 +86,10 @@ def test_resume_upload_reject_exe(monkeypatch):
     client = TestClient(app)
 
     # Need to mock settings even for failures if validation triggers
-    monkeypatch.setattr(resume_service.settings, "gcs_bucket_name", "test-bucket")
-    monkeypatch.setattr(resume_service.settings, "gcp_project_id", "test-project")
+    monkeypatch.setattr(resume_service.settings, "GCS_BUCKET_NAME", "test-bucket")
+    monkeypatch.setattr(resume_service.settings, "GCP_PROJECT_ID", "test-project")
 
     files = {"file": ("test.exe", b"hello", "application/x-msdownload")}
-    r = client.post(f"{settings.API_PREFIX}/resume/", files=files)
+    r = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
 
     assert r.status_code == 400, r.text
