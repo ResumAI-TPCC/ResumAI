@@ -39,7 +39,7 @@ jobs:
 
     - name: 'Build and Push Container'
       run: |
-        docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/backend-test:${{ github.sha }} -f backend/Dockerfile .
+        docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/backend-test:${{ github.sha }} -f Dockerfile .
         docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/backend-test:${{ github.sha }}
 
     - name: 'Deploy to Cloud Run'
