@@ -45,23 +45,27 @@ def test_resume_upload_success_pdf(monkeypatch):
     monkeypatch.setattr(resume_service, "_get_gcs_client", lambda: fake_client)
     monkeypatch.setattr(resume_service.settings, "gcs_bucket_name", "test-bucket")
     monkeypatch.setattr(resume_service.settings, "gcs_object_prefix", "resumes")
-    # Also need to ensure gcp_project_id is present to avoid validation error
     monkeypatch.setattr(resume_service.settings, "gcp_project_id", "test-project")
 
+    # Mock _validate_pdf_content to avoid pypdf parsing errors with fake content
+    monkeypatch.setattr(resume_service, "_validate_pdf_content", lambda content: None)
+
     files = {"file": ("test.pdf", b"%PDF-1.4\nfake\n", "application/pdf")}
-    r = client.post(f"{settings.API_PREFIX}/resume/", files=files)
+    r = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
 
     assert r.status_code == 201, r.text
-    data = r.json()
-    assert "file_id" in data
-    assert data["filename"] == "test.pdf"
-    # storage_path should NOT be in the response anymore (DTO filtering)
-    assert "storage_path" not in data
+    res = r.json()
+    assert res["status"] == "ok"
+    assert "session_id" in res["data"]
+    assert "expire_at" in res["data"]
+    # storage_path and filename should NOT be in the top level anymore
+    assert "file_id" not in res
+    assert "filename" not in res
     assert fake_client.bucket_name == "test-bucket"
     assert fake_client.bucket_obj.blobs
 
 
-def test_resume_upload_success_txt(monkeypatch):
+def test_resume_upload_success_docx(monkeypatch):
     app = create_app()
     client = TestClient(app)
 
@@ -70,11 +74,11 @@ def test_resume_upload_success_txt(monkeypatch):
     monkeypatch.setattr(resume_service.settings, "gcs_bucket_name", "test-bucket")
     monkeypatch.setattr(resume_service.settings, "gcp_project_id", "test-project")
 
-    files = {"file": ("test.txt", b"hello world", "text/plain")}
-    r = client.post(f"{settings.API_PREFIX}/resume/", files=files)
+    files = {"file": ("test.docx", b"fake docx content", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
+    r = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
 
     assert r.status_code == 201, r.text
-    assert r.json()["filename"] == "test.txt"
+    assert r.json()["data"]["session_id"]
 
 
 def test_resume_upload_reject_exe(monkeypatch):
@@ -86,6 +90,6 @@ def test_resume_upload_reject_exe(monkeypatch):
     monkeypatch.setattr(resume_service.settings, "gcp_project_id", "test-project")
 
     files = {"file": ("test.exe", b"hello", "application/x-msdownload")}
-    r = client.post(f"{settings.API_PREFIX}/resume/", files=files)
+    r = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
 
     assert r.status_code == 400, r.text
