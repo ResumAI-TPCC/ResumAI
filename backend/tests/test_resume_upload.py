@@ -205,3 +205,41 @@ def test_analyze_endpoint_placeholder(client):
     
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+# GCS Upload Unit Tests
+def test_gcs_upload_success(client, sample_pdf_content, mock_gcs):
+    """Test that GCS upload is called with correct parameters"""
+    files = {"file": ("test_resume.pdf", sample_pdf_content, "application/pdf")}
+    
+    response = client.post(f"{settings.api_prefix}/resume/", files=files)
+    
+    assert response.status_code == 201
+    data = response.json()
+    
+    # Verify GCS client was used
+    mock_gcs.return_value.bucket.assert_called_once_with(settings.GCS_BUCKET_NAME)
+    
+    # Verify storage_path is in correct format
+    assert data["storage_path"].startswith("gs://")
+    assert settings.GCS_BUCKET_NAME in data["storage_path"]
+
+
+def test_gcs_object_name_format(client, sample_pdf_content, mock_gcs):
+    """Test that GCS object names follow the correct format"""
+    files = {"file": ("my_resume.pdf", sample_pdf_content, "application/pdf")}
+    
+    response = client.post(f"{settings.api_prefix}/resume/", files=files)
+    
+    assert response.status_code == 201
+    data = response.json()
+    file_id = data["file_id"]
+    
+    # Object name should follow pattern: {prefix}/{file_id}/{filename}
+    # Storage path format: gs://bucket_name/prefix/file_id/filename
+    assert file_id in data["storage_path"]
+    assert "my_resume.pdf" in data["storage_path"]
+    
+    # Verify blob.upload_from_string was called
+    mock_blob = mock_gcs.return_value.bucket.return_value.blob.return_value
+    assert mock_blob.upload_from_string.called

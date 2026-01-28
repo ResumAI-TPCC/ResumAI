@@ -31,8 +31,8 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = ""
 
     # GCP / GCS settings
-    GCP_PROJECT_ID: str = ""  # Optional, can be set via environment
-    GCS_BUCKET_NAME: str = ""  # Optional, can be set via environment
+    GCP_PROJECT_ID: str  # Mandatory, fail early if missing
+    GCS_BUCKET_NAME: str  # Mandatory, fail early if missing
     GCS_OBJECT_PREFIX: str = "resumes"
 
     def __getattr__(self, name: str):
