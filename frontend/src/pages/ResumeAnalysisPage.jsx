@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
 import AnalysisOutput from '../components/AnalysisOutput'
 import ResumePreview from '../components/ResumePreview'
-import { uploadResume, optimizeResume, matchResumeWithJob } from '../utils/api'
+import { uploadResume, optimizeResume } from '../utils/api'
 import { saveSession, loadSession, clearSession as clearStorageSession } from '../utils/storage'
 
 /**
@@ -24,7 +24,6 @@ function ResumeAnalysisPage() {
   // Optimize resume states
   const [isOptimizing, setIsOptimizing] = useState(false)
   const [optimizedFile, setOptimizedFile] = useState(null)
-  const [optimizeError, setOptimizeError] = useState(null)
   const [matchScore, setMatchScore] = useState(null)
 
   // Load session data on mount
@@ -121,12 +120,10 @@ function ResumeAnalysisPage() {
    */
   const handleOptimize = async () => {
     if (!sessionId) {
-      setOptimizeError('Please upload a resume first')
       return
     }
 
     setIsOptimizing(true)
-    setOptimizeError(null)
 
     try {
       const result = await optimizeResume(sessionId, jobDescription)
@@ -142,7 +139,6 @@ function ResumeAnalysisPage() {
       }
     } catch (error) {
       console.error('Optimize error:', error)
-      setOptimizeError(error.message || 'Failed to optimize resume')
     } finally {
       setIsOptimizing(false)
     }
@@ -154,7 +150,6 @@ function ResumeAnalysisPage() {
    */
   const handleDownloadResume = () => {
     if (!optimizedFile?.content) {
-      setOptimizeError('No optimized resume available')
       return
     }
 
@@ -179,7 +174,6 @@ function ResumeAnalysisPage() {
       window.URL.revokeObjectURL(url)
     } catch (error) {
       console.error('Download error:', error)
-      setOptimizeError('Failed to download resume')
     }
   }
 

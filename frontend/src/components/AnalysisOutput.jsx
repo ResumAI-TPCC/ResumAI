@@ -2,12 +2,6 @@ import { useState } from 'react'
 import PropTypes from 'prop-types'
 import { matchResumeWithJob, analyzeResume } from '../utils/api'
 
-/**
- * AnalysisOutput Component
- * 
- * Displays analysis and match results
- * RA-20: Integrate with parent component for match score tracking
- */
 function AnalysisOutput({ sessionId, jobDescription, companyName, jobTitle, onMatchScoreUpdate }) {
   const [analysisData, setAnalysisData] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
