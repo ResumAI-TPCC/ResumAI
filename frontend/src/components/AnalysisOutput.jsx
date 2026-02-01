@@ -2,7 +2,13 @@ import { useState } from 'react'
 import PropTypes from 'prop-types'
 import { matchResumeWithJob, analyzeResume } from '../utils/api'
 
-function AnalysisOutput({ sessionId, jobDescription, companyName, jobTitle }) {
+/**
+ * AnalysisOutput Component
+ * 
+ * Displays analysis and match results
+ * RA-20: Integrate with parent component for match score tracking
+ */
+function AnalysisOutput({ sessionId, jobDescription, companyName, jobTitle, onMatchScoreUpdate }) {
   const [analysisData, setAnalysisData] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [error, setError] = useState(null)
@@ -27,10 +33,17 @@ function AnalysisOutput({ sessionId, jobDescription, companyName, jobTitle }) {
           companyName || ''
         )
         
+        const matchScore = result.data?.match_score || 68
+        
+        // Notify parent component of match score
+        if (onMatchScoreUpdate) {
+          onMatchScoreUpdate(matchScore)
+        }
+        
         // Set data for match analysis
         setAnalysisData({
           type: 'match',
-          matchScore: result.data?.match_score || 68,
+          matchScore,
           matchBreakdown: result.data?.match_breakdown || {
             skills_match: 85,
             experience_match: 75,
@@ -81,13 +94,14 @@ function AnalysisOutput({ sessionId, jobDescription, companyName, jobTitle }) {
   }
 
   const handleGenerateResume = () => {
-    // TODO: Implement in future sprint
-    setError('Generate Polished Resume feature coming soon!')
+    // Handled by ResumePreview component now
+    // This button is kept for backward compatibility but generation logic 
+    // is now in ResumePreview toggle
   }
 
   const handleDownloadResume = () => {
-    // TODO: Implement in future sprint
-    setError('Download feature coming soon!')
+    // Handled by ResumePreview component now
+    // Download is triggered from ResumePreview
   }
 
   return (
@@ -315,6 +329,7 @@ AnalysisOutput.propTypes = {
   jobDescription: PropTypes.string,
   companyName: PropTypes.string,
   jobTitle: PropTypes.string,
+  onMatchScoreUpdate: PropTypes.func,
 }
 
 export default AnalysisOutput

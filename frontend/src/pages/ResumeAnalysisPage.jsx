@@ -2,9 +2,15 @@ import { useState, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
 import AnalysisOutput from '../components/AnalysisOutput'
 import ResumePreview from '../components/ResumePreview'
-import { uploadResume } from '../utils/api'
+import { uploadResume, optimizeResume, matchResumeWithJob } from '../utils/api'
 import { saveSession, loadSession, clearSession as clearStorageSession } from '../utils/storage'
 
+/**
+ * ResumeAnalysisPage Component
+ * 
+ * Main page for resume analysis and optimization workflow
+ * RA-20: Handles optimize resume logic
+ */
 function ResumeAnalysisPage() {
   const [sessionId, setSessionId] = useState(null)
   const [companyName, setCompanyName] = useState('')
@@ -14,6 +20,12 @@ function ResumeAnalysisPage() {
   const [uploadedFile, setUploadedFile] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
+  
+  // Optimize resume states
+  const [isOptimizing, setIsOptimizing] = useState(false)
+  const [optimizedFile, setOptimizedFile] = useState(null)
+  const [optimizeError, setOptimizeError] = useState(null)
+  const [matchScore, setMatchScore] = useState(null)
 
   // Load session data on mount
   useEffect(() => {
@@ -98,7 +110,85 @@ function ResumeAnalysisPage() {
       setSelectedFile(null)
       setUploadedFile(null)
       setUploadError(null)
+      setOptimizedFile(null)
+      setMatchScore(null)
     }
+  }
+
+  /**
+   * Handle optimize resume request
+   * Calls the optimize API and stores the result
+   */
+  const handleOptimize = async () => {
+    if (!sessionId) {
+      setOptimizeError('Please upload a resume first')
+      return
+    }
+
+    setIsOptimizing(true)
+    setOptimizeError(null)
+
+    try {
+      const result = await optimizeResume(sessionId, jobDescription)
+      
+      if (result.status === 'ok' && result.data?.encoded_file) {
+        // Store the optimized file
+        setOptimizedFile({
+          name: `optimized_resume_${new Date().getTime()}.pdf`,
+          content: result.data.encoded_file,
+        })
+      } else {
+        throw new Error('Invalid response from server')
+      }
+    } catch (error) {
+      console.error('Optimize error:', error)
+      setOptimizeError(error.message || 'Failed to optimize resume')
+    } finally {
+      setIsOptimizing(false)
+    }
+  }
+
+  /**
+   * Handle download of optimized resume
+   * Decodes base64 and triggers browser download
+   */
+  const handleDownloadResume = () => {
+    if (!optimizedFile?.content) {
+      setOptimizeError('No optimized resume available')
+      return
+    }
+
+    try {
+      // Decode base64 to binary
+      const byteCharacters = atob(optimizedFile.content)
+      const byteNumbers = new Array(byteCharacters.length)
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i)
+      }
+      const byteArray = new Uint8Array(byteNumbers)
+
+      // Create blob and download
+      const blob = new Blob([byteArray], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = optimizedFile.name
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Download error:', error)
+      setOptimizeError('Failed to download resume')
+    }
+  }
+
+  /**
+   * Track match score from analysis output
+   * This is called by AnalysisOutput when match analysis completes
+   */
+  const handleAnalysisComplete = (score) => {
+    setMatchScore(score)
   }
 
   return (
@@ -128,12 +218,16 @@ function ResumeAnalysisPage() {
         jobDescription={jobDescription}
         companyName={companyName}
         jobTitle={jobTitle}
+        onMatchScoreUpdate={handleAnalysisComplete}
       />
-
-      {/* Right preview area */}
       <ResumePreview
         sessionId={sessionId}
         uploadedFile={uploadedFile}
+        matchScore={matchScore}
+        isOptimizing={isOptimizing}
+        optimizedFile={optimizedFile}
+        onOptimize={handleOptimize}
+        onDownload={handleDownloadResume}
       />
     </div>
   )
