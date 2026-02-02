@@ -7,6 +7,7 @@ RA-24: Parse resume file and extract structured data
 
 from __future__ import annotations
 
+import logging
 import re
 import tempfile
 import uuid
@@ -28,8 +29,10 @@ from app.schemas.resume_schema import (
     WorkExperience,
 )
 
+logger = logging.getLogger(__name__)
+
 # Configuration
-ALLOWED_EXTS = {".pdf", ".doc", ".docx", ".txt"}
+ALLOWED_EXTS = {".pdf", ".docx", ".txt"}
 MAX_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
 
 # Global GCS client instance for reuse
@@ -132,9 +135,9 @@ def _extract_text_from_pdf(file_path: Path) -> str:
                 text_parts.append(text)
 
         return "\n".join(text_parts)
-    except Exception as e:
-        print(f"PDF parsing error: {str(e)}")
-        raise ValueError("Failed to parse PDF file")
+    except (ValueError, IOError, OSError) as e:
+        logger.error("PDF parsing error: %s", str(e))
+        raise ValueError("Failed to parse PDF file") from e
 
 
 def _extract_text_from_docx(file_path: Path) -> str:
@@ -148,17 +151,22 @@ def _extract_text_from_docx(file_path: Path) -> str:
                 text_parts.append(paragraph.text)
 
         return "\n".join(text_parts)
-    except Exception as e:
-        print(f"DOCX parsing error: {str(e)}")
-        raise ValueError("Failed to parse DOCX file")
+    except (ValueError, IOError, OSError) as e:
+        logger.error("DOCX parsing error: %s", str(e))
+        raise ValueError("Failed to parse DOCX file") from e
 
 
 def _extract_structured_data(raw_text: str, filename: str) -> ResumeData:
     """
-    Extract structured information from raw text using regex patterns
+    Extract structured information from raw text using regex patterns.
 
     Note: This is a basic implementation using regex.
     For production, consider using NLP or LLM-based extraction.
+    
+    Args:
+        raw_text: The text content to parse
+        filename: Original filename (currently unused but kept for API compatibility
+                  and potential future filename-based parsing heuristics)
     """
     # Extract email
     email_pattern = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
@@ -166,6 +174,9 @@ def _extract_structured_data(raw_text: str, filename: str) -> ResumeData:
     email = emails[0] if emails else None
 
     # Extract phone number with validation
+    # Note: This pattern is intentionally permissive and may match false positives
+    # like dates or IDs. For production, consider stricter validation or using
+    # a specialized phone number parsing library like phonenumbers.
     phone_pattern = r"\b(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{3,4}\b"
     raw_phones = re.findall(phone_pattern, raw_text)
     # Filter to valid phone numbers (7-15 digits)
@@ -177,7 +188,10 @@ def _extract_structured_data(raw_text: str, filename: str) -> ResumeData:
     linkedin_urls = re.findall(linkedin_pattern, raw_text, re.IGNORECASE)
     linkedin = linkedin_urls[0] if linkedin_urls else None
 
-    # Extract name (first non-empty line, often the name)
+    # Extract name (first non-empty line)
+    # Note: This is a simple heuristic that assumes the first line is the name.
+    # Many resumes may start with headers or titles. Consider more robust
+    # name detection using NLP or pattern matching for production use.
     lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
     full_name = lines[0] if lines else None
 
@@ -216,13 +230,14 @@ def _extract_skills(text: str) -> list[str]:
     skills = []
 
     # Look for skills section
-    skills_pattern = r"(?:skills?|technical skills?|core competencies)[\s:]*\n((?:[^\n]+\n?)+?)(?:\n\n|experience|employment|work history|education|$)"
+    # Note: Simplified pattern to avoid ReDoS vulnerability from nested quantifiers
+    skills_pattern = r"(?:skills?|technical skills?|core competencies)[\s:]*\n(.*?)(?:\n\n|experience|employment|work history|education|$)"
     match = re.search(skills_pattern, text, re.IGNORECASE | re.DOTALL)
 
     if match:
         skills_text = match.group(1)
-        # Split by common separators
-        skill_items = re.split(r"[,;•·\|]|\n", skills_text)
+        # Split by common separators (removed redundant escape for pipe)
+        skill_items = re.split(r"[,;•·|]|\n", skills_text)
         skills = [s.strip() for s in skill_items if s.strip() and len(s.strip()) > 2]
 
     # Limit to first 20 skills
@@ -233,8 +248,8 @@ def _extract_education(text: str) -> list[Education]:
     """Extract education information"""
     education_list = []
 
-    # Look for education section
-    edu_pattern = r"(?:education|academic background)[\s:]*\n((?:[^\n]+\n?)+?)(?:\n\n|experience|skills|$)"
+    # Look for education section with improved boundary detection
+    edu_pattern = r"(?:education|academic background)[\s:]*\n(.*?)(?:\n\n(?:experience|skills|work history)|$)"
     match = re.search(edu_pattern, text, re.IGNORECASE | re.DOTALL)
 
     if match:
@@ -292,11 +307,19 @@ def _classify_education_fields(entry_lines: list[str]) -> Education:
 
 
 def _extract_work_experience(text: str) -> list[WorkExperience]:
-    """Extract work experience information"""
+    """
+    Extract work experience information.
+    
+    Note: This uses a simple heuristic assuming every 3 consecutive lines form
+    a complete entry (company, position, duration). This is rigid and won't work
+    well for most real resumes with varying formats, bullet points, or different
+    numbers of lines. For production, consider more flexible parsing logic using
+    NLP or machine learning.
+    """
     experience_list = []
 
-    # Look for experience section
-    exp_pattern = r"(?:experience|employment|work history)[\s:]*\n((?:[^\n]+\n?)+?)(?:\n\n|education|skills|$)"
+    # Look for experience section with improved boundary detection
+    exp_pattern = r"(?:experience|employment|work history)[\s:]*\n(.*?)(?:\n\n(?:education|skills)|$)"
     match = re.search(exp_pattern, text, re.IGNORECASE | re.DOTALL)
 
     if match:
@@ -310,9 +333,9 @@ def _extract_work_experience(text: str) -> list[WorkExperience]:
             if len(current_entry) >= 3:
                 experience_list.append(
                     WorkExperience(
-                        company=current_entry[0] if len(current_entry) > 0 else None,
-                        position=current_entry[1] if len(current_entry) > 1 else None,
-                        duration=current_entry[2] if len(current_entry) > 2 else None,
+                        company=current_entry[0],
+                        position=current_entry[1],
+                        duration=current_entry[2],
                     )
                 )
                 current_entry = []
@@ -334,11 +357,11 @@ def _extract_summary(text: str) -> Optional[str]:
     return None
 
 
-async def _parse_file_from_bytes(
+def _parse_file_from_bytes(
     file_content: bytes, filename: str
 ) -> ResumeData:
     """
-    Parse resume from memory buffer
+    Parse resume from memory buffer.
 
     Args:
         file_content: File content as bytes
@@ -350,28 +373,32 @@ async def _parse_file_from_bytes(
     # Security: Extract only the basename to prevent path traversal
     safe_filename = Path(filename).name
 
-    # Validate filename for unsafe characters (e.g., null bytes, control chars)
-    if "\x00" in safe_filename or any(ord(ch) < 32 for ch in safe_filename):
-        raise ValueError("Invalid filename")
+    # Validate filename for unsafe characters
+    # Check for null bytes and control characters (including DEL at 127)
+    if "\x00" in safe_filename or any(ord(ch) < 32 or ord(ch) == 127 for ch in safe_filename):
+        raise ValueError("Invalid filename: contains control characters")
 
-    # Determine file extension from safe filename
-    if safe_filename.endswith(".pdf"):
+    # Determine file extension from safe filename (case-insensitive)
+    safe_filename_lower = safe_filename.lower()
+    if safe_filename_lower.endswith(".pdf"):
         suffix = ".pdf"
-    elif safe_filename.endswith(".docx"):
+    elif safe_filename_lower.endswith(".docx"):
         suffix = ".docx"
-    elif safe_filename.endswith(".txt"):
+    elif safe_filename_lower.endswith(".txt"):
         suffix = ".txt"
     else:
         raise ValueError(f"Unsupported file format: {safe_filename}")
 
     # For PDF/DOCX, we need to use temporary file
     if suffix in [".pdf", ".docx"]:
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            tmp.write(file_content)
-            tmp.flush()
-            tmp_path = Path(tmp.name)
-
+        # Use context manager for better resource management
+        tmp_path = None
         try:
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp.write(file_content)
+                tmp.flush()
+                tmp_path = Path(tmp.name)
+
             # Extract text based on file type
             if suffix == ".pdf":
                 raw_text = _extract_text_from_pdf(tmp_path)
@@ -380,7 +407,8 @@ async def _parse_file_from_bytes(
 
             return _extract_structured_data(raw_text, safe_filename)
         finally:
-            tmp_path.unlink(missing_ok=True)
+            if tmp_path:
+                tmp_path.unlink(missing_ok=True)
     else:
         # For text files, parse directly
         raw_text = file_content.decode("utf-8", errors="ignore")
@@ -447,13 +475,14 @@ async def upload_and_parse_resume(file: UploadFile) -> ResumeUploadResponse:
     # Step 4: Attempt to parse file (RA-24)
     parsed_data: Optional[ResumeData] = None
     try:
-        parsed_data = await _parse_file_from_bytes(
+        parsed_data = await run_in_threadpool(
+            _parse_file_from_bytes,
             file_content=content,
             filename=file.filename,
         )
-    except Exception as e:
+    except (ValueError, IOError, OSError) as e:
         # Log parsing error but don't fail the upload
-        print(f"Resume parsing error: {str(e)}")
+        logger.warning("Resume parsing failed for %s: %s", file.filename, str(e))
         # parsed_data remains None
 
     # Step 5: Return response with upload info (always) + parse data (if successful)

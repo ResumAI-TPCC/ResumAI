@@ -4,6 +4,7 @@ Tests for Resume Upload Endpoint (RA-24)
 
 import io
 import pytest
+from docx import Document
 
 from app.core.config import settings
 
@@ -65,8 +66,6 @@ startxref
 @pytest.fixture
 def sample_docx_content():
     """Create sample DOCX content"""
-    from docx import Document
-    
     doc = Document()
     doc.add_paragraph("Jane Smith")
     doc.add_paragraph("jane.smith@example.com")
@@ -208,6 +207,9 @@ def test_analyze_endpoint_placeholder(client):
 
 
 # GCS Upload Unit Tests
+# Note: The client fixture already depends on mock_gcs, so mock_gcs is automatically
+# activated for all tests using the client fixture. The explicit mock_gcs parameter
+# in these tests is redundant but kept for clarity about the mocking setup.
 def test_gcs_upload_success(client, sample_pdf_content, mock_gcs):
     """Test that GCS upload is called with correct parameters"""
     files = {"file": ("test_resume.pdf", sample_pdf_content, "application/pdf")}
@@ -218,6 +220,8 @@ def test_gcs_upload_success(client, sample_pdf_content, mock_gcs):
     data = response.json()
     
     # Verify GCS client was used
+    # Note: Since mock_gcs is bound to client fixture, assertions check the
+    # mock instance that was used during client creation
     mock_gcs.return_value.bucket.assert_called_once_with(settings.GCS_BUCKET_NAME)
     
     # Verify storage_path is in correct format
@@ -241,5 +245,6 @@ def test_gcs_object_name_format(client, sample_pdf_content, mock_gcs):
     assert "my_resume.pdf" in data["storage_path"]
     
     # Verify blob.upload_from_string was called
+    # Note: Accessing mock_gcs.return_value checks the mock bound to client fixture
     mock_blob = mock_gcs.return_value.bucket.return_value.blob.return_value
     assert mock_blob.upload_from_string.called

@@ -15,6 +15,8 @@ os.environ["GCP_PROJECT_ID"] = "test-project"
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
+# Import after setting environment variables and path to ensure proper configuration
+# noqa: E402 comments below suppress 'module level import not at top of file' warnings
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 

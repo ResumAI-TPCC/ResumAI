@@ -6,6 +6,7 @@ from .resume_schema import (
     ContactInfo,
     Education,
     ResumeData,
+    ResumeUploadResponse,
     WorkExperience,
 )
 
@@ -14,4 +15,5 @@ __all__ = [
     "ContactInfo",
     "Education",
     "WorkExperience",
+    "ResumeUploadResponse",
 ]
