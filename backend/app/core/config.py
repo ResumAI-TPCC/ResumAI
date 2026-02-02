@@ -35,15 +35,6 @@ class Settings(BaseSettings):
     GCS_BUCKET_NAME: str  # Mandatory, fail early if missing
     GCS_OBJECT_PREFIX: str = "resumes"
 
-    def __getattr__(self, name: str):
-        """Support lowercase attribute access for convenience"""
-        if name.islower():
-            upper_name = name.upper()
-            if hasattr(self, upper_name):
-                return getattr(self, upper_name)
-        raise AttributeError(f"'Settings' object has no attribute '{name}'")
-
-
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance"""
