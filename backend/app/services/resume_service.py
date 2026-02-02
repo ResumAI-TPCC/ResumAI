@@ -41,7 +41,7 @@ _gcs_client: Optional[storage.Client] = None
 
 # Email pattern: Matches standard email addresses
 # Captures: username@domain.tld format with common characters
-EMAIL_PATTERN = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
+EMAIL_PATTERN = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"
 
 # Phone pattern: Matches international and domestic phone numbers
 # Captures: Optional country code (+1-3 digits), area code (2-4 digits),
