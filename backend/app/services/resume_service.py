@@ -7,6 +7,7 @@ RA-24: Parse resume file and extract structured data
 
 from __future__ import annotations
 
+import logging
 import re
 import tempfile
 import uuid
@@ -27,6 +28,8 @@ from app.schemas.resume_schema import (
     ResumeUploadResponse,
     WorkExperience,
 )
+
+logger = logging.getLogger(__name__)
 
 # Configuration
 ALLOWED_EXTS = {".pdf", ".doc", ".docx", ".txt"}
@@ -133,7 +136,7 @@ def _extract_text_from_pdf(file_path: Path) -> str:
 
         return "\n".join(text_parts)
     except Exception as e:
-        print(f"PDF parsing error: {str(e)}")
+        logger.error("PDF parsing error: %s", str(e))
         raise ValueError("Failed to parse PDF file")
 
 
@@ -149,7 +152,7 @@ def _extract_text_from_docx(file_path: Path) -> str:
 
         return "\n".join(text_parts)
     except Exception as e:
-        print(f"DOCX parsing error: {str(e)}")
+        logger.error("DOCX parsing error: %s", str(e))
         raise ValueError("Failed to parse DOCX file")
 
 
@@ -453,7 +456,7 @@ async def upload_and_parse_resume(file: UploadFile) -> ResumeUploadResponse:
         )
     except Exception as e:
         # Log parsing error but don't fail the upload
-        print(f"Resume parsing error: {str(e)}")
+        logger.warning("Resume parsing error: %s", str(e))
         # parsed_data remains None
 
     # Step 5: Return response with upload info (always) + parse data (if successful)
