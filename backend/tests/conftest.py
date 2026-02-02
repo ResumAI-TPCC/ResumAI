@@ -3,8 +3,8 @@ Pytest configuration for backend tests
 """
 
 import os
-import sys  # noqa: E402
-from pathlib import Path  # noqa: E402
+import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 # Set environment variables for testing
