@@ -35,6 +35,60 @@ MAX_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
 # Global GCS client instance for reuse
 _gcs_client: Optional[storage.Client] = None
 
+# ============================================================================
+# Regex Patterns for Resume Parsing
+# ============================================================================
+
+# Email pattern: Matches standard email addresses
+# Captures: username@domain.tld format with common characters
+EMAIL_PATTERN = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
+
+# Phone pattern: Matches international and domestic phone numbers
+# Captures: Optional country code (+1-3 digits), area code (2-4 digits),
+# and phone number (7-11 digits total), with flexible separators (space, dash, dot)
+# Examples: +1-555-1234, (555) 123-4567, 555.123.4567
+PHONE_PATTERN = r"\b(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{3,4}\b"
+
+# LinkedIn URL pattern: Matches LinkedIn profile URLs
+# Captures: Both http/https and www/non-www variants
+# Example: linkedin.com/in/username or https://www.linkedin.com/in/username
+LINKEDIN_PATTERN = r"(?:https?://)?(?:www\.)?linkedin\.com/in/[\w-]+"
+
+# Skills section pattern: Matches content after "Skills" heading
+# Captures text from skills heading until next section or end of document
+# Handles variations: "Skills", "Technical Skills", "Core Competencies"
+SKILLS_SECTION_PATTERN = (
+    r"(?:skills?|technical skills?|core competencies)[\s:]*\n"
+    r"((?:[^\n]+\n?)+?)"
+    r"(?:\n\n|experience|employment|work history|education|$)"
+)
+
+# Education section pattern: Matches content after "Education" heading
+# Captures text from education heading until next section or end of document
+EDUCATION_SECTION_PATTERN = (
+    r"(?:education|academic background)[\s:]*\n"
+    r"((?:[^\n]+\n?)+?)"
+    r"(?:\n\n|experience|skills|$)"
+)
+
+# Work experience section pattern: Matches content after "Experience" heading
+# Captures text from experience heading until next section or end of document
+# Handles variations: "Experience", "Employment", "Work History"
+WORK_EXPERIENCE_SECTION_PATTERN = (
+    r"(?:experience|employment|work history)[\s:]*\n"
+    r"((?:[^\n]+\n?)+?)"
+    r"(?:\n\n|education|skills|$)"
+)
+
+# Summary section pattern: Matches content after "Summary" heading
+# Captures text from summary heading until next section or end of document
+# Handles variations: "Summary", "Objective", "Profile", "About"
+SUMMARY_SECTION_PATTERN = (
+    r"(?:summary|objective|profile|about)[\s:]*\n"
+    r"((?:[^\n]+\n?)+?)"
+    r"(?:\n\n|experience|employment|work history|education|skills|$)"
+)
+
 
 # ============================================================================
 # RA-23: GCS Upload Functions
@@ -161,20 +215,17 @@ def _extract_structured_data(raw_text: str, filename: str) -> ResumeData:
     For production, consider using NLP or LLM-based extraction.
     """
     # Extract email
-    email_pattern = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
-    emails = re.findall(email_pattern, raw_text)
+    emails = re.findall(EMAIL_PATTERN, raw_text)
     email = emails[0] if emails else None
 
     # Extract phone number with validation
-    phone_pattern = r"\b(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{3,4}\b"
-    raw_phones = re.findall(phone_pattern, raw_text)
+    raw_phones = re.findall(PHONE_PATTERN, raw_text)
     # Filter to valid phone numbers (7-15 digits)
     phones = [p for p in raw_phones if 7 <= len(re.sub(r"\D", "", p)) <= 15]
     phone = phones[0] if phones else None
 
     # Extract LinkedIn URL
-    linkedin_pattern = r"(?:https?://)?(?:www\.)?linkedin\.com/in/[\w-]+"
-    linkedin_urls = re.findall(linkedin_pattern, raw_text, re.IGNORECASE)
+    linkedin_urls = re.findall(LINKEDIN_PATTERN, raw_text, re.IGNORECASE)
     linkedin = linkedin_urls[0] if linkedin_urls else None
 
     # Extract name (first non-empty line, often the name)
@@ -216,8 +267,7 @@ def _extract_skills(text: str) -> list[str]:
     skills = []
 
     # Look for skills section
-    skills_pattern = r"(?:skills?|technical skills?|core competencies)[\s:]*\n((?:[^\n]+\n?)+?)(?:\n\n|experience|employment|work history|education|$)"
-    match = re.search(skills_pattern, text, re.IGNORECASE | re.DOTALL)
+    match = re.search(SKILLS_SECTION_PATTERN, text, re.IGNORECASE | re.DOTALL)
 
     if match:
         skills_text = match.group(1)
@@ -234,8 +284,7 @@ def _extract_education(text: str) -> list[Education]:
     education_list = []
 
     # Look for education section
-    edu_pattern = r"(?:education|academic background)[\s:]*\n((?:[^\n]+\n?)+?)(?:\n\n|experience|skills|$)"
-    match = re.search(edu_pattern, text, re.IGNORECASE | re.DOTALL)
+    match = re.search(EDUCATION_SECTION_PATTERN, text, re.IGNORECASE | re.DOTALL)
 
     if match:
         edu_text = match.group(1)
@@ -296,8 +345,7 @@ def _extract_work_experience(text: str) -> list[WorkExperience]:
     experience_list = []
 
     # Look for experience section
-    exp_pattern = r"(?:experience|employment|work history)[\s:]*\n((?:[^\n]+\n?)+?)(?:\n\n|education|skills|$)"
-    match = re.search(exp_pattern, text, re.IGNORECASE | re.DOTALL)
+    match = re.search(WORK_EXPERIENCE_SECTION_PATTERN, text, re.IGNORECASE | re.DOTALL)
 
     if match:
         exp_text = match.group(1)
@@ -323,8 +371,7 @@ def _extract_work_experience(text: str) -> list[WorkExperience]:
 def _extract_summary(text: str) -> Optional[str]:
     """Extract professional summary"""
     # Look for summary/objective section
-    summary_pattern = r"(?:summary|objective|profile|about)[\s:]*\n((?:[^\n]+\n?)+?)(?:\n\n|experience|employment|work history|education|skills|$)"
-    match = re.search(summary_pattern, text, re.IGNORECASE | re.DOTALL)
+    match = re.search(SUMMARY_SECTION_PATTERN, text, re.IGNORECASE | re.DOTALL)
 
     if match:
         summary = match.group(1).strip()
