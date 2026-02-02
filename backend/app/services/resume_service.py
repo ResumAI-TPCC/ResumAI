@@ -231,7 +231,8 @@ def _extract_skills(text: str) -> list[str]:
 
     # Look for skills section
     # Note: Simplified pattern to avoid ReDoS vulnerability from nested quantifiers
-    skills_pattern = r"(?:skills?|technical skills?|core competencies)[\s:]*\n(.*?)(?:\n\n|experience|employment|work history|education|$)"
+    # Using \Z for true end-of-string matching instead of $ (which behaves differently in DOTALL mode)
+    skills_pattern = r"(?:skills?|technical skills?|core competencies)[\s:]*\n(.*?)(?:\n\n|experience|employment|work history|education|\Z)"
     match = re.search(skills_pattern, text, re.IGNORECASE | re.DOTALL)
 
     if match:
@@ -249,7 +250,8 @@ def _extract_education(text: str) -> list[Education]:
     education_list = []
 
     # Look for education section with improved boundary detection
-    edu_pattern = r"(?:education|academic background)[\s:]*\n(.*?)(?:\n\n(?:experience|skills|work history)|$)"
+    # Using \Z for true end-of-string matching instead of $ (which behaves differently in DOTALL mode)
+    edu_pattern = r"(?:education|academic background)[\s:]*\n(.*?)(?:\n\n(?:experience|skills|work history)|\Z)"
     match = re.search(edu_pattern, text, re.IGNORECASE | re.DOTALL)
 
     if match:
@@ -319,7 +321,8 @@ def _extract_work_experience(text: str) -> list[WorkExperience]:
     experience_list = []
 
     # Look for experience section with improved boundary detection
-    exp_pattern = r"(?:experience|employment|work history)[\s:]*\n(.*?)(?:\n\n(?:education|skills)|$)"
+    # Using \Z for true end-of-string matching instead of $ (which behaves differently in DOTALL mode)
+    exp_pattern = r"(?:experience|employment|work history)[\s:]*\n(.*?)(?:\n\n(?:education|skills)|\Z)"
     match = re.search(exp_pattern, text, re.IGNORECASE | re.DOTALL)
 
     if match:
@@ -346,7 +349,8 @@ def _extract_work_experience(text: str) -> list[WorkExperience]:
 def _extract_summary(text: str) -> Optional[str]:
     """Extract professional summary"""
     # Look for summary/objective section
-    summary_pattern = r"(?:summary|objective|profile|about)[\s:]*\n((?:[^\n]+\n?)+?)(?:\n\n|experience|employment|work history|education|skills|$)"
+    # Using \Z for true end-of-string matching instead of $ (which behaves differently in DOTALL mode)
+    summary_pattern = r"(?:summary|objective|profile|about)[\s:]*\n(.*?)(?:\n\n|experience|employment|work history|education|skills|\Z)"
     match = re.search(summary_pattern, text, re.IGNORECASE | re.DOTALL)
 
     if match:
