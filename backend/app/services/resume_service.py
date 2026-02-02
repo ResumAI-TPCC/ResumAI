@@ -32,6 +32,25 @@ from app.schemas.resume_schema import (
 ALLOWED_EXTS = {".pdf", ".doc", ".docx", ".txt"}
 MAX_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
 
+# Regex patterns for resume parsing
+# Email pattern: Matches standard email addresses
+# - Local part: alphanumeric, dots, underscores, percent, plus, hyphens
+# - Domain: alphanumeric and hyphens, with TLD of 2+ characters
+EMAIL_PATTERN = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
+
+# Phone pattern: Matches international and domestic phone numbers
+# - Optional country code: +1-3 digits with optional separators
+# - Optional area code: 2-4 digits with optional parentheses and separators
+# - Main number: 3-4 digits, separator, 3-4 digits
+# - Validated to be 7-15 digits total (done in extraction logic)
+PHONE_PATTERN = r"\b(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{3,4}\b"
+
+# LinkedIn URL pattern: Matches LinkedIn profile URLs
+# - Optional protocol: http or https
+# - Optional www subdomain
+# - Profile path: /in/ followed by alphanumeric and hyphens
+LINKEDIN_PATTERN = r"(?:https?://)?(?:www\.)?linkedin\.com/in/[\w-]+"
+
 # Global GCS client instance for reuse
 _gcs_client: Optional[storage.Client] = None
 
@@ -161,20 +180,17 @@ def _extract_structured_data(raw_text: str, filename: str) -> ResumeData:
     For production, consider using NLP or LLM-based extraction.
     """
     # Extract email
-    email_pattern = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
-    emails = re.findall(email_pattern, raw_text)
+    emails = re.findall(EMAIL_PATTERN, raw_text)
     email = emails[0] if emails else None
 
     # Extract phone number with validation
-    phone_pattern = r"\b(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{3,4}\b"
-    raw_phones = re.findall(phone_pattern, raw_text)
+    raw_phones = re.findall(PHONE_PATTERN, raw_text)
     # Filter to valid phone numbers (7-15 digits)
     phones = [p for p in raw_phones if 7 <= len(re.sub(r"\D", "", p)) <= 15]
     phone = phones[0] if phones else None
 
     # Extract LinkedIn URL
-    linkedin_pattern = r"(?:https?://)?(?:www\.)?linkedin\.com/in/[\w-]+"
-    linkedin_urls = re.findall(linkedin_pattern, raw_text, re.IGNORECASE)
+    linkedin_urls = re.findall(LINKEDIN_PATTERN, raw_text, re.IGNORECASE)
     linkedin = linkedin_urls[0] if linkedin_urls else None
 
     # Extract name (first non-empty line, often the name)
