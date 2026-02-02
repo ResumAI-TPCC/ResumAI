@@ -4,6 +4,7 @@ Uses pydantic-settings to manage environment variables and configuration
 """
 
 from functools import lru_cache
+from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -27,8 +28,11 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api"
 
     # LLM Provider settings
-    # Specific provider settings will be extended by each implementation
-    LLM_PROVIDER: str = ""
+    LLM_PROVIDER: str = "gemini"  # Default to Gemini
+
+    # Gemini API settings
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-1.5-flash"
 
     # GCP / GCS settings
     GCP_PROJECT_ID: str  # Mandatory, fail early if missing

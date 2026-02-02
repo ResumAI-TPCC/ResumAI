@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router as api_router
 from app.core.config import settings
+from app.services.llm import GeminiProvider, register_provider
 
 
 @asynccontextmanager
@@ -16,6 +17,11 @@ async def lifespan(app: FastAPI):
     """Application lifecycle management"""
     # Startup
     print(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} starting...")
+
+    # Register LLM providers
+    register_provider("gemini", GeminiProvider)
+    print("✅ Registered Gemini LLM provider")
+
     yield
     # Shutdown
     print(f"👋 {settings.APP_NAME} shutting down...")

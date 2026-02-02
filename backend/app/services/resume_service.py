@@ -4,9 +4,10 @@ Resume Service Layer
 
 from __future__ import annotations
 
+import io
 import uuid
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from fastapi import HTTPException, UploadFile, status
 from google.cloud import storage
@@ -123,3 +124,195 @@ def _do_gcs_upload(
     blob.upload_from_string(
         content, content_type=content_type or "application/octet-stream"
     )
+
+
+# ============================================================================
+# GCS Download and Resume Parsing Functions
+# ============================================================================
+
+
+async def get_resume_from_gcs(session_id: str) -> Tuple[bytes, str]:
+    """
+    Download resume file from GCS by session_id.
+
+    Args:
+        session_id: The file_id/session_id returned from upload
+
+    Returns:
+        Tuple[bytes, str]: (file_content, filename)
+
+    Raises:
+        HTTPException: 404 if resume not found, 500 if download fails
+    """
+    if not settings.GCS_BUCKET_NAME:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="GCS bucket not configured",
+        )
+
+    try:
+        content, filename = await run_in_threadpool(
+            _do_gcs_download, session_id=session_id
+        )
+        return content, filename
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to download resume from GCS: {exc}",
+        ) from exc
+
+
+def _do_gcs_download(session_id: str) -> Tuple[bytes, str]:
+    """
+    Synchronous GCS download operation.
+
+    Args:
+        session_id: The file_id/session_id
+
+    Returns:
+        Tuple[bytes, str]: (file_content, filename)
+    """
+    client = _get_gcs_client()
+    bucket = client.bucket(settings.GCS_BUCKET_NAME)
+
+    # List blobs with the session_id prefix
+    prefix = f"{settings.GCS_OBJECT_PREFIX}/{session_id}/"
+    blobs = list(bucket.list_blobs(prefix=prefix))
+
+    if not blobs:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Resume not found for session: {session_id}",
+        )
+
+    # Get the first (and should be only) file
+    blob = blobs[0]
+    content = blob.download_as_bytes()
+
+    # Extract filename from blob name
+    filename = Path(blob.name).name
+
+    return content, filename
+
+
+def parse_resume_content(content: bytes, filename: str) -> str:
+    """
+    Parse resume file and extract text content.
+
+    Supports PDF, DOCX, DOC, and TXT formats.
+
+    Args:
+        content: File content as bytes
+        filename: Original filename (to determine file type)
+
+    Returns:
+        str: Extracted text content
+
+    Raises:
+        HTTPException: 400 if file type is unsupported or parsing fails
+    """
+    ext = Path(filename).suffix.lower()
+
+    try:
+        if ext == ".txt":
+            return content.decode("utf-8")
+
+        elif ext == ".pdf":
+            return _parse_pdf(content)
+
+        elif ext in (".docx", ".doc"):
+            return _parse_docx(content)
+
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported file type for parsing: {ext}",
+            )
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to parse resume file: {exc}",
+        ) from exc
+
+
+def _parse_pdf(content: bytes) -> str:
+    """
+    Parse PDF file and extract text.
+
+    Args:
+        content: PDF file content as bytes
+
+    Returns:
+        str: Extracted text content
+    """
+    import pdfplumber
+
+    text_parts = []
+    with pdfplumber.open(io.BytesIO(content)) as pdf:
+        for page in pdf.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text_parts.append(page_text)
+
+    if not text_parts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not extract text from PDF. The file may be empty or image-based.",
+        )
+
+    return "\n\n".join(text_parts)
+
+
+def _parse_docx(content: bytes) -> str:
+    """
+    Parse DOCX file and extract text.
+
+    Args:
+        content: DOCX file content as bytes
+
+    Returns:
+        str: Extracted text content
+    """
+    from docx import Document
+
+    doc = Document(io.BytesIO(content))
+    paragraphs = [para.text for para in doc.paragraphs if para.text.strip()]
+
+    if not paragraphs:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not extract text from DOCX. The file may be empty.",
+        )
+
+    return "\n\n".join(paragraphs)
+
+
+async def get_resume_text(session_id: str) -> str:
+    """
+    Get resume text content by session_id.
+
+    This is a high-level function that:
+    1. Downloads the resume file from GCS
+    2. Parses the file to extract text content
+
+    Args:
+        session_id: The file_id/session_id returned from upload
+
+    Returns:
+        str: Extracted text content from the resume
+
+    Raises:
+        HTTPException: 404 if not found, 400 if parsing fails, 500 if other error
+    """
+    # Download from GCS
+    content, filename = await get_resume_from_gcs(session_id)
+
+    # Parse and extract text (run in thread pool for CPU-bound parsing)
+    text = await run_in_threadpool(parse_resume_content, content, filename)
+
+    return text
