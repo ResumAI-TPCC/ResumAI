@@ -137,7 +137,7 @@ def _extract_text_from_pdf(file_path: Path) -> str:
 
         return "\n".join(text_parts)
     except Exception as e:
-        logger.error("PDF parsing error: %s", str(e), exc_info=True)
+        logger.error("PDF parsing error: %s", e, exc_info=True)
         raise ValueError("Failed to parse PDF file")
 
 
@@ -153,7 +153,7 @@ def _extract_text_from_docx(file_path: Path) -> str:
 
         return "\n".join(text_parts)
     except Exception as e:
-        logger.error("DOCX parsing error: %s", str(e), exc_info=True)
+        logger.error("DOCX parsing error: %s", e, exc_info=True)
         raise ValueError("Failed to parse DOCX file")
 
 
@@ -457,7 +457,7 @@ async def upload_and_parse_resume(file: UploadFile) -> ResumeUploadResponse:
         )
     except Exception as e:
         # Log parsing error but don't fail the upload
-        logger.error("Resume parsing error: %s", str(e), exc_info=True)
+        logger.error("Resume parsing error: %s", e, exc_info=True)
         # parsed_data remains None
 
     # Step 5: Return response with upload info (always) + parse data (if successful)
