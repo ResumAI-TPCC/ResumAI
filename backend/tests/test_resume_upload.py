@@ -7,6 +7,9 @@ import pytest
 
 from app.core.config import settings
 
+# MIME type constants
+DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
 
 @pytest.fixture
 def sample_pdf_content():
@@ -103,7 +106,7 @@ def test_upload_resume_pdf_success(client, sample_pdf_content):
 
 def test_upload_resume_docx_success(client, sample_docx_content):
     """Test successful DOCX upload and parsing"""
-    files = {"file": ("test_resume.docx", sample_docx_content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
+    files = {"file": ("test_resume.docx", sample_docx_content, DOCX_MIME_TYPE)}
     
     response = client.post(f"{settings.api_prefix}/resume/", files=files)
     
