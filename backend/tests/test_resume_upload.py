@@ -83,7 +83,7 @@ def test_upload_resume_pdf_success(client, sample_pdf_content):
     """Test successful PDF upload and parsing"""
     files = {"file": ("test_resume.pdf", sample_pdf_content, "application/pdf")}
     
-    response = client.post(f"{settings.api_prefix}/resume/", files=files)
+    response = client.post(f"{settings.API_PREFIX}/resume/", files=files)
     
     assert response.status_code == 201
     data = response.json()
@@ -105,7 +105,7 @@ def test_upload_resume_docx_success(client, sample_docx_content):
     """Test successful DOCX upload and parsing"""
     files = {"file": ("test_resume.docx", sample_docx_content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
     
-    response = client.post(f"{settings.api_prefix}/resume/", files=files)
+    response = client.post(f"{settings.API_PREFIX}/resume/", files=files)
     
     assert response.status_code == 201
     data = response.json()
@@ -127,7 +127,7 @@ def test_upload_resume_unsupported_format(client):
     """Test upload with unsupported file format"""
     files = {"file": ("test.exe", b"fake exe content", "application/x-msdownload")}
     
-    response = client.post(f"{settings.api_prefix}/resume/", files=files)
+    response = client.post(f"{settings.API_PREFIX}/resume/", files=files)
     
     assert response.status_code == 400
     assert "unsupported" in response.json()["detail"].lower() or "not supported" in response.json()["detail"].lower()
@@ -139,7 +139,7 @@ def test_upload_resume_file_too_large(client):
     large_content = b"x" * (11 * 1024 * 1024)
     files = {"file": ("large.pdf", large_content, "application/pdf")}
     
-    response = client.post(f"{settings.api_prefix}/resume/", files=files)
+    response = client.post(f"{settings.API_PREFIX}/resume/", files=files)
     
     assert response.status_code == 413
     assert "too large" in response.json()["detail"].lower()
@@ -155,7 +155,7 @@ def test_upload_resume_invalid_filename(client, sample_pdf_content):
     
     for filename in malicious_filenames:
         files = {"file": (filename, sample_pdf_content, "application/pdf")}
-        response = client.post(f"{settings.api_prefix}/resume/", files=files)
+        response = client.post(f"{settings.API_PREFIX}/resume/", files=files)
         
         # Should either reject the filename or sanitize it
         # We accept sanitized version, so check that it succeeds with safe name
@@ -173,7 +173,7 @@ def test_upload_resume_text_file(client):
     text_content = b"John Doe\njohn@example.com\n+1-555-0000"
     files = {"file": ("resume.txt", text_content, "text/plain")}
     
-    response = client.post(f"{settings.api_prefix}/resume/", files=files)
+    response = client.post(f"{settings.API_PREFIX}/resume/", files=files)
     
     assert response.status_code == 201
     data = response.json()
@@ -185,7 +185,7 @@ def test_upload_resume_text_file(client):
 
 def test_match_endpoint_placeholder(client):
     """Test match endpoint returns placeholder response"""
-    response = client.post(f"{settings.api_prefix}/resume/match")
+    response = client.post(f"{settings.API_PREFIX}/resume/match")
     
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
@@ -193,7 +193,7 @@ def test_match_endpoint_placeholder(client):
 
 def test_optimize_endpoint_placeholder(client):
     """Test optimize endpoint returns placeholder response"""
-    response = client.post(f"{settings.api_prefix}/resume/optimize")
+    response = client.post(f"{settings.API_PREFIX}/resume/optimize")
     
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
@@ -201,7 +201,7 @@ def test_optimize_endpoint_placeholder(client):
 
 def test_analyze_endpoint_placeholder(client):
     """Test analyze endpoint returns placeholder response"""
-    response = client.post(f"{settings.api_prefix}/resume/analyze")
+    response = client.post(f"{settings.API_PREFIX}/resume/analyze")
     
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
@@ -212,7 +212,7 @@ def test_gcs_upload_success(client, sample_pdf_content, mock_gcs):
     """Test that GCS upload is called with correct parameters"""
     files = {"file": ("test_resume.pdf", sample_pdf_content, "application/pdf")}
     
-    response = client.post(f"{settings.api_prefix}/resume/", files=files)
+    response = client.post(f"{settings.API_PREFIX}/resume/", files=files)
     
     assert response.status_code == 201
     data = response.json()
@@ -229,7 +229,7 @@ def test_gcs_object_name_format(client, sample_pdf_content, mock_gcs):
     """Test that GCS object names follow the correct format"""
     files = {"file": ("my_resume.pdf", sample_pdf_content, "application/pdf")}
     
-    response = client.post(f"{settings.api_prefix}/resume/", files=files)
+    response = client.post(f"{settings.API_PREFIX}/resume/", files=files)
     
     assert response.status_code == 201
     data = response.json()
