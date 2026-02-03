@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
 
+    # GCP / GCS settings
+    gcp_project_id: str  # Mandatory, fail early if missing
+    gcs_bucket_name: str  # Mandatory, fail early if missing
+    gcs_object_prefix: str = "resumes"
+
 
 class EnvConfig:
     """
@@ -84,7 +89,6 @@ class EnvConfig:
                 model=settings.gemini_model,
             ),
         )
-
 
 @lru_cache
 def get_settings() -> Settings:
