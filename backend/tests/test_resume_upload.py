@@ -1,12 +1,11 @@
-"""
-Tests for Resume Upload Endpoint (RA-24)
-"""
+from fastapi.testclient import TestClient
 
 import io
 import pytest
 
 from app.core.config import settings
-
+from app.main import create_app
+from app.services import resume_service
 
 @pytest.fixture
 def sample_pdf_content():
@@ -78,6 +77,25 @@ def sample_docx_content():
     buffer.seek(0)
     return buffer.read()
 
+class FakeBlob:
+    def __init__(self) -> None:
+        self.data = None
+        self.content_type = None
+        self.name = None
+
+    def upload_from_string(self, data: bytes, content_type: str | None = None) -> None:
+        self.data = data
+        self.content_type = content_type
+
+class FakeBucket:
+    def __init__(self) -> None:
+        self.blobs = {}
+
+    def blob(self, name: str) -> FakeBlob:
+        blob = FakeBlob()
+        blob.name = name
+        self.blobs[name] = blob
+        return blob
 
 class FakeClient:
     def __init__(self) -> None:
@@ -87,7 +105,6 @@ class FakeClient:
     def bucket(self, name: str) -> FakeBucket:
         self.bucket_name = name
         return self.bucket_obj
-
 
 def test_resume_upload_success_pdf(monkeypatch):
     app = create_app()
