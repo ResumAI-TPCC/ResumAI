@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     gcp_project_id: str = ""  # Mandatory, fail early if missing
     gcs_bucket_name: str = ""  # Mandatory, fail early if missing
     gcs_object_prefix: str = "resumes"
+    gcp_sa_key: str = ""
+    gcp_private_key: str = ""
+    gcp_private_key_id: str = ""
 
 
 @lru_cache
