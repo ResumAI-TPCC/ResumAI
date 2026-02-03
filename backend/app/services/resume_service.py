@@ -48,7 +48,7 @@ def _get_gcs_client() -> storage.Client:
         return _gcs_client
 
     # Use Application Default Credentials (ADC)
-    _gcs_client = storage.Client(project=settings.gcp_project_id or None)
+    _gcs_client = storage.Client(project=settings.GCP_PROJECT_ID or None)
     return _gcs_client
 
 
@@ -70,7 +70,7 @@ def _validate_filename(filename: str) -> None:
 def _build_object_name(file_id: str, filename: str) -> str:
     """Build GCS object path."""
     safe_name = Path(filename).name
-    prefix = settings.gcs_object_prefix.strip("/")
+    prefix = settings.GCS_OBJECT_PREFIX.strip("/")
     if prefix:
         return f"{prefix}/{file_id}/{safe_name}"
     return f"{file_id}/{safe_name}"
@@ -101,14 +101,14 @@ def _do_gcs_upload(
     content: bytes, object_name: str, content_type: Optional[str]
 ) -> None:
     """Synchronous GCS upload operation."""
-    if not settings.gcs_bucket_name:
+    if not settings.GCS_BUCKET_NAME:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="GCS bucket not configured",
         )
 
     client = _get_gcs_client()
-    bucket = client.bucket(settings.gcs_bucket_name)
+    bucket = client.bucket(settings.GCS_BUCKET_NAME)
     blob = bucket.blob(object_name)
     blob.upload_from_string(
         content, content_type=content_type or "application/octet-stream"
@@ -415,7 +415,7 @@ async def upload_and_parse_resume(file: UploadFile) -> ResumeUploadResponse:
     # Step 1: Validate filename (RA-23)
     _validate_filename(file.filename)
 
-    if not settings.gcs_bucket_name:
+    if not settings.GCS_BUCKET_NAME:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="GCS bucket not configured",
@@ -442,7 +442,7 @@ async def upload_and_parse_resume(file: UploadFile) -> ResumeUploadResponse:
             detail=f"GCS upload failed: {exc}",
         ) from exc
 
-    storage_path = f"gs://{settings.gcs_bucket_name}/{object_name}"
+    storage_path = f"gs://{settings.GCS_BUCKET_NAME}/{object_name}"
 
     # Step 4: Attempt to parse file (RA-24)
     parsed_data: Optional[ResumeData] = None

@@ -48,18 +48,18 @@ class Settings(BaseSettings):
     )
 
     # Flat environment variables (read from .env)
-    app_name: str = "ResumAI"
-    app_version: str = "0.1.0"
-    debug: bool = False
-    api_prefix: str = "/api"
-    llm_provider: str = "gemini"
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    APP_NAME: str = "ResumAI"
+    APP_VERSION: str = "0.1.0"
+    DEBUG: bool = False
+    API_PREFIX: str = "/api"
+    LLM_PROVIDER: str = "gemini"
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
 
     # GCP / GCS settings
-    gcp_project_id: str  # Mandatory, fail early if missing
-    gcs_bucket_name: str  # Mandatory, fail early if missing
-    gcs_object_prefix: str = "resumes"
+    GCP_PROJECT_ID: str  # Mandatory, fail early if missing
+    GCS_BUCKET_NAME: str  # Mandatory, fail early if missing
+    GCS_OBJECT_PREFIX: str = "resumes"
 
 
 class EnvConfig:
@@ -73,20 +73,20 @@ class EnvConfig:
 
         # Organized configuration structure
         self.app = AppConfig(
-            name=settings.app_name,
-            version=settings.app_version,
-            debug=settings.debug,
+            name=settings.APP_NAME,
+            version=settings.APP_VERSION,
+            debug=settings.DEBUG,
         )
 
         self.api = APIConfig(
-            prefix=settings.api_prefix,
+            prefix=settings.API_PREFIX,
         )
 
         self.llm = LLMConfig(
-            provider=settings.llm_provider,
+            provider=settings.LLM_PROVIDER,
             gemini=GeminiConfig(
-                api_key=settings.gemini_api_key,
-                model=settings.gemini_model,
+                api_key=settings.GEMINI_API_KEY,
+                model=settings.GEMINI_MODEL,
             ),
         )
 
