@@ -33,7 +33,7 @@ def _get_gcs_client() -> storage.Client:
         return _gcs_client
 
     # Use Application Default Credentials (ADC)
-    _gcs_client = storage.Client(project=settings.gcp_project_id or None)
+    _gcs_client = storage.Client(project=settings.GCP_PROJECT_ID or None)
     return _gcs_client
 
 
@@ -233,7 +233,7 @@ async def upload_resume_to_gcs(file: UploadFile) -> Dict[str, Any]:
     """
     _validate_filename(file.filename)
 
-    if not settings.gcs_bucket_name:
+    if not settings.GCS_BUCKET_NAME:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="GCS bucket not configured",
@@ -302,7 +302,7 @@ def _do_gcs_upload(
 ) -> None:
     """Synchronous GCS upload operation."""
     client = _get_gcs_client()
-    bucket = client.bucket(settings.gcs_bucket_name)
+    bucket = client.bucket(settings.GCS_BUCKET_NAME)
     blob = bucket.blob(object_name)
     blob.upload_from_string(
         content, content_type=content_type or "application/octet-stream"

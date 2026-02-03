@@ -71,8 +71,8 @@ def test_resume_upload_success_docx(monkeypatch):
 
     fake_client = FakeClient()
     monkeypatch.setattr(resume_service, "_get_gcs_client", lambda: fake_client)
-    monkeypatch.setattr(resume_service.settings, "gcs_bucket_name", "test-bucket")
-    monkeypatch.setattr(resume_service.settings, "gcp_project_id", "test-project")
+    monkeypatch.setattr(resume_service.settings, "GCS_BUCKET_NAME", "test-bucket")
+    monkeypatch.setattr(resume_service.settings, "GCP_PROJECT_ID", "test-project")
 
     files = {"file": ("test.docx", b"fake docx content", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
     r = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
@@ -86,8 +86,8 @@ def test_resume_upload_reject_exe(monkeypatch):
     client = TestClient(app)
 
     # Need to mock settings even for failures if validation triggers
-    monkeypatch.setattr(resume_service.settings, "gcs_bucket_name", "test-bucket")
-    monkeypatch.setattr(resume_service.settings, "gcp_project_id", "test-project")
+    monkeypatch.setattr(resume_service.settings, "GCS_BUCKET_NAME", "test-bucket")
+    monkeypatch.setattr(resume_service.settings, "GCP_PROJECT_ID", "test-project")
 
     files = {"file": ("test.exe", b"hello", "application/x-msdownload")}
     r = client.post(f"{settings.API_PREFIX}/resumes/", files=files)

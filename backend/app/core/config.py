@@ -39,14 +39,9 @@ class Settings(BaseSettings):
     GEMINI_RETRY_DELAY: float = 1.0
 
     # GCP / GCS settings
-    gcp_project_id: str = ""  # Mandatory, fail early if missing
-    gcs_bucket_name: str = ""  # Mandatory, fail early if missing
-    gcs_object_prefix: str = "resumes"
-
-    # GCP / GCS settings
-    gcp_project_id: str = ""  # Mandatory, fail early if missing
-    gcs_bucket_name: str = ""  # Mandatory, fail early if missing
-    gcs_object_prefix: str = "resumes"
+    GCP_PROJECT_ID: str = ""  # Mandatory, fail early if missing
+    GCS_BUCKET_NAME: str = ""  # Mandatory, fail early if missing
+    GCS_OBJECT_PREFIX: str = "resumes"
 
 
 @lru_cache

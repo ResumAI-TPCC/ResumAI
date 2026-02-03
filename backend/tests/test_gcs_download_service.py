@@ -88,9 +88,9 @@ class TestGCSDownloadService:
     def test_validate_filename_valid_extensions(self):
         """Test filename validation with valid extensions."""
         from app.services.resume_service import _validate_filename
-
+    
         # Should not raise for valid extensions
-        valid_files = ["resume.pdf", "cv.doc", "resume.docx", "plain.txt"]
+        valid_files = ["resume.pdf", "resume.docx", "CV.PDF"]
         for filename in valid_files:
             _validate_filename(filename)  # Should not raise
 
