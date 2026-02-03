@@ -7,15 +7,18 @@ RA-24: Parse resume file and extract structured data
 
 from fastapi import APIRouter, File, UploadFile, status
 
-from app.schemas.resume import (
+from app.schemas.resume_schema import (
     ResumeAnalyzeRequest,
+    ResumeData,
     ResumeMatchRequest,
     ResumeOptimizeRequest,
     ResumeUploadResponse,
 )
-from app.services.resume_service import get_resume_content, upload_resume_to_gcs
-from app.schemas.resume_schema import ResumeUploadResponse
-from app.services.resume_service import upload_and_parse_resume
+from app.services.resume_service import (
+    get_resume_content,
+    upload_and_parse_resume,
+    upload_resume_to_gcs,
+)
 
 router = APIRouter()
 

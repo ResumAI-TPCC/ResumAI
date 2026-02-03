@@ -147,14 +147,17 @@ def test_resume_upload_success_docx(monkeypatch):
     r = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
 
     assert r.status_code == 201, r.text
-    assert r.json()["data"]["session_id"]
+    res = r.json()
+    assert res["status"] == "ok"
+    assert res["data"]["session_id"]
+    assert "expire_at" in res["data"]
 
 
 def test_upload_resume_unsupported_format(client):
     """Test upload with unsupported file format"""
     files = {"file": ("test.exe", b"fake exe content", "application/x-msdownload")}
     
-    response = client.post(f"{settings.API_PREFIX}/resume/", files=files)
+    response = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
     
     assert response.status_code == 400
     assert "unsupported" in response.json()["detail"].lower() or "not supported" in response.json()["detail"].lower()
@@ -165,7 +168,7 @@ def test_upload_resume_file_too_large(client):
     large_content = b"x" * (11 * 1024 * 1024)
     files = {"file": ("large.pdf", large_content, "application/pdf")}
     
-    response = client.post(f"{settings.API_PREFIX}/resume/", files=files)
+    response = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
     
     assert response.status_code == 413
     assert "too large" in response.json()["detail"].lower()
@@ -181,14 +184,15 @@ def test_upload_resume_invalid_filename(client, sample_pdf_content):
     
     for filename in malicious_filenames:
         files = {"file": (filename, sample_pdf_content, "application/pdf")}
-        response = client.post(f"{settings.API_PREFIX}/resume/", files=files)
+        response = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
         
         # Should either reject the filename or sanitize it
         # We accept sanitized version, so check that it succeeds with safe name
         if response.status_code == 201:
             # Filename was sanitized successfully
-            assert "file_id" in response.json()
-            assert "storage_path" in response.json()
+            res = response.json()
+            assert "session_id" in res["data"]
+            assert "expire_at" in res["data"]
         else:
             # Filename was rejected
             assert response.status_code == 400
@@ -199,35 +203,55 @@ def test_upload_resume_text_file(client):
     text_content = b"John Doe\njohn@example.com\n+1-555-0000"
     files = {"file": ("resume.txt", text_content, "text/plain")}
     
-    response = client.post(f"{settings.API_PREFIX}/resume/", files=files)
+    response = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
     
     assert response.status_code == 201
-    data = response.json()
-    assert data["filename"] == "resume.txt"
-    assert "file_id" in data
-    assert "storage_path" in data
+    res = response.json()
+    assert "session_id" in res["data"]
+    assert "expire_at" in res["data"]
     # parsed_data may be present or None depending on parsing success
 
 
-def test_match_endpoint_placeholder(client):
+def test_match_endpoint_placeholder(client, monkeypatch):
     """Test match endpoint returns placeholder response"""
-    response = client.post(f"{settings.API_PREFIX}/resume/match")
+    async def mock_get_content(session_id):
+        return "fake resume content"
+    
+    from app.api.routes import resume
+    monkeypatch.setattr(resume, "get_resume_content", mock_get_content)
+    
+    payload = {"session_id": "test-id", "job_description": "test job"}
+    response = client.post(f"{settings.API_PREFIX}/resumes/match", json=payload)
     
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
 
-def test_optimize_endpoint_placeholder(client):
+def test_optimize_endpoint_placeholder(client, monkeypatch):
     """Test optimize endpoint returns placeholder response"""
-    response = client.post(f"{settings.API_PREFIX}/resume/optimize")
+    async def mock_get_content(session_id):
+        return "fake resume content"
+        
+    from app.api.routes import resume
+    monkeypatch.setattr(resume, "get_resume_content", mock_get_content)
+    
+    payload = {"session_id": "test-id", "job_description": "test job"}
+    response = client.post(f"{settings.API_PREFIX}/resumes/optimize", json=payload)
     
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
 
-def test_analyze_endpoint_placeholder(client):
+def test_analyze_endpoint_placeholder(client, monkeypatch):
     """Test analyze endpoint returns placeholder response"""
-    response = client.post(f"{settings.API_PREFIX}/resume/analyze")
+    async def mock_get_content(session_id):
+        return "fake resume content"
+        
+    from app.api.routes import resume
+    monkeypatch.setattr(resume, "get_resume_content", mock_get_content)
+    
+    payload = {"session_id": "test-id"}
+    response = client.post(f"{settings.API_PREFIX}/resumes/analyze", json=payload)
     
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
@@ -238,33 +262,31 @@ def test_gcs_upload_success(client, sample_pdf_content, mock_gcs):
     """Test that GCS upload is called with correct parameters"""
     files = {"file": ("test_resume.pdf", sample_pdf_content, "application/pdf")}
     
-    response = client.post(f"{settings.API_PREFIX}/resume/", files=files)
+    response = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
     
     assert response.status_code == 201
-    data = response.json()
+    res = response.json()
     
     # Verify GCS client was used
     mock_gcs.return_value.bucket.assert_called_once_with(settings.GCS_BUCKET_NAME)
     
-    # Verify storage_path is in correct format
-    assert data["storage_path"].startswith("gs://")
-    assert settings.GCS_BUCKET_NAME in data["storage_path"]
+    # Verify session fields
+    assert "session_id" in res["data"]
+    assert "expire_at" in res["data"]
 
 
 def test_gcs_object_name_format(client, sample_pdf_content, mock_gcs):
     """Test that GCS object names follow the correct format"""
     files = {"file": ("my_resume.pdf", sample_pdf_content, "application/pdf")}
     
-    response = client.post(f"{settings.API_PREFIX}/resume/", files=files)
+    response = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
     
     assert response.status_code == 201
-    data = response.json()
-    file_id = data["file_id"]
+    res = response.json()
+    session_id = res["data"]["session_id"]
     
-    # Object name should follow pattern: {prefix}/{file_id}/{filename}
-    # Storage path format: gs://bucket_name/prefix/file_id/filename
-    assert file_id in data["storage_path"]
-    assert "my_resume.pdf" in data["storage_path"]
+    assert session_id
+    assert "expire_at" in res["data"]
     
     # Verify blob.upload_from_string was called
     mock_blob = mock_gcs.return_value.bucket.return_value.blob.return_value

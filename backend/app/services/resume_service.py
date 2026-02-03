@@ -676,9 +676,13 @@ async def upload_and_parse_resume(file: UploadFile) -> ResumeUploadResponse:
         # parsed_data remains None
 
     # Step 5: Return response with upload info (always) + parse data (if successful)
+    expire_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    
     return ResumeUploadResponse(
-        file_id=file_id,
-        filename=file.filename,
-        storage_path=storage_path,
-        parsed_data=parsed_data,
+        code=201,
+        status="ok",
+        data={
+            "session_id": file_id,
+            "expire_at": expire_at,
+        }
     )

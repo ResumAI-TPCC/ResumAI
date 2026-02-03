@@ -49,18 +49,40 @@ class ResumeData(BaseModel):
     raw_text: str = Field(..., description="Full extracted text from resume")
 
 
+class ResumeUploadData(BaseModel):
+    """Inner data for resume upload response"""
+
+    session_id: str = Field(..., description="Session ID (UUID) for the upload")
+    expire_at: str = Field(..., description="Expiration timestamp (ISO 8601)")
+
+
 class ResumeUploadResponse(BaseModel):
     """Response schema for resume upload and parse
     
     Combines RA-23 (GCS upload) and RA-24 (file parsing).
-    Always returns file_id/session_id from upload.
-    Returns parsed_data only if parsing was successful.
+    Always returns code, status, and data containing session_id and other details.
     """
 
-    # RA-23: Upload info (always present)
-    file_id: str = Field(..., description="File ID (UUID) from GCS upload")
-    filename: str = Field(..., description="Original filename")
-    storage_path: str = Field(..., description="GCS storage path (gs://bucket/...)")
-    
-    # RA-24: Parsing info (optional, only if parsing succeeded)
-    parsed_data: Optional[ResumeData] = Field(None, description="Parsed resume data (RA-24)")
+    code: int = Field(201, description="Status code")
+    status: str = Field("ok", description="Status message")
+    data: ResumeUploadData = Field(..., description="Uploaded resume details")
+
+
+class ResumeAnalyzeRequest(BaseModel):
+    """Request schema for resume analysis"""
+    session_id: str
+
+
+class ResumeMatchRequest(BaseModel):
+    """Request schema for resume matching"""
+    session_id: str
+    job_description: str
+    job_title: Optional[str] = None
+    company_name: Optional[str] = None
+
+
+class ResumeOptimizeRequest(BaseModel):
+    """Request schema for resume optimization"""
+    session_id: str
+    job_description: Optional[str] = None
+    template: str = "modern"
