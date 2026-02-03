@@ -74,22 +74,70 @@ export async function uploadResume(file, onProgress = null) {
  * Analyze resume quality
  * @param {string} sessionId - Session ID
  * @returns {Promise<Object>} Analysis suggestions
+ * @throws {Error} If sessionId is empty or API call fails
  */
 export async function analyzeResume(sessionId) {
-  const response = await fetch(`${API_BASE_URL}/resumes/analyze`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ session_id: sessionId }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Analysis failed' }));
-    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+  // Validate input
+  if (!sessionId || typeof sessionId !== 'string' || sessionId.trim() === '') {
+    throw new Error('Session ID is required and cannot be empty');
   }
 
-  return await response.json();
+  try {
+    const response = await fetch(`${API_BASE_URL}/resumes/analyze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ session_id: sessionId.trim() }),
+    });
+
+    // Handle different HTTP status codes
+    if (response.status === 400) {
+      const errorData = await response.json().catch(() => ({ message: 'Invalid request' }));
+      throw new Error(errorData.message || 'Invalid request parameters');
+    }
+
+    if (response.status === 404) {
+      const errorData = await response.json().catch(() => ({ message: 'Resume not found' }));
+      throw new Error(errorData.message || 'Resume not found. Please upload your resume again.');
+    }
+
+    if (response.status === 500) {
+      const errorData = await response.json().catch(() => ({ message: 'Server error' }));
+      throw new Error(errorData.message || 'Server error occurred. Please try again later.');
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Analysis failed' }));
+      throw new Error(errorData.message || `Analysis failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    // Validate response structure
+    if (!result || typeof result !== 'object') {
+      throw new Error('Invalid response format from server');
+    }
+
+    return result;
+  } catch (error) {
+    // Re-throw validation errors
+    if (error.message.includes('Session ID is required') ||
+        error.message.includes('Resume not found') ||
+        error.message.includes('Invalid request') ||
+        error.message.includes('Server error')) {
+      throw error;
+    }
+
+    // Handle network errors
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+
+    // Handle other unexpected errors
+    console.error('Unexpected error in analyzeResume:', error);
+    throw new Error('An unexpected error occurred. Please try again.');
+  }
 }
 
 /**
