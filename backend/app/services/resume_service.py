@@ -187,10 +187,10 @@ async def get_resume_content(session_id: str) -> str:
         HTTPException: If file not found or parsing fails
     """
     client = _get_gcs_client()
-    bucket = client.bucket(settings.gcs_bucket_name)
+    bucket = client.bucket(settings.GCS_BUCKET_NAME)
     
     # List blobs with the session prefix to find the file
-    prefix = f"{settings.gcs_object_prefix.strip('/')}/{session_id}/"
+    prefix = f"{settings.GCS_OBJECT_PREFIX.strip('/')}/{session_id}/"
     blobs = list(client.list_blobs(bucket, prefix=prefix))
     
     if not blobs:
@@ -219,7 +219,7 @@ async def get_resume_content(session_id: str) -> str:
 
 def _build_object_name(file_id: str, filename: str) -> str:
     safe_name = _clean_filename(filename)
-    prefix = settings.gcs_object_prefix.strip("/")
+    prefix = settings.GCS_OBJECT_PREFIX.strip("/")
     if prefix:
         return f"{prefix}/{file_id}/{safe_name}"
     return f"{file_id}/{safe_name}"

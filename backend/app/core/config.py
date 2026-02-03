@@ -27,16 +27,21 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api"
 
     # LLM Provider settings
-    llm_provider: str = "gemini"
+    LLM_PROVIDER: str = "gemini"
 
     # Gemini settings
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-1.5-flash"
-    gemini_temperature: float = 0.7
-    gemini_max_tokens: int = 2048
-    gemini_timeout: float = 60.0
-    gemini_max_retries: int = 3
-    gemini_retry_delay: float = 1.0
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_TEMPERATURE: float = 0.7
+    GEMINI_MAX_TOKENS: int = 2048
+    GEMINI_TIMEOUT: float = 60.0
+    GEMINI_MAX_RETRIES: int = 3
+    GEMINI_RETRY_DELAY: float = 1.0
+
+    # GCP / GCS settings
+    gcp_project_id: str = ""  # Mandatory, fail early if missing
+    gcs_bucket_name: str = ""  # Mandatory, fail early if missing
+    gcs_object_prefix: str = "resumes"
 
     # GCP / GCS settings
     gcp_project_id: str = ""  # Mandatory, fail early if missing

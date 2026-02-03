@@ -43,9 +43,9 @@ def test_resume_upload_success_pdf(monkeypatch):
 
     fake_client = FakeClient()
     monkeypatch.setattr(resume_service, "_get_gcs_client", lambda: fake_client)
-    monkeypatch.setattr(resume_service.settings, "gcs_bucket_name", "test-bucket")
-    monkeypatch.setattr(resume_service.settings, "gcs_object_prefix", "resumes")
-    monkeypatch.setattr(resume_service.settings, "gcp_project_id", "test-project")
+    monkeypatch.setattr(resume_service.settings, "GCS_BUCKET_NAME", "test-bucket")
+    monkeypatch.setattr(resume_service.settings, "GCS_OBJECT_PREFIX", "resumes")
+    monkeypatch.setattr(resume_service.settings, "GCP_PROJECT_ID", "test-project")
 
     # Mock _validate_pdf_content to avoid pypdf parsing errors with fake content
     monkeypatch.setattr(resume_service, "_validate_pdf_content", lambda content: None)
