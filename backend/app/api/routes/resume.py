@@ -9,7 +9,6 @@ from fastapi import APIRouter, File, UploadFile, status
 
 from app.schemas.resume_schema import (
     ResumeAnalyzeRequest,
-    ResumeData,
     ResumeMatchRequest,
     ResumeOptimizeRequest,
     ResumeUploadResponse,
@@ -17,7 +16,6 @@ from app.schemas.resume_schema import (
 from app.services.resume_service import (
     get_resume_content,
     upload_and_parse_resume,
-    upload_resume_to_gcs,
 )
 
 router = APIRouter()

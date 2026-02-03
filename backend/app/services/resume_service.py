@@ -13,10 +13,9 @@ import io
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from docx import Document
-import docx
 from fastapi import HTTPException, UploadFile, status
 from google.cloud import storage
 from pypdf import PdfReader
@@ -146,7 +145,7 @@ def _parse_pdf_to_text(content: bytes) -> str:
 def _parse_docx_to_markdown(content: bytes) -> str:
     """Parse DOCX to simple Markdown (headings, paragraphs, lists, bold)."""
     try:
-        doc = docx.Document(io.BytesIO(content))
+        doc = Document(io.BytesIO(content))
         md_lines = []
         
         for para in doc.paragraphs:
@@ -244,55 +243,6 @@ def _build_object_name(file_id: str, filename: str) -> str:
     return f"{file_id}/{safe_name}"
 
 
-async def upload_resume_to_gcs(file: UploadFile) -> Dict[str, Any]:
-    """
-    Upload resume file to GCS.
-    Returns:
-        dict: {code, status, data: {session_id, expire_at}}
-    """
-    _validate_filename(file.filename)
-
-    if not settings.GCS_BUCKET_NAME:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="GCS bucket not configured",
-        )
-
-    file_id = str(uuid.uuid4())
-    object_name = _build_object_name(file_id, file.filename)
-
-    # Read file content into memory with size validation
-    content = await _read_file_content(file)
-
-    # Deep validation for PDF content (reject scanned copies)
-    if Path(file.filename).suffix.lower() == ".pdf":
-        await run_in_threadpool(_validate_pdf_content, content)
-
-    try:
-        # Run synchronous GCS upload in a thread pool to avoid blocking the event loop
-        await run_in_threadpool(
-            _do_gcs_upload,
-            content=content,
-            object_name=object_name,
-            content_type=file.content_type,
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"GCS upload failed: {exc}",
-        ) from exc
-
-    # Set expiration to 24 hours from now
-    expire_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
-
-    return {
-        "code": 201,
-        "status": "ok",
-        "data": {
-            "session_id": file_id,
-            "expire_at": expire_at
-        }
-    }
 
 
 async def _read_file_content(file: UploadFile) -> bytes:
@@ -661,12 +611,9 @@ async def upload_and_parse_resume(file: UploadFile) -> ResumeUploadResponse:
             detail=f"GCS upload failed: {exc}",
         ) from exc
 
-    storage_path = f"gs://{settings.GCS_BUCKET_NAME}/{object_name}"
 
-    # Step 4: Attempt to parse file (RA-24)
-    parsed_data: Optional[ResumeData] = None
     try:
-        parsed_data = await _parse_file_from_bytes(
+        await _parse_file_from_bytes(
             file_content=content,
             filename=file.filename,
         )

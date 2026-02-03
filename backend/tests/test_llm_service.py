@@ -10,7 +10,7 @@ Tests the LLM service layer including:
 
 import pytest
 from typing import Optional
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import patch
 
 from app.services.llm import (
     BaseLLMProvider,

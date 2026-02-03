@@ -7,7 +7,7 @@ Tests the prompt generation functionality for resume analysis.
 import pytest
 
 from app.services.prompt import PromptBuilder, get_prompt_builder
-from app.services.prompt.builder import _prompt_builder
+
 
 
 class TestPromptBuilder:
