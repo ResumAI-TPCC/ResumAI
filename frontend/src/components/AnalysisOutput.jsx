@@ -22,6 +22,7 @@ function AnalysisOutput({ sessionId, jobDescription, companyName, jobTitle }) {
         // Call match API with job description
         result = await matchResumeWithJob(
           sessionId,
+          resumeContent,
           jobDescription,
           jobTitle || '',
           companyName || ''
