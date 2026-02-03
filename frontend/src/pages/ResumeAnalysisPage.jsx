@@ -3,6 +3,7 @@ import Sidebar from '../components/Sidebar'
 import AnalysisOutput from '../components/AnalysisOutput'
 import ResumePreview from '../components/ResumePreview'
 import { uploadResume } from '../utils/api'
+import { matchResumeWithJob } from '../utils/api'
 import { saveSession, loadSession, clearSession as clearStorageSession } from '../utils/storage'
 
 function ResumeAnalysisPage() {
@@ -14,6 +15,8 @@ function ResumeAnalysisPage() {
   const [uploadedFile, setUploadedFile] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
+  const [matchResult, setMatchResult] = useState(null) 
+  const [isMatching, setIsMatching] = useState(false)
 
   // Load session data on mount
   useEffect(() => {
@@ -101,6 +104,24 @@ function ResumeAnalysisPage() {
     }
   }
 
+  const handleStartMatch = async () => {
+    try {
+      setIsMatching(true);
+      setUploadError(null);
+      
+      const result = await matchResumeWithJob(sessionId, resumeContent, jobDescription, jobTitle, companyName);
+      
+      setMatchResult(result); 
+      console.log("match score:", result.score);
+
+    } catch (error) {
+      console.error("match error:", error.message);
+      setUploadError(error.message || 'Failed to get matching result')
+    } finally {
+      setIsMatching(false);
+    }
+  }
+
   return (
     <div className="h-screen bg-gray-50 flex overflow-hidden">
       {/* Left sidebar */}
@@ -120,6 +141,8 @@ function ResumeAnalysisPage() {
         onRemoveFile={handleRemoveFile}
         onUpload={handleUpload}
         onClearSession={handleClearSession}
+        onStartMatch={handleStartMatch}
+        isMatching={isMatching}
       />
 
       {/* Center analysis area */}
@@ -128,6 +151,8 @@ function ResumeAnalysisPage() {
         jobDescription={jobDescription}
         companyName={companyName}
         jobTitle={jobTitle}
+        matchResult={matchResult}
+        isMatching={isMatching}
       />
 
       {/* Right preview area */}
