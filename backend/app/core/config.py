@@ -35,7 +35,6 @@ class Settings(BaseSettings):
     GCS_BUCKET_NAME: str  # Mandatory, fail early if missing
     GCS_OBJECT_PREFIX: str = "resumes"
 
-
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance"""
