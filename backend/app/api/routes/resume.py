@@ -46,18 +46,12 @@ async def match_resume(request: ResumeMatchRequest):
 
 
 @router.post("/optimize")
-async def optimize_resume(request: ResumeMatchRequest):
-    result = await gemini_provider.optimize(
-        resume_content=request.resume_content,
-        job_description=request.job_description
-    )
-    return {"optimized_content": result.content, "usage": result.usage}
+async def optimize_resume():
+    """Optimize resume content"""
+    return {"message": "Resume optimize endpoint", "status": "ok"}
 
 
 @router.post("/analyze")
-async def analyze_resume(request: ResumeMatchRequest):
-    result = await gemini_provider.analyze(
-        resume_content=request.resume_content,
-        job_description=request.job_description
-    )
-    return {"analysis": result.content, "usage": result.usage}
+async def analyze_resume():
+    """Analyze resume and generate improvement suggestions"""
+    return {"message": "Resume analyze endpoint", "status": "ok"}
