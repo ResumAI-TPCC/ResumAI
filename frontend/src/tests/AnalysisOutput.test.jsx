@@ -311,7 +311,7 @@ describe('AnalysisOutput Component', () => {
   describe('Error Handling', () => {
     test('shows error when sessionId is missing but button clicked', async () => {
       // This shouldn't happen due to disabled button, but testing the logic
-      const { container } = render(<AnalysisOutput sessionId="" />)
+      render(<AnalysisOutput sessionId="" />)
       
       // Force-enable and click (simulating edge case)
       const button = screen.getByRole('button', { name: /Analyze Resume/i })
