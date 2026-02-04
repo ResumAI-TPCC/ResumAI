@@ -317,7 +317,7 @@ async def _read_file_content(file: UploadFile) -> bytes:
             size += len(chunk)
             if size > MAX_SIZE_BYTES:
                 raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                     detail=f"File too large. Max {MAX_SIZE_BYTES // (1024 * 1024)}MB",
                 )
             chunks.append(chunk)
