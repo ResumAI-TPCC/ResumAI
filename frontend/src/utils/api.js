@@ -123,9 +123,9 @@ export async function analyzeResume(sessionId) {
   } catch (error) {
     // Re-throw validation errors
     if (error.message.includes('Session ID is required') ||
-        error.message.includes('Resume not found') ||
-        error.message.includes('Invalid request') ||
-        error.message.includes('Server error')) {
+      error.message.includes('Resume not found') ||
+      error.message.includes('Invalid request') ||
+      error.message.includes('Server error')) {
       throw error;
     }
 
