@@ -10,13 +10,11 @@ from __future__ import annotations
 import io
 import re
 import uuid
-import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
 import docx
-from docx import Document
 from fastapi import HTTPException, UploadFile, status
 from google.cloud import storage
 from pypdf import PdfReader
@@ -427,7 +425,8 @@ def _classify_education_fields(entry_lines: list[str]) -> Education:
             degree = line
         elif field is None:
             field = line
-    if institution is None and len(entry_lines) > 0: institution = entry_lines[0]
+    if institution is None and len(entry_lines) > 0:
+        institution = entry_lines[0]
     return Education(institution=institution, degree=degree, field=field)
 
 
