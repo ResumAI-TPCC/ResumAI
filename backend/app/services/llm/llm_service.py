@@ -30,9 +30,9 @@ class LLMService:
     - Return data matching API response schemas
     """
 
-    def __init__(self):
+    def __init__(self, provider: Optional[GeminiProvider] = None):
         """Initialize LLM service with Gemini provider"""
-        self.provider = GeminiProvider()
+        self.provider = provider or GeminiProvider()
 
     async def analyze_resume(self, prompt: str) -> AnalyzeResult:
         """

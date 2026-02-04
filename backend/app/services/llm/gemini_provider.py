@@ -35,18 +35,18 @@ class GeminiProvider(BaseLLMProvider):
     - Parse responses and return structured results
     """
 
-    def __init__(self):
+    def __init__(self, api_key: Optional[str] = None):
         """Initialize Gemini provider with settings from config"""
-        self.api_key = settings.gemini_api_key
-        self.model = settings.gemini_model
-        self.temperature = settings.gemini_temperature
-        self.max_tokens = settings.gemini_max_tokens
-        self.timeout = settings.gemini_timeout
-        self.max_retries = settings.gemini_max_retries
-        self.retry_delay = settings.gemini_retry_delay
+        self.api_key = api_key or settings.GEMINI_API_KEY
+        self.model = settings.GEMINI_MODEL
+        self.temperature = settings.GEMINI_TEMPERATURE
+        self.max_tokens = settings.GEMINI_MAX_TOKENS
+        self.timeout = settings.GEMINI_TIMEOUT
+        self.max_retries = settings.GEMINI_MAX_RETRIES
+        self.retry_delay = settings.GEMINI_RETRY_DELAY
 
         if not self.api_key:
-            raise ValueError("GEMINI_API_KEY environment variable is not set")
+            logger.warning("GEMINI_API_KEY is not set. LLM features will not work.")
 
         # Construct base URL with model and API key
         self.base_url = (

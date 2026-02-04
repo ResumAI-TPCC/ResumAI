@@ -9,7 +9,7 @@ import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from app.schemas.resume import ResumeUploadData, ResumeUploadResponse
 
 import docx
 from fastapi import HTTPException, UploadFile, status
@@ -33,7 +33,7 @@ def _get_gcs_client() -> storage.Client:
         return _gcs_client
 
     # Use Application Default Credentials (ADC)
-    _gcs_client = storage.Client(project=settings.gcp_project_id or None)
+    _gcs_client = storage.Client(project=settings.GCP_PROJECT_ID or None)
     return _gcs_client
 
 
@@ -225,15 +225,15 @@ def _build_object_name(file_id: str, filename: str) -> str:
     return f"{file_id}/{safe_name}"
 
 
-async def upload_resume_to_gcs(file: UploadFile) -> Dict[str, Any]:
+async def upload_resume_to_gcs(file: UploadFile) -> ResumeUploadResponse:
     """
     Upload resume file to GCS.
     Returns:
-        dict: {code, status, data: {session_id, expire_at}}
+        ResumeUploadResponse: {code, status, data: {session_id, expire_at}}
     """
     _validate_filename(file.filename)
 
-    if not settings.gcs_bucket_name:
+    if not settings.GCS_BUCKET_NAME:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="GCS bucket not configured",
@@ -266,14 +266,14 @@ async def upload_resume_to_gcs(file: UploadFile) -> Dict[str, Any]:
     # Set expiration to 24 hours from now
     expire_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
 
-    return {
-        "code": 201,
-        "status": "ok",
-        "data": {
-            "session_id": file_id,
-            "expire_at": expire_at
-        }
-    }
+    return ResumeUploadResponse(
+        code=201,
+        status="ok",
+        data=ResumeUploadData(
+            session_id=file_id,
+            expire_at=expire_at
+        )
+    )
 
 
 async def _read_file_content(file: UploadFile) -> bytes:
@@ -302,7 +302,7 @@ def _do_gcs_upload(
 ) -> None:
     """Synchronous GCS upload operation."""
     client = _get_gcs_client()
-    bucket = client.bucket(settings.gcs_bucket_name)
+    bucket = client.bucket(settings.GCS_BUCKET_NAME)
     blob = bucket.blob(object_name)
     blob.upload_from_string(
         content, content_type=content_type or "application/octet-stream"
