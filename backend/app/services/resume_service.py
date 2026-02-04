@@ -1,5 +1,8 @@
 """
 Resume Service Layer
+
+RA-23: Upload resume to GCS and return file_id
+RA-24: Parse resume file and extract structured data
 """
 
 from __future__ import annotations
@@ -7,23 +10,39 @@ from __future__ import annotations
 import io
 import re
 import uuid
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from app.schemas.resume import ResumeUploadData, ResumeUploadResponse
+from typing import Optional, List
 
 import docx
+from docx import Document
 from fastapi import HTTPException, UploadFile, status
 from google.cloud import storage
 from pypdf import PdfReader
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
+from app.schemas.resume_schema import (
+    ContactInfo,
+    Education,
+    ResumeData,
+    ResumeUploadResponse,
+    ResumeUploadData,
+    WorkExperience,
+)
 
+# Configuration - Restricted to PDF and DOCX per latest instructions
 ALLOWED_EXTS = {".pdf", ".docx"}
 MAX_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
 
 # Global GCS client instance for reuse
 _gcs_client: Optional[storage.Client] = None
+
+
+# ============================================================================
+# RA-23: GCS Upload Functions
+# ============================================================================
 
 
 def _get_gcs_client() -> storage.Client:
@@ -38,6 +57,7 @@ def _get_gcs_client() -> storage.Client:
 
 
 def _validate_filename(filename: str) -> None:
+    """Validate file extension and name."""
     if not filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Missing filename"
@@ -147,7 +167,6 @@ def _parse_docx_to_markdown(content: bytes) -> str:
                 md_lines.append(f"* {text}")
             else:
                 # Process inline formatting like bold
-                # (Simplification: if the whole paragraph is bold or has bold runs)
                 processed_text = ""
                 for run in para.runs:
                     run_text = run.text
@@ -176,15 +195,6 @@ def _parse_docx_to_markdown(content: bytes) -> str:
 async def get_resume_content(session_id: str) -> str:
     """
     Download and parse resume content from GCS.
-    
-    Args:
-        session_id: The unique session/file identifier
-        
-    Returns:
-        str: Parsed resume content (Plain Text for PDF, Markdown for DOCX)
-        
-    Raises:
-        HTTPException: If file not found or parsing fails
     """
     client = _get_gcs_client()
     bucket = client.bucket(settings.GCS_BUCKET_NAME)
@@ -218,6 +228,7 @@ async def get_resume_content(session_id: str) -> str:
 
 
 def _build_object_name(file_id: str, filename: str) -> str:
+    """Build GCS object path."""
     safe_name = _clean_filename(filename)
     prefix = settings.GCS_OBJECT_PREFIX.strip("/")
     if prefix:
@@ -227,9 +238,7 @@ def _build_object_name(file_id: str, filename: str) -> str:
 
 async def upload_resume_to_gcs(file: UploadFile) -> ResumeUploadResponse:
     """
-    Upload resume file to GCS.
-    Returns:
-        ResumeUploadResponse: {code, status, data: {session_id, expire_at}}
+    Upload resume file to GCS and return session info.
     """
     _validate_filename(file.filename)
 
@@ -250,7 +259,7 @@ async def upload_resume_to_gcs(file: UploadFile) -> ResumeUploadResponse:
         await run_in_threadpool(_validate_pdf_content, content)
 
     try:
-        # Run synchronous GCS upload in a thread pool to avoid blocking the event loop
+        # Run synchronous GCS upload in a thread pool
         await run_in_threadpool(
             _do_gcs_upload,
             content=content,
@@ -265,13 +274,35 @@ async def upload_resume_to_gcs(file: UploadFile) -> ResumeUploadResponse:
 
     # Set expiration to 24 hours from now
     expire_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+    storage_path = f"gs://{settings.GCS_BUCKET_NAME}/{object_name}"
+
+    # RA-24: Optional basic parsing for structured data
+    parsed_data = None
+    try:
+        # For RA-24 integration, we can extract basic data here if needed
+        # (Using their regex-based extraction as a bonus)
+        raw_text = ""
+        ext = Path(file.filename).suffix.lower()
+        if ext == ".pdf":
+            raw_text = await run_in_threadpool(_parse_pdf_to_text, content)
+        elif ext == ".docx":
+            raw_text = await run_in_threadpool(_parse_docx_to_markdown, content)
+        
+        if raw_text:
+            parsed_data = _extract_structured_data(raw_text, file.filename)
+    except Exception as e:
+        # Don't fail the upload if parsing fails
+        print(f"Bonus parsing error: {e}")
 
     return ResumeUploadResponse(
         code=201,
         status="ok",
         data=ResumeUploadData(
             session_id=file_id,
-            expire_at=expire_at
+            expire_at=expire_at,
+            filename=file.filename,
+            storage_path=storage_path,
+            parsed_data=parsed_data
         )
     )
 
@@ -289,7 +320,7 @@ async def _read_file_content(file: UploadFile) -> bytes:
             if size > MAX_SIZE_BYTES:
                 raise HTTPException(
                     status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    detail=f"File too large. Max {MAX_SIZE_BYTES} bytes",
+                    detail=f"File too large. Max {MAX_SIZE_BYTES // (1024 * 1024)}MB",
                 )
             chunks.append(chunk)
     finally:
@@ -307,3 +338,115 @@ def _do_gcs_upload(
     blob.upload_from_string(
         content, content_type=content_type or "application/octet-stream"
     )
+
+
+# ============================================================================
+# RA-24: File Parsing Functions (Integrated from Incoming)
+# ============================================================================
+
+
+def _extract_structured_data(raw_text: str, filename: str) -> ResumeData:
+    """
+    Extract structured information from raw text using regex patterns (Bonus RA-24)
+    """
+    # Extract email
+    email_pattern = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
+    emails = re.findall(email_pattern, raw_text)
+    email = emails[0] if emails else None
+
+    # Extract phone
+    phone_pattern = r"\b(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{3,4}\b"
+    raw_phones = re.findall(phone_pattern, raw_text)
+    phones = [p for p in raw_phones if 7 <= len(re.sub(r"\D", "", p)) <= 15]
+    phone = phones[0] if phones else None
+
+    # Extract LinkedIn
+    linkedin_pattern = r"(?:https?://)?(?:www\.)?linkedin\.com/in/[\w-]+"
+    linkedin_urls = re.findall(linkedin_pattern, raw_text, re.IGNORECASE)
+    linkedin = linkedin_urls[0] if linkedin_urls else None
+
+    # Extract name (heuristic: first non-empty line)
+    lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
+    full_name = lines[0] if lines else None
+
+    contact_info = ContactInfo(
+        email=email,
+        phone=phone,
+        linkedin=linkedin,
+        location=None,
+    )
+
+    return ResumeData(
+        full_name=full_name,
+        contact_info=contact_info,
+        summary=_extract_summary(raw_text),
+        skills=_extract_skills(raw_text),
+        education=_extract_education(raw_text),
+        work_experience=_extract_work_experience(raw_text),
+        raw_text=raw_text,
+    )
+
+
+def _extract_skills(text: str) -> list[str]:
+    skills = []
+    skills_pattern = r"(?:skills?|technical skills?|core competencies)[\s:]*\n((?:[^\n]+\n?)+?)(?:\n\n|experience|employment|work history|education|$)"
+    match = re.search(skills_pattern, text, re.IGNORECASE | re.DOTALL)
+    if match:
+        skill_items = re.split(r"[,;•·\|]|\n", match.group(1))
+        skills = [s.strip() for s in skill_items if s.strip() and len(s.strip()) > 2]
+    return skills[:20]
+
+
+def _extract_education(text: str) -> list[Education]:
+    education_list = []
+    edu_pattern = r"(?:education|academic background)[\s:]*\n((?:[^\n]+\n?)+?)(?:\n\n|experience|skills|$)"
+    match = re.search(edu_pattern, text, re.IGNORECASE | re.DOTALL)
+    if match:
+        edu_text = match.group(1)
+        current_entry = []
+        for line in edu_text.split("\n"):
+            line = line.strip()
+            if not line:
+                if current_entry:
+                    education_list.append(_classify_education_fields(current_entry))
+                    current_entry = []
+                continue
+            current_entry.append(line)
+        if current_entry:
+            education_list.append(_classify_education_fields(current_entry))
+    return education_list[:5]
+
+
+def _classify_education_fields(entry_lines: list[str]) -> Education:
+    institution, degree, field = None, None, None
+    for line in entry_lines:
+        lower_line = line.lower()
+        if institution is None and re.search(r"\b(university|college|institute|school)\b", lower_line):
+            institution = line
+        elif degree is None and re.search(r"\b(bachelor|master|ph\.?d|phd|b\.?sc|m\.?sc|ba|bs|beng|meng|mba)\b", lower_line):
+            degree = line
+        elif field is None:
+            field = line
+    if institution is None and len(entry_lines) > 0: institution = entry_lines[0]
+    return Education(institution=institution, degree=degree, field=field)
+
+
+def _extract_work_experience(text: str) -> list[WorkExperience]:
+    experience_list = []
+    exp_pattern = r"(?:experience|employment|work history)[\s:]*\n((?:[^\n]+\n?)+?)(?:\n\n|education|skills|$)"
+    match = re.search(exp_pattern, text, re.IGNORECASE | re.DOTALL)
+    if match:
+        lines = [line.strip() for line in match.group(1).split("\n") if line.strip()]
+        for i in range(0, len(lines), 3):
+            if i + 2 < len(lines):
+                experience_list.append(WorkExperience(company=lines[i], position=lines[i+1], duration=lines[i+2]))
+    return experience_list[:10]
+
+
+def _extract_summary(text: str) -> Optional[str]:
+    summary_pattern = r"(?:summary|objective|profile|about)[\s:]*\n((?:[^\n]+\n?)+?)(?:\n\n|experience|employment|work history|education|skills|$)"
+    match = re.search(summary_pattern, text, re.IGNORECASE | re.DOTALL)
+    if match:
+        summary = match.group(1).strip()
+        return summary[:500] if len(summary) > 500 else summary
+    return None
