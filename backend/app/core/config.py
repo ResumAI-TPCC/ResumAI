@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     GCP_PROJECT_ID: str = ""  # Mandatory, fail early if missing
     GCS_BUCKET_NAME: str = ""  # Mandatory, fail early if missing
     GCS_OBJECT_PREFIX: str = "resumes"
+    GCP_SA_KEY: str = ""
+    GCP_PRIVATE_KEY: str = ""
+    GCP_PRIVATE_KEY_ID: str = ""
 
 @lru_cache
 def get_settings() -> Settings:

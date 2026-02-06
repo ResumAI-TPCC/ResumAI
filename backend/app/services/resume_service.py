@@ -7,16 +7,19 @@ RA-24: Parse resume file and extract structured data
 
 from __future__ import annotations
 
+import base64
 import io
+import json
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import docx
 from fastapi import HTTPException, UploadFile, status
 from google.cloud import storage
+from google.oauth2 import service_account
 from pypdf import PdfReader
 from starlette.concurrency import run_in_threadpool
 
@@ -49,8 +52,15 @@ def _get_gcs_client() -> storage.Client:
     if _gcs_client is not None:
         return _gcs_client
 
-    # Use Application Default Credentials (ADC)
-    _gcs_client = storage.Client(project=settings.GCP_PROJECT_ID or None)
+    credentials = _build_service_account_credentials()
+
+    # Use Application Default Credentials (ADC) if no explicit credentials provided
+    if credentials is not None:
+        _gcs_client = storage.Client(
+            project=settings.GCP_PROJECT_ID or None, credentials=credentials
+        )
+    else:
+        _gcs_client = storage.Client(project=settings.GCP_PROJECT_ID or None)
     return _gcs_client
 
 
@@ -336,6 +346,47 @@ def _do_gcs_upload(
     blob.upload_from_string(
         content, content_type=content_type or "application/octet-stream"
     )
+
+
+def _build_service_account_credentials() -> Optional[service_account.Credentials]:
+    """Build service account credentials from environment variables if available."""
+
+    raw_key = (settings.GCP_SA_KEY or "").strip()
+    if raw_key:
+        info = _parse_service_account_payload(raw_key)
+        return service_account.Credentials.from_service_account_info(info)
+
+    return None
+
+
+def _parse_service_account_payload(raw: str) -> Dict[str, Any]:
+    """Parse service account JSON or base64 payload, normalizing private key format."""
+
+    payload = raw
+    if not raw.startswith("{"):
+        try:
+            payload = base64.b64decode(raw).decode("utf-8")
+        except Exception as exc:  # pragma: no cover - defensive
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Invalid service account payload: {exc}",
+            ) from exc
+
+    try:
+        info = json.loads(payload)
+    except json.JSONDecodeError as exc:  # pragma: no cover - defensive
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Invalid service account JSON: {exc}",
+        ) from exc
+
+    if "private_key" in info:
+        info["private_key"] = info["private_key"].replace("\\n", "\n")
+
+    if not info.get("project_id") and settings.GCP_PROJECT_ID:
+        info["project_id"] = settings.GCP_PROJECT_ID
+
+    return info
 
 
 # ============================================================================

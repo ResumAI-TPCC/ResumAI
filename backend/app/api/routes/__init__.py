@@ -4,7 +4,7 @@ API Route Aggregation Module
 
 from fastapi import APIRouter
 
-from .resume import router as api_router
+from .resumes import router as api_router
 
 router = APIRouter()
 
