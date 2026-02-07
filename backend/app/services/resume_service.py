@@ -272,35 +272,13 @@ async def upload_resume_to_gcs(file: UploadFile) -> ResumeUploadResponse:
 
     # Set expiration to 24 hours from now
     expire_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
-    storage_path = f"gs://{settings.GCS_BUCKET_NAME}/{object_name}"
-
-    # RA-24: Optional basic parsing for structured data
-    parsed_data = None
-    try:
-        # For RA-24 integration, we can extract basic data here if needed
-        # (Using their regex-based extraction as a bonus)
-        raw_text = ""
-        ext = Path(file.filename).suffix.lower()
-        if ext == ".pdf":
-            raw_text = await run_in_threadpool(_parse_pdf_to_text, content)
-        elif ext == ".docx":
-            raw_text = await run_in_threadpool(_parse_docx_to_markdown, content)
-        
-        if raw_text:
-            parsed_data = _extract_structured_data(raw_text, file.filename)
-    except Exception as e:
-        # Don't fail the upload if parsing fails
-        print(f"Bonus parsing error: {e}")
 
     return ResumeUploadResponse(
         code=201,
         status="ok",
         data=ResumeUploadData(
             session_id=file_id,
-            expire_at=expire_at,
-            filename=file.filename,
-            storage_path=storage_path,
-            parsed_data=parsed_data
+            expire_at=expire_at
         )
     )
 
