@@ -16,18 +16,13 @@ from .schemas import (
     MatchResult,
     OptimizeResult,
 )
+
 logger = logging.getLogger(__name__)
 
 
 class LLMService:
     """
     LLM Service class - Middle layer
-
-    Responsibilities:
-    - Receive prompts from API endpoints
-    - Send prompts to LLM Provider (Gemini)
-    - Parse LLM responses into structured formats
-    - Return data matching API response schemas
     """
 
     def __init__(self, provider: Optional[GeminiProvider] = None):
@@ -35,35 +30,16 @@ class LLMService:
         self.provider = provider or GeminiProvider()
 
     async def analyze_resume(self, prompt: str) -> AnalyzeResult:
-        """
-        Analyze resume and return structured suggestions
-
-        Args:
-            prompt: Complete prompt for resume analysis (constructed by upstream)
-
-        Returns:
-            AnalyzeResult: Structured analysis with suggestions list
-        """
-        # Send prompt to LLM
+        """Analyze resume and return structured suggestions"""
         data = await self.provider.send_prompt(prompt)
         raw_content = self.provider._extract_content(data)
 
         # Parse response into structured format
         suggestions = self._parse_suggestions(raw_content, include_example=True)
-
         return AnalyzeResult(suggestions=suggestions)
 
     async def match_resume(self, prompt: str) -> MatchResult:
-        """
-        Match resume with job description and return score with suggestions
-
-        Args:
-            prompt: Complete prompt for matching (constructed by upstream)
-
-        Returns:
-            MatchResult: Match score, breakdown, and suggestions
-        """
-        # Send prompt to LLM
+        """Match resume with JD and return score with suggestions"""
         data = await self.provider.send_prompt(prompt)
         raw_content = self.provider._extract_content(data)
 
@@ -78,33 +54,10 @@ class LLMService:
         )
 
     async def optimize_resume(self, prompt: str) -> OptimizeResult:
-        """
-        Optimize resume and return improved content
-
-        Args:
-            prompt: Complete prompt for optimization (constructed by upstream)
-
-        Returns:
-            OptimizeResult: Optimized resume content
-        """
-        # Send prompt to LLM
+        """Optimize resume and return improved content"""
         data = await self.provider.send_prompt(prompt)
         raw_content = self.provider._extract_content(data)
-
         return OptimizeResult(optimized_content=raw_content)
-
-    async def send_raw_prompt(self, prompt: str) -> str:
-        """
-        Send prompt and return raw response content
-
-        Args:
-            prompt: Any prompt to send to LLM
-
-        Returns:
-            str: Raw response content from LLM
-        """
-        data = await self.provider.send_prompt(prompt)
-        return self.provider._extract_content(data)
 
     def _parse_suggestions(
         self,
@@ -112,32 +65,17 @@ class LLMService:
         include_example: bool = False,
         include_action: bool = False,
     ) -> list[Suggestion]:
-        """
-        Parse LLM response content to extract suggestions
-
-        Attempts to parse JSON format first, falls back to text parsing
-        """
-        suggestions = []
-
-        # Try to extract JSON from response
+        """Parse LLM response content to extract suggestions"""
         json_data = self._extract_json(content)
         if json_data:
-            suggestions = self._parse_suggestions_from_json(
-                json_data, include_example, include_action
-            )
-            if suggestions:
-                return suggestions
+            return self._parse_suggestions_from_json(json_data, include_example, include_action)
 
-        # Fallback: parse as structured text
-        suggestions = self._parse_suggestions_from_text(
-            content, include_example, include_action
-        )
-
-        return suggestions
+        # Fallback: parse as structured text (very basic)
+        return self._parse_suggestions_from_text(content, include_example, include_action)
 
     def _extract_json(self, content: str) -> Optional[dict]:
         """Extract JSON object or array from content"""
-        # Try to find JSON in code blocks
+        # Try markdown blocks
         json_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", content)
         if json_match:
             try:
@@ -145,25 +83,19 @@ class LLMService:
             except json.JSONDecodeError:
                 pass
 
-        # Try to parse entire content as JSON
+        # Try raw JSON
         try:
             return json.loads(content)
         except json.JSONDecodeError:
             pass
 
-        # Try to find JSON object or array
-        json_patterns = [
-            r"\{[\s\S]*\}",  # Object
-            r"\[[\s\S]*\]",  # Array
-        ]
-        for pattern in json_patterns:
-            match = re.search(pattern, content)
-            if match:
-                try:
-                    return json.loads(match.group())
-                except json.JSONDecodeError:
-                    continue
-
+        # Try to find { ... }
+        match = re.search(r"\{[\s\S]*\}", content)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
         return None
 
     def _parse_suggestions_from_json(
@@ -173,176 +105,62 @@ class LLMService:
         include_action: bool,
     ) -> list[Suggestion]:
         """Parse suggestions from JSON data"""
-        suggestions = []
-
-        # Handle different JSON structures
         items = []
         if isinstance(data, list):
             items = data
         elif isinstance(data, dict):
             items = data.get("suggestions", [])
-            if not items:
-                # Maybe the entire dict is a single suggestion
-                if "title" in data or "category" in data:
-                    items = [data]
 
+        suggestions = []
         for item in items:
             if not isinstance(item, dict):
                 continue
-
-            suggestion = Suggestion(
+            
+            s = Suggestion(
                 category=str(item.get("category", "general")),
                 priority=str(item.get("priority", "medium")),
-                title=str(item.get("title", "")),
+                title=str(item.get("title", "Suggestion")),
                 description=str(item.get("description", "")),
             )
-
             if include_example:
-                suggestion.example = item.get("example")
+                s.example = str(item.get("example", "N/A"))
             if include_action:
-                suggestion.action = item.get("action")
-
-            if suggestion.title or suggestion.description:
-                suggestions.append(suggestion)
-
+                s.action = str(item.get("action", "N/A"))
+            
+            suggestions.append(s)
         return suggestions
 
-    def _parse_suggestions_from_text(
-        self,
-        content: str,
-        include_example: bool,
-        include_action: bool,
-    ) -> list[Suggestion]:
-        """
-        Fallback parser for text-based responses
-
-        Looks for numbered lists or bullet points
-        """
-        suggestions = []
-        lines = content.split("\n")
-
-        current_suggestion = None
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-
-            # Check for numbered item or bullet point (new suggestion)
-            if re.match(r"^(\d+[\.\)]\s*|[-*•]\s*)", line):
-                if current_suggestion and (
-                    current_suggestion.get("title")
-                    or current_suggestion.get("description")
-                ):
-                    suggestions.append(
-                        self._create_suggestion_from_dict(
-                            current_suggestion, include_example, include_action
-                        )
-                    )
-
-                # Start new suggestion
-                text = re.sub(r"^(\d+[\.\)]\s*|[-*•]\s*)", "", line).strip()
-                current_suggestion = {
-                    "title": text,
-                    "description": "",
-                    "category": "general",
-                    "priority": self._infer_priority(text),
-                }
-
-            elif current_suggestion:
-                # Add to current suggestion description
-                current_suggestion["description"] += " " + line
-
-        # Don't forget the last suggestion
-        if current_suggestion and (
-            current_suggestion.get("title") or current_suggestion.get("description")
-        ):
-            suggestions.append(
-                self._create_suggestion_from_dict(
-                    current_suggestion, include_example, include_action
-                )
-            )
-
-        return suggestions
-
-    def _create_suggestion_from_dict(
-        self,
-        data: dict,
-        include_example: bool,
-        include_action: bool,
-    ) -> Suggestion:
-        """Create Suggestion object from dictionary"""
-        suggestion = Suggestion(
-            category=data.get("category", "general"),
-            priority=data.get("priority", "medium"),
-            title=data.get("title", "").strip(),
-            description=data.get("description", "").strip(),
-        )
-        if include_example:
-            suggestion.example = data.get("example")
-        if include_action:
-            suggestion.action = data.get("action")
-        return suggestion
-
-    def _infer_priority(self, text: str) -> str:
-        """Infer priority from text content"""
-        text_lower = text.lower()
-        if any(word in text_lower for word in ["critical", "must", "essential"]):
-            return "high"
-        elif any(word in text_lower for word in ["should", "recommend", "important"]):
-            return "medium"
-        return "low"
+    def _parse_suggestions_from_text(self, content: str, include_example: bool, include_action: bool) -> list[Suggestion]:
+        """Very basic fallback text parser"""
+        # Just create one generic suggestion from raw text if parsing fails
+        return [Suggestion(
+            category="general",
+            priority="medium",
+            title="Analysis Result",
+            description=content[:500],
+            example="N/A" if include_example else None,
+            action="N/A" if include_action else None
+        )]
 
     def _parse_match_score(self, content: str) -> tuple[int, MatchBreakdown]:
-        """
-        Parse match score and breakdown from LLM response
-
-        Returns:
-            tuple: (overall_score, MatchBreakdown)
-        """
-        breakdown = MatchBreakdown()
-        overall_score = 0
-
-        # Try to extract JSON first
+        """Parse match score and breakdown from LLM response"""
         json_data = self._extract_json(content)
+        breakdown = MatchBreakdown()
+        score = 0
+
         if json_data and isinstance(json_data, dict):
-            overall_score = int(json_data.get("match_score", 0))
-            if "match_breakdown" in json_data:
-                bd = json_data["match_breakdown"]
-                breakdown = MatchBreakdown(
-                    skills_match=int(bd.get("skills_match", 0)),
-                    experience_match=int(bd.get("experience_match", 0)),
-                    education_match=int(bd.get("education_match", 0)),
-                    keywords_match=int(bd.get("keywords_match", 0)),
-                )
-            return overall_score, breakdown
-
-        # Fallback: extract numbers from text
-        score_patterns = [
-            r"(?:overall|total|match)\s*(?:score)?[:\s]*(\d+)",
-            r"(\d+)\s*(?:out of\s*100|%|/100)",
-        ]
-        for pattern in score_patterns:
-            match = re.search(pattern, content, re.IGNORECASE)
-            if match:
-                overall_score = min(100, max(0, int(match.group(1))))
-                break
-
-        # Try to extract breakdown scores
-        breakdown_patterns = {
-            "skills_match": r"skills?\s*(?:match)?[:\s]*(\d+)",
-            "experience_match": r"experience\s*(?:match)?[:\s]*(\d+)",
-            "education_match": r"education\s*(?:match)?[:\s]*(\d+)",
-            "keywords_match": r"keywords?\s*(?:match)?[:\s]*(\d+)",
-        }
-        for field, pattern in breakdown_patterns.items():
-            match = re.search(pattern, content, re.IGNORECASE)
-            if match:
-                setattr(breakdown, field, min(100, max(0, int(match.group(1)))))
-
-        return overall_score, breakdown
+            score = int(json_data.get("match_score", 0))
+            bd = json_data.get("match_breakdown", {})
+            breakdown = MatchBreakdown(
+                skills_match=int(bd.get("skills_match", 0)),
+                experience_match=int(bd.get("experience_match", 0)),
+                education_match=int(bd.get("education_match", 0)),
+                keywords_match=int(bd.get("keywords_match", 0)),
+            )
+        return score, breakdown
 
 
-# Singleton instance for convenience
+# Singleton instance
 _llm_service_instance: Optional[LLMService] = None
 
 

@@ -129,9 +129,9 @@ def test_resume_upload_success_pdf(monkeypatch):
     assert res["status"] == "ok"
     assert "session_id" in res["data"]
     assert "expire_at" in res["data"]
-    # storage_path and filename should be in the data object
-    assert res["data"]["filename"] == "test.pdf"
-    assert res["data"]["storage_path"].startswith("gs://test-bucket/resumes/")
+    # Removed extra fields according to Design Doc 4.2.1
+    assert "filename" not in res["data"]
+    assert "storage_path" not in res["data"]
     assert fake_client.bucket_name == "test-bucket"
     assert fake_client.bucket_obj.blobs
 

@@ -115,14 +115,14 @@ def _validate_pdf_content(content: bytes) -> None:
 
         if not has_text:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Scanned PDFs are not supported. Please upload a text-based PDF.",
             )
     except Exception as exc:
         if isinstance(exc, HTTPException):
             raise exc
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Invalid or corrupted PDF file: {exc}",
         ) from exc
 
@@ -139,7 +139,7 @@ def _parse_pdf_to_text(content: bytes) -> str:
         result = "\n".join(full_text).strip()
         if not result:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="No extractable text found in PDF. Scanned PDFs are not supported.",
             )
         return result
@@ -147,7 +147,7 @@ def _parse_pdf_to_text(content: bytes) -> str:
         if isinstance(exc, HTTPException):
             raise exc
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Failed to parse PDF content: {exc}",
         ) from exc
 
@@ -187,7 +187,7 @@ def _parse_docx_to_markdown(content: bytes) -> str:
         result = "\n\n".join(md_lines).strip()
         if not result:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="No text found in DOCX file.",
             )
         return result
@@ -195,7 +195,7 @@ def _parse_docx_to_markdown(content: bytes) -> str:
         if isinstance(exc, HTTPException):
             raise exc
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Failed to parse DOCX content: {exc}",
         ) from exc
 
@@ -230,7 +230,7 @@ async def get_resume_content(session_id: str) -> str:
         return await run_in_threadpool(_parse_docx_to_markdown, content_bytes)
     else:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Unsupported file type in storage: {ext}",
         )
 
@@ -282,35 +282,13 @@ async def upload_resume_to_gcs(file: UploadFile) -> ResumeUploadResponse:
 
     # Set expiration to 24 hours from now
     expire_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
-    storage_path = f"gs://{settings.GCS_BUCKET_NAME}/{object_name}"
-
-    # RA-24: Optional basic parsing for structured data
-    parsed_data = None
-    try:
-        # For RA-24 integration, we can extract basic data here if needed
-        # (Using their regex-based extraction as a bonus)
-        raw_text = ""
-        ext = Path(file.filename).suffix.lower()
-        if ext == ".pdf":
-            raw_text = await run_in_threadpool(_parse_pdf_to_text, content)
-        elif ext == ".docx":
-            raw_text = await run_in_threadpool(_parse_docx_to_markdown, content)
-        
-        if raw_text:
-            parsed_data = _extract_structured_data(raw_text, file.filename)
-    except Exception as e:
-        # Don't fail the upload if parsing fails
-        print(f"Bonus parsing error: {e}")
 
     return ResumeUploadResponse(
         code=201,
         status="ok",
         data=ResumeUploadData(
             session_id=file_id,
-            expire_at=expire_at,
-            filename=file.filename,
-            storage_path=storage_path,
-            parsed_data=parsed_data
+            expire_at=expire_at
         )
     )
 
