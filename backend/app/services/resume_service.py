@@ -463,3 +463,97 @@ async def upload_and_parse_resume(file: UploadFile) -> ResumeUploadResponse:
         storage_path=storage_path,
         parsed_data=parsed_data,
     )
+
+
+# ============================================================================
+# RA-47: Resume Download Functions
+# ============================================================================
+
+
+def _do_gcs_download(storage_path: str) -> tuple[bytes, str]:
+    """
+    Synchronous GCS download operation.
+    
+    Args:
+        storage_path: GCS storage path (gs://bucket/path/to/file)
+        
+    Returns:
+        Tuple of (file_content, content_type)
+        
+    Raises:
+        HTTPException: If download fails or file not found
+    """
+    # Parse GCS path
+    if not storage_path.startswith("gs://"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid storage path format. Expected gs://bucket/path",
+        )
+    
+    # Extract bucket and object path
+    path_parts = storage_path[5:].split("/", 1)
+    if len(path_parts) != 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid storage path format",
+        )
+    
+    bucket_name, object_name = path_parts
+    
+    try:
+        client = _get_gcs_client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(object_name)
+        
+        # Check if file exists
+        if not blob.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"File not found in storage: {storage_path}",
+            )
+        
+        # Download file content
+        content = blob.download_as_bytes()
+        content_type = blob.content_type or "application/octet-stream"
+        
+        return content, content_type
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to download file from GCS: {str(e)}",
+        ) from e
+
+
+async def download_resume(file_id: str, storage_path: str) -> tuple[bytes, str, str]:
+    """
+    Download resume file from GCS (RA-47).
+    
+    Args:
+        file_id: File ID (UUID) from upload
+        storage_path: GCS storage path
+        
+    Returns:
+        Tuple of (file_content, content_type, filename)
+        
+    Raises:
+        HTTPException: If file not found or download fails
+    """
+    if not settings.GCS_BUCKET_NAME:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="GCS bucket not configured",
+        )
+    
+    # Extract filename from storage path
+    filename = storage_path.split("/")[-1]
+    
+    # Download from GCS
+    content, content_type = await run_in_threadpool(
+        _do_gcs_download,
+        storage_path=storage_path,
+    )
+    
+    return content, content_type, filename

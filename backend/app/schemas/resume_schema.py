@@ -64,3 +64,10 @@ class ResumeUploadResponse(BaseModel):
     
     # RA-24: Parsing info (optional, only if parsing succeeded)
     parsed_data: Optional[ResumeData] = Field(None, description="Parsed resume data (RA-24)")
+
+
+class ResumeDownloadRequest(BaseModel):
+    """Request schema for resume download (RA-47)"""
+
+    file_id: str = Field(..., description="File ID (UUID) from previous upload")
+    storage_path: str = Field(..., description="GCS storage path (gs://bucket/...)")
