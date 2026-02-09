@@ -10,7 +10,6 @@ This script demonstrates the core functionality of Service 3:
 import asyncio
 import json
 from app.services.llm import get_llm_provider, LLMService
-from app.services.llm.schemas import AnalyzeResult
 
 
 async def demo_basic_call():
@@ -34,18 +33,18 @@ async def demo_basic_call():
     请用 JSON 格式返回，包含 suggestions 数组。
     """
     
-    print(f"\n📥 Input (from upstream):")
+    print("\n📥 Input (from upstream):")
     print(f"   Prompt: {upstream_prompt[:50]}...")
     
     # Step 2: Send to Gemini
-    print(f"\n🚀 Sending to Gemini API...")
+    print("\n🚀 Sending to Gemini API...")
     provider = get_llm_provider()
     
     try:
         raw_response = await provider.send_prompt(upstream_prompt)
         
         # Step 3: Return response
-        print(f"\n📤 Output (raw response from Gemini):")
+        print("\n📤 Output (raw response from Gemini):")
         print("-" * 40)
         print(raw_response)
         print("-" * 40)
@@ -76,18 +75,18 @@ async def demo_with_parsing():
     目标职位：高级后端工程师（要求5年经验）
     """
     
-    print(f"\n📥 Input (from upstream):")
+    print("\n📥 Input (from upstream):")
     print(f"   Prompt: {upstream_prompt[:50]}...")
     
     # Step 2: Use LLMService (includes parsing)
-    print(f"\n🚀 Processing with LLMService...")
+    print("\n🚀 Processing with LLMService...")
     service = LLMService()
     
     try:
         result = await service.analyze_resume(upstream_prompt)
         
         # Step 3: Return structured response
-        print(f"\n📤 Output (structured response for downstream):")
+        print("\n📤 Output (structured response for downstream):")
         print("-" * 40)
         print(json.dumps(result.model_dump(), indent=2, ensure_ascii=False))
         print("-" * 40)

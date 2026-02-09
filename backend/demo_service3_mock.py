@@ -121,7 +121,7 @@ async def run_demo():
     Target Job: Senior Backend Engineer (requires 5 years)
     """
     
-    print(f"\n📥 INPUT (what upstream gives you):")
+    print("\n📥 INPUT (what upstream gives you):")
     print("-" * 40)
     print(upstream_prompt)
     print("-" * 40)
@@ -149,7 +149,7 @@ async def run_demo():
     print("📍 STEP 3: Return Structured Response to Downstream")
     print("=" * 60)
     
-    print(f"\n📤 OUTPUT (what you return to downstream/frontend):")
+    print("\n📤 OUTPUT (what you return to downstream/frontend):")
     print("-" * 40)
     
     # Pretty print without raw_llm_response for cleaner output
