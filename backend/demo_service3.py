@@ -133,7 +133,7 @@ async def main():
         print("\n   Get your key at: https://aistudio.google.com/app/apikey")
         return
     
-    print(f"\n✅ API Key configured: {settings.gemini_api_key[:10]}...")
+    print("\n✅ API Key configured: ***")
     print(f"✅ Model: {settings.gemini_model}")
     
     # Run demos
