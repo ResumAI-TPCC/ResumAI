@@ -1,10 +1,12 @@
 import { useState, useRef, useCallback } from 'react'
 import PropTypes from 'prop-types'
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 const ACCEPTED_TYPES = [
   'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+  'text/plain'
 ]
 
 function FileUpload({ onFileSelect, uploadedFile, isUploaded = false, onRemoveFile }) {
@@ -16,15 +18,17 @@ function FileUpload({ onFileSelect, uploadedFile, isUploaded = false, onRemoveFi
     // Check file type
     const isValidType = ACCEPTED_TYPES.includes(file.type) ||
       file.name.endsWith('.pdf') ||
-      file.name.endsWith('.docx')
+      file.name.endsWith('.docx') ||
+      file.name.endsWith('.doc') ||
+      file.name.endsWith('.txt')
 
     if (!isValidType) {
-      return { valid: false, error: 'Unsupported file format. Please upload PDF or DOCX files.' }
+      return { valid: false, error: 'Unsupported file format. Please upload PDF, DOCX, DOC or TXT files.' }
     }
 
     // Check file size
     if (file.size > MAX_FILE_SIZE) {
-      return { valid: false, error: 'File size exceeds 10MB limit. Please upload a smaller file.' }
+      return { valid: false, error: 'File size exceeds 5MB limit. Please upload a smaller file.' }
     }
 
     return { valid: true, error: null }
@@ -146,7 +150,7 @@ function FileUpload({ onFileSelect, uploadedFile, isUploaded = false, onRemoveFi
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.docx"
+          accept=".pdf,.docx,.doc,.txt"
           onChange={handleFileInput}
           className="hidden"
         />
@@ -182,7 +186,7 @@ function FileUpload({ onFileSelect, uploadedFile, isUploaded = false, onRemoveFi
             {isDragging ? 'Release to upload file' : 'Click to upload or drag and drop'}
           </p>
           <p className="text-xs text-gray-500">
-            PDF, DOCX (Max 10MB)
+            PDF, DOCX, DOC, TXT (Max 5MB)
           </p>
         </div>
 

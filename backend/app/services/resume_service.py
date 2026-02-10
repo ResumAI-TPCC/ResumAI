@@ -33,7 +33,7 @@ from app.schemas.resume_schema import (
     WorkExperience,
 )
 
-# Configuration - Restricted to PDF and DOCX per latest instructions
+# Configuration - Supported file types per design doc
 ALLOWED_EXTS = {".pdf", ".docx", ".doc", ".txt"}
 MAX_SIZE_BYTES = 5 * 1024 * 1024  # 5MB
 
@@ -200,6 +200,50 @@ def _parse_docx_to_markdown(content: bytes) -> str:
         ) from exc
 
 
+def _parse_doc_to_text(content: bytes) -> str:
+    """Parse legacy .doc file by extracting readable text from binary content."""
+    try:
+        import olefile
+        ole = olefile.OleFileIO(io.BytesIO(content))
+        # WordDocument stream contains the raw text in .doc files
+        if ole.exists("WordDocument"):
+            stream = ole.openstream("WordDocument")
+            raw = stream.read()
+            text = raw.decode("utf-8", errors="ignore")
+            result = "".join(
+                c if c.isprintable() or c in "\n\r\t" else " " for c in text
+            ).strip()
+            if result:
+                return result
+        # Fallback: try to read any text from all streams
+        text = content.decode("utf-8", errors="ignore")
+        result = "".join(
+            c if c.isprintable() or c in "\n\r\t" else " " for c in text
+        ).strip()
+        if result:
+            return result
+        raise ValueError("No text extracted")
+    except ImportError:
+        # olefile not installed: brute-force text extraction
+        text = content.decode("utf-8", errors="ignore")
+        result = "".join(
+            c if c.isprintable() or c in "\n\r\t" else " " for c in text
+        ).strip()
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Failed to parse .doc file. Please convert to .docx format.",
+            )
+        return result
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Failed to parse .doc file: {exc}. Please convert to .docx format.",
+        ) from exc
+
+
 async def get_resume_content(session_id: str) -> str:
     """
     Download and parse resume content from GCS.
@@ -229,8 +273,7 @@ async def get_resume_content(session_id: str) -> str:
     elif ext == ".docx":
         return await run_in_threadpool(_parse_docx_to_markdown, content_bytes)
     elif ext == ".doc":
-        # .doc files: try parsing as docx, fallback to raw text
-        return await run_in_threadpool(_parse_docx_to_markdown, content_bytes)
+        return await run_in_threadpool(_parse_doc_to_text, content_bytes)
     elif ext == ".txt":
         return content_bytes.decode("utf-8", errors="replace")
     else:
