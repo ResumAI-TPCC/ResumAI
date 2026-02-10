@@ -9,7 +9,7 @@ const ACCEPTED_TYPES = [
   'text/plain'
 ]
 
-function FileUpload({ onFileSelect, uploadedFile, isUploaded = false, onRemoveFile }) {
+function FileUpload({ onFileSelect, uploadedFile = null, isUploaded = false, onRemoveFile }) {
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState(null)
   const fileInputRef = useRef(null)
@@ -220,11 +220,6 @@ FileUpload.propTypes = {
   }),
   isUploaded: PropTypes.bool,
   onRemoveFile: PropTypes.func.isRequired,
-}
-
-FileUpload.defaultProps = {
-  uploadedFile: null,
-  isUploaded: false,
 }
 
 export default FileUpload

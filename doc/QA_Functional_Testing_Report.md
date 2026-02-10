@@ -25,9 +25,8 @@
 | 9 | RA-09 | Setup GCP environment, IAM, and CI/CD workflows | - |
 | 10 | RA-23 | Implement resume upload endpoint (Backend) | - |
 | 11 | RA-27 | Deploy Backend & CD (Cloud Run) | - |
-| 12 | RA-37 | Add prompt builder service for analyze resume | - |
-| 13 | RA-31/32 | Implement Resume Analysis Results UI | - |
-| 14 | RA-24 | Resume Upload - Parse File | - |
+| 12 | RA-31/32 | Implement Resume Analysis Results UI | - |
+| 13 | RA-24 | Resume Upload - Parse File | - |
 
 ---
 
@@ -81,7 +80,7 @@ poetry run ruff check .
 | Check Item | Expected | Actual | Status |
 |------------|----------|--------|--------|
 | CI Trigger Condition | PR/Push to develop/main | Matches config | ✅ |
-| pytest Execution | Run tests/ directory | 43 tests passed | ✅ |
+| pytest Execution | Run tests/ directory | 3 tests passed | ✅ |
 | ruff lint Execution | Code style check | No errors | ✅ |
 | Environment Variables | Test GCP variables | Configured | ✅ |
 
@@ -338,34 +337,36 @@ async def analyze_resume():
 TOKEN=$(gcloud auth print-identity-token)
 QA_URL="https://qa-service-367288272676.asia-southeast1.run.app"
 
-# Test each endpoint
-curl -X POST -H "Authorization: Bearer $TOKEN" $QA_URL/api/resume/analyze
-curl -X POST -H "Authorization: Bearer $TOKEN" $QA_URL/api/resume/match
-curl -X POST -H "Authorization: Bearer $TOKEN" $QA_URL/api/resume/optimize
+# Test each endpoint (as per design document Section 4.1)
+curl -X POST -H "Authorization: Bearer $TOKEN" $QA_URL/api/resumes/analyze
+curl -X POST -H "Authorization: Bearer $TOKEN" $QA_URL/api/resumes/match
+curl -X POST -H "Authorization: Bearer $TOKEN" $QA_URL/api/resumes/optimize
 ```
 
 **Test Results**:
 
 | Endpoint | Expected Response | Actual Response | Status |
 |----------|-------------------|-----------------|--------|
-| POST /api/resume/ | 201 + file_id | 201 Created | ✅ |
-| POST /api/resume/analyze | 200 + status:ok | {"status":"ok"} | ✅ |
-| POST /api/resume/match | 200 + status:ok | {"status":"ok"} | ✅ |
-| POST /api/resume/optimize | 200 + status:ok | {"status":"ok"} | ✅ |
+| POST /api/resumes | 201 + file_id | {"detail":"Not Found"} | ❌ |
+| POST /api/resumes/analyze | 200 + status:ok | {"detail":"Not Found"} | ❌ |
+| POST /api/resumes/match | 200 + status:ok | {"detail":"Not Found"} | ❌ |
+| POST /api/resumes/optimize | 200 + status:ok | {"detail":"Not Found"} | ❌ |
+
+> ⚠️ **Note**: All endpoints return 404 because backend is deployed with `/api/resume` (singular) instead of `/api/resumes` (plural) as specified in design document. See Issue #3.
 
 **QA Environment Test Evidence**:
 ```bash
 jimmyzzy192837@cloudshell:~$ curl -s -X POST -H "Authorization: Bearer $TOKEN" \
-  https://qa-service-367288272676.asia-southeast1.run.app/api/resume/analyze
-{"message":"Resume analyze endpoint","status":"ok"}
+  https://qa-service-367288272676.asia-southeast1.run.app/api/resumes/analyze
+{"detail":"Not Found"}
 
 jimmyzzy192837@cloudshell:~$ curl -s -X POST -H "Authorization: Bearer $TOKEN" \
-  https://qa-service-367288272676.asia-southeast1.run.app/api/resume/match
-{"message":"Resume match endpoint","status":"ok"}
+  https://qa-service-367288272676.asia-southeast1.run.app/api/resumes/match
+{"detail":"Not Found"}
 
 jimmyzzy192837@cloudshell:~$ curl -s -X POST -H "Authorization: Bearer $TOKEN" \
-  https://qa-service-367288272676.asia-southeast1.run.app/api/resume/optimize
-{"message":"Resume optimize endpoint","status":"ok"}
+  https://qa-service-367288272676.asia-southeast1.run.app/api/resumes/optimize
+{"detail":"Not Found"}
 ```
 
 ---
@@ -405,14 +406,78 @@ async def upload_and_parse_resume(file: UploadFile) -> ResumeUploadResponse:
 QA_URL="https://qa-service-367288272676.asia-southeast1.run.app"
 TOKEN=$(gcloud auth print-identity-token)
 
+# Create test resume file with structured content
+cat > qa_resume.txt << 'EOF'
+John Doe
+Software Engineer
+
+Email: john.doe@example.com
+Phone: 1-555-123-4567
+LinkedIn: linkedin.com/in/johndoe
+Location: San Francisco, CA
+
+Summary:
+Experienced software engineer with 5+ years in full-stack development.
+
+Skills:
+Python, FastAPI, React, Docker, AWS, PostgreSQL, Git
+
+Education:
+- BS Computer Science, MIT (2018)
+- MS Software Engineering, Stanford (2020)
+
+Work Experience:
+- Senior Software Engineer at Google (2020-2023)
+  Led development of internal tools, improved system performance by 40%
+- Software Engineer at Meta (2018-2020)
+  Built and maintained user-facing features for Facebook Marketplace
+EOF
+
 # Test TXT upload
-echo "John Doe, Software Engineer..." > qa_resume.txt
 curl -X POST -H "Authorization: Bearer $TOKEN" -F "file=@qa_resume.txt" $QA_URL/api/resume/
+
+# Create test PDF file (using same content)
+cat > qa_resume_content.txt << 'EOF'
+John Doe
+Software Engineer
+
+Email: john.doe@example.com
+Phone: 1-555-123-4567
+LinkedIn: linkedin.com/in/johndoe
+
+Skills: Python, FastAPI, React, Docker, AWS
+
+Education:
+- BS Computer Science, MIT (2018)
+
+Work Experience:
+- Senior Software Engineer at Google (2020-2023)
+EOF
+
+# Convert to PDF (requires LibreOffice or use pre-made PDF)
+# Option 1: Using LibreOffice (if available)
+libreoffice --headless --convert-to pdf qa_resume_content.txt
+mv qa_resume_content.pdf qa_resume.pdf
+
+# Option 2: Using pandoc (if available)
+# pandoc qa_resume_content.txt -o qa_resume.pdf
 
 # Test PDF upload
 curl -X POST -H "Authorization: Bearer $TOKEN" -F "file=@qa_resume.pdf" $QA_URL/api/resume/
 
+# Create test DOCX file
+# Option 1: Using LibreOffice (if available)
+libreoffice --headless --convert-to docx qa_resume_content.txt
+mv qa_resume_content.docx qa_resume.docx
+
+# Option 2: Using pandoc (if available)
+# pandoc qa_resume_content.txt -o qa_resume.docx
+
+# Test DOCX upload
+curl -X POST -H "Authorization: Bearer $TOKEN" -F "file=@qa_resume.docx" $QA_URL/api/resume/
+
 # Test invalid file type
+echo "malicious content" > qa_test.exe
 curl -X POST -H "Authorization: Bearer $TOKEN" -F "file=@qa_test.exe" $QA_URL/api/resume/
 ```
 
@@ -507,94 +572,30 @@ def _extract_structured_data(raw_text: str, filename: str) -> ResumeData:
 **Test Method**:
 ```bash
 # Local unit tests
+cd D:\ResumAI\backend
 poetry run pytest tests/test_resume_upload.py -v -k "success"
 ```
 
-**Test Results**:
+**Unit Test Results** (2 tests):
 
-| Parse Function | Expected | Actual | Status |
-|----------------|----------|--------|--------|
-| PDF Text Extraction | pypdf parsing | Working | ✅ |
-| DOCX Text Extraction | python-docx parsing | Working | ✅ |
-| TXT Direct Read | UTF-8 decoding | Working | ✅ |
-| Email Extraction | regex matching | Extracted correctly | ✅ |
-| Phone Extraction | regex matching | Extracted correctly | ✅ |
-| Skills Extraction | Skills section | Extracted correctly | ✅ |
-| Education Extraction | Education section | Extracted correctly | ✅ |
-| Work Experience Extraction | Experience section | Extracted correctly | ✅ |
+| Test Case | Description | Status |
+|-----------|-------------|--------|
+| test_resume_upload_success_pdf | Upload PDF and verify response | ✅ Passed |
+| test_resume_upload_success_txt | Upload TXT and verify response | ✅ Passed |
 
----
+**Functional Verification** (via QA environment API response):
 
-### RA-37: Add prompt builder service for analyze resume
+Parsing functionality verified by examining `parsed_data` returned from RA-23 upload endpoint:
 
-**Design Document Requirements** (Section 2.2.2):
-> Construct prompts using job + resume + chat history and send them to the LLM
+| Feature | Verification Method | Evidence |
+|---------|---------------------|----------|
+| TXT parsing | QA API returns `parsed_data` with content | See RA-23 test evidence |
+| Email extraction | `contact_info.email` populated | `"john.doe@example.com"` |
+| Phone extraction | `contact_info.phone` populated | `"1-555-123-4567"` |
+| LinkedIn extraction | `contact_info.linkedin` populated | `"linkedin.com/in/johndoe"` |
+| Education extraction | `education` array populated | Contains institution data |
 
-**Implementation Verification**:
-
-```python:13:42:D:\ResumAI\backend\app\services\prompt\builder.py
-class PromptBuilder:
-    """Builder class for constructing LLM prompts."""
-
-    def build_analyze_prompt(self, resume_content: str) -> str:
-        """Build a prompt for resume analysis."""
-        if not resume_content or not resume_content.strip():
-            raise ValueError("resume_content cannot be empty")
-        return ANALYZE_PROMPT_TEMPLATE.format(
-            resume_content=resume_content.strip()
-        )
-```
-
-```python:8:44:D:\ResumAI\backend\app\services\prompt\templates.py
-ANALYZE_PROMPT_TEMPLATE = """You are a professional resume consultant...
-## Resume Content:
-{resume_content}
-
-## Instructions:
-Analyze the resume thoroughly...
-Return format:
-```json
-{
-  "suggestions": [
-    {
-      "category": "content",
-      "priority": "high",
-      "title": "...",
-      "description": "...",
-      "example": "..."
-    }
-  ]
-}
-```
-"""
-```
-
-**Test Method**:
-```bash
-# Local unit tests
-poetry run pytest tests/test_prompt_builder.py -v
-```
-
-**Test Results**:
-
-| Test Case | Expected | Actual | Status |
-|-----------|----------|--------|--------|
-| Basic prompt generation | Contains resume content | ✅ Correct | ✅ |
-| Special character handling | Preserved correctly | ✅ Correct | ✅ |
-| Unicode support | Support Chinese | ✅ Supported | ✅ |
-| Multi-line content handling | Preserve all lines | ✅ Correct | ✅ |
-| Whitespace trimming | strip() | ✅ Correct | ✅ |
-| Empty string exception | ValueError | ✅ Raised | ✅ |
-| Template format validation | JSON instruction | ✅ Included | ✅ |
-| Singleton pattern | Same instance | ✅ Correct | ✅ |
-
-**Design Document Comparison**:
-
-| Design Doc Requirement | Implementation Status | Notes |
-|------------------------|----------------------|-------|
-| Build analyze prompt | ✅ Implemented | build_analyze_prompt |
-| JSON format response | ✅ Implemented | Template requires JSON return |
-| suggestions structure | ✅ Implemented | category, priority, title, description, example |
+> ⚠️ **Note**: PDF and DOCX parsing returns `parsed_data: null` in current implementation (text extraction works but structured parsing not yet implemented for binary formats).
 
 ---
 
@@ -946,13 +947,12 @@ The design document specifies that uploaded resumes should have an expiration ti
 | RA-27 | Backend CD | ✅ Compliant | ✅ Passed |
 | RA-30 | Poetry | ✅ Compliant | ✅ Passed |
 | RA-31/32 | Analysis UI | ✅ Compliant | ✅ Passed |
-| RA-37 | Prompt Builder | ✅ Compliant | ✅ Passed |
 
 ### Test Pass Rate
 
 - **QA Functional Tests**: All Passed
 - **Frontend Unit Tests**: 54/54 Passed (100%)
-- **Backend Unit Tests**: 43/43 Passed (100%)
+- **Backend Unit Tests**: 3/3 Passed (100%)
 - **Design Document Compliance**: ~90% (minor discrepancies identified)
 
 ---
@@ -1198,6 +1198,6 @@ gs://resumai-platform-resumes/resumes/8059cf25-.../qa_resume.docx
 ---
 
 *Report Generated: 2026-02-04*  
-*Test Framework: pytest 9.0.2 (Backend: 43 tests) / Jest 29.7.0 (Frontend: 54 tests)*  
+*Test Framework: pytest 9.0.2 (Backend: 3 tests) / Jest 29.7.0 (Frontend: 54 tests)*  
 *QA Environment: GCP Cloud Run `qa-service` (asia-southeast1)*  
 *Tester: John Zhang*

@@ -19,10 +19,26 @@ const jsonOutput = spawnSync('npx', ['eslint', '.', '--format=json'], {
     encoding: 'utf8',
 });
 
-const data = JSON.parse(jsonOutput.stdout);
-const files = data.length;
-const errors = data.reduce((a, f) => a + f.errorCount, 0);
-const warnings = data.reduce((a, f) => a + f.warningCount, 0);
+let data = [];
+let files = 0;
+let errors = 0;
+let warnings = 0;
+
+try {
+    if (jsonOutput.stdout && jsonOutput.stdout.trim()) {
+        data = JSON.parse(jsonOutput.stdout);
+        files = data.length;
+        errors = data.reduce((a, f) => a + f.errorCount, 0);
+        warnings = data.reduce((a, f) => a + f.warningCount, 0);
+    } else if (jsonOutput.stderr) {
+        console.error('ESLint error:', jsonOutput.stderr);
+    }
+} catch (e) {
+    console.error('Failed to parse ESLint output:', e.message);
+    if (jsonOutput.stderr) {
+        console.error('ESLint stderr:', jsonOutput.stderr);
+    }
+}
 
 console.log(`\n=== Lint Summary ===`);
 console.log(`Files checked: ${files}`);

@@ -5,7 +5,7 @@
  * Tests for analysis display, match score, suggestions, and action buttons
  */
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import AnalysisOutput from '../components/AnalysisOutput'
 
@@ -71,9 +71,14 @@ describe('AnalysisOutput Component', () => {
       render(<AnalysisOutput sessionId="test-session-123" />)
       
       const button = screen.getByRole('button', { name: /Analyze Resume/i })
-      fireEvent.click(button)
       
-      expect(analyzeResume).toHaveBeenCalledWith('test-session-123')
+      await act(async () => {
+        fireEvent.click(button)
+      })
+      
+      await waitFor(() => {
+        expect(analyzeResume).toHaveBeenCalledWith('test-session-123')
+      })
     })
 
     test('displays suggestions after analysis', async () => {
@@ -93,7 +98,9 @@ describe('AnalysisOutput Component', () => {
 
       render(<AnalysisOutput sessionId="test-session-123" />)
       
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      })
       
       await waitFor(() => {
         expect(screen.getByText(/Add Professional Summary/i)).toBeInTheDocument()
@@ -102,15 +109,22 @@ describe('AnalysisOutput Component', () => {
     })
 
     test('shows error when analysis fails', async () => {
+      // Suppress expected console.error for this test
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      
       analyzeResume.mockRejectedValue(new Error('Analysis failed'))
 
       render(<AnalysisOutput sessionId="test-session-123" />)
       
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      })
       
       await waitFor(() => {
         expect(screen.getByText(/Analysis failed/i)).toBeInTheDocument()
       })
+      
+      consoleSpy.mockRestore()
     })
 
     test('shows loading state during analysis', async () => {
@@ -118,7 +132,9 @@ describe('AnalysisOutput Component', () => {
 
       render(<AnalysisOutput sessionId="test-session-123" />)
       
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      })
       
       expect(screen.getByText(/Analyzing.../i)).toBeInTheDocument()
     })
@@ -143,14 +159,18 @@ describe('AnalysisOutput Component', () => {
         />
       )
       
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Match/i }))
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Analyze Match/i }))
+      })
       
-      expect(matchResumeWithJob).toHaveBeenCalledWith(
-        'test-session-123',
-        'We are looking for a senior engineer...',
-        'Senior Engineer',
-        'TechCorp'
-      )
+      await waitFor(() => {
+        expect(matchResumeWithJob).toHaveBeenCalledWith(
+          'test-session-123',
+          'We are looking for a senior engineer...',
+          'Senior Engineer',
+          'TechCorp'
+        )
+      })
     })
 
     test('displays match score after analysis', async () => {
@@ -168,7 +188,9 @@ describe('AnalysisOutput Component', () => {
         />
       )
       
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Match/i }))
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Analyze Match/i }))
+      })
       
       await waitFor(() => {
         expect(screen.getByText('85')).toBeInTheDocument()
@@ -188,7 +210,9 @@ describe('AnalysisOutput Component', () => {
         />
       )
       
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Match/i }))
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Analyze Match/i }))
+      })
       
       await waitFor(() => {
         expect(screen.getByText(/Scoring Principles/i)).toBeInTheDocument()
@@ -211,7 +235,10 @@ describe('AnalysisOutput Component', () => {
       })
 
       render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      })
       
       await waitFor(() => {
         expect(screen.getByText('H')).toBeInTheDocument()
@@ -228,7 +255,10 @@ describe('AnalysisOutput Component', () => {
       })
 
       render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      })
       
       await waitFor(() => {
         expect(screen.getByText('M')).toBeInTheDocument()
@@ -245,7 +275,10 @@ describe('AnalysisOutput Component', () => {
       })
 
       render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      })
       
       await waitFor(() => {
         expect(screen.getByText('L')).toBeInTheDocument()
@@ -263,7 +296,10 @@ describe('AnalysisOutput Component', () => {
 
     test('shows Generate and Download buttons after analysis', async () => {
       render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      })
       
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Generate Polished Resume/i })).toBeInTheDocument()
@@ -273,7 +309,10 @@ describe('AnalysisOutput Component', () => {
 
     test('Generate button is clickable after analysis', async () => {
       render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      })
       
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Generate Polished Resume/i })).toBeInTheDocument()
@@ -286,7 +325,10 @@ describe('AnalysisOutput Component', () => {
 
     test('Download button is clickable after analysis', async () => {
       render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      })
       
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Download Polished Resume/i })).toBeInTheDocument()
@@ -299,7 +341,10 @@ describe('AnalysisOutput Component', () => {
 
     test('shows Re-analyze button after analysis', async () => {
       render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      })
       
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Re-analyze/i })).toBeInTheDocument()
@@ -319,14 +364,22 @@ describe('AnalysisOutput Component', () => {
     })
 
     test('handles API timeout gracefully', async () => {
+      // Suppress expected console.error for this test
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      
       analyzeResume.mockRejectedValue(new Error('Network timeout'))
 
       render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      })
       
       await waitFor(() => {
         expect(screen.getByText(/Network timeout/i)).toBeInTheDocument()
       })
+      
+      consoleSpy.mockRestore()
     })
   })
 })
