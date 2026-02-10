@@ -34,8 +34,8 @@ from app.schemas.resume_schema import (
 )
 
 # Configuration - Restricted to PDF and DOCX per latest instructions
-ALLOWED_EXTS = {".pdf", ".docx"}
-MAX_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
+ALLOWED_EXTS = {".pdf", ".docx", ".doc", ".txt"}
+MAX_SIZE_BYTES = 5 * 1024 * 1024  # 5MB
 
 # Global GCS client instance for reuse
 _gcs_client: Optional[storage.Client] = None
@@ -228,6 +228,11 @@ async def get_resume_content(session_id: str) -> str:
         return await run_in_threadpool(_parse_pdf_to_text, content_bytes)
     elif ext == ".docx":
         return await run_in_threadpool(_parse_docx_to_markdown, content_bytes)
+    elif ext == ".doc":
+        # .doc files: try parsing as docx, fallback to raw text
+        return await run_in_threadpool(_parse_docx_to_markdown, content_bytes)
+    elif ext == ".txt":
+        return content_bytes.decode("utf-8", errors="replace")
     else:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
