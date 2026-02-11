@@ -5,36 +5,7 @@ Uses pydantic-settings to manage environment variables and configuration
 
 from functools import lru_cache
 
-from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-class GeminiConfig(BaseModel):
-    """Gemini-specific configuration"""
-
-    api_key: str = ""
-    model: str = "gemini-2.5-flash"
-
-
-class LLMConfig(BaseModel):
-    """LLM configuration"""
-
-    provider: str = "gemini"
-    gemini: GeminiConfig = GeminiConfig()
-
-
-class AppConfig(BaseModel):
-    """Application configuration"""
-
-    name: str = "ResumAI"
-    version: str = "0.1.0"
-    debug: bool = False
-
-
-class APIConfig(BaseModel):
-    """API configuration"""
-
-    prefix: str = "/api"
 
 
 class Settings(BaseSettings):
@@ -78,15 +49,5 @@ def get_settings() -> Settings:
     """Get cached settings instance"""
     return Settings()
 
-
-@lru_cache
-def get_env_config() -> EnvConfig:
-    """Get cached env_config instance"""
-    return EnvConfig(get_settings())
-
-
 # For backward compatibility
 settings = get_settings()
-
-# Unified environment configuration - use this for all config access
-env_config = get_env_config()

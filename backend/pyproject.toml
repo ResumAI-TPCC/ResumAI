@@ -21,7 +21,7 @@ dependencies = [
     "pypdf (>=5.1.0,<6.0.0)",
     "python-docx (>=1.1.2,<2.0.0)",
     "pytest (>=9.0.2,<10.0.0)",
-    "pytest-asyncio (>=0.23.0,<1.0.0)",
+    "pytest-asyncio (>=1.0.0)",
     "ruff (>=0.14.10,<0.15.0)",
     "olefile (>=0.47,<0.48)"
 ]
@@ -30,14 +30,11 @@ dependencies = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 asyncio_mode = "auto"
-
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
 filterwarnings = [
     "ignore::DeprecationWarning:pytest_asyncio",
     "ignore::FutureWarning:google.api_core",
 ]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
