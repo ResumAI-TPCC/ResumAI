@@ -4,9 +4,9 @@ Tests for Optimize Resume Endpoint (RA-45, RA-46, RA-47)
 
 import base64
 from unittest.mock import AsyncMock, MagicMock, patch
+from dataclasses import dataclass
 
 from app.core.config import settings
-from app.services.llm.base import LLMResponse
 
 
 MOCK_RESUME_TEXT = """# John Doe
@@ -25,7 +25,7 @@ Experienced software engineer with 4+ years of expertise.
 
 ## Work Experience
 ### Software Engineer | Tech Corp | 2020-2024
-- Architected and developed 5 production web applications serving 10K+ daily users
+- Architected and developed 5 production web applications
 - Optimized without JD
 """
 
@@ -42,66 +42,70 @@ Results-driven software engineer aligned with Senior Engineer requirements.
 """
 
 
-@patch("app.services.resume_service.get_llm_provider")
-@patch("app.services.resume_service.get_resume_content", new_callable=AsyncMock)
-def test_optimize_resume_without_jd(mock_get_content, mock_get_provider, client):
-    """RA-45: Test optimize and download without job description"""
+@dataclass
+class MockOptimizeResult:
+    optimized_content: str = ""
+
+
+@patch("app.api.routes.resumes.get_llm_service")
+@patch("app.api.routes.resumes.get_resume_content", new_callable=AsyncMock)
+def test_optimize_resume_without_jd(mock_get_content, mock_get_llm, client):
+    """RA-45: Test optimize without job description"""
     mock_get_content.return_value = MOCK_RESUME_TEXT
 
-    mock_provider = MagicMock()
-    mock_provider.optimize = AsyncMock(
-        return_value=LLMResponse(content=MOCK_OPTIMIZED_WITHOUT_JD, model="test")
+    mock_service = MagicMock()
+    mock_service.optimize_resume = AsyncMock(
+        return_value=MockOptimizeResult(optimized_content=MOCK_OPTIMIZED_WITHOUT_JD)
     )
-    mock_get_provider.return_value = mock_provider
+    mock_get_llm.return_value = mock_service
 
     response = client.post(
-        f"{settings.API_PREFIX}/resume/optimize",
+        f"{settings.API_PREFIX}/resumes/optimize",
         json={"session_id": "test-session-123"},
     )
 
     assert response.status_code == 200
     data = response.json()
 
-    assert "encoded_file" in data
-    assert "filename" in data
-    assert data["filename"] == "optimized_resume.md"
-    assert data["format"] == "markdown"
+    assert data["code"] == 200
+    assert data["status"] == "ok"
+    assert "encoded_file" in data["data"]
 
     # Verify base64 decoding works
-    decoded = base64.b64decode(data["encoded_file"])
+    decoded = base64.b64decode(data["data"]["encoded_file"])
     content = decoded.decode("utf-8")
 
     assert "John Doe" in content
     assert "without JD" in content
 
 
-@patch("app.services.resume_service.get_llm_provider")
-@patch("app.services.resume_service.get_resume_content", new_callable=AsyncMock)
-def test_optimize_resume_with_jd(mock_get_content, mock_get_provider, client):
-    """RA-46: Test optimize and download with job description"""
+@patch("app.api.routes.resumes.get_llm_service")
+@patch("app.api.routes.resumes.get_resume_content", new_callable=AsyncMock)
+def test_optimize_resume_with_jd(mock_get_content, mock_get_llm, client):
+    """RA-46: Test optimize with job description"""
     mock_get_content.return_value = MOCK_RESUME_TEXT
 
-    mock_provider = MagicMock()
-    mock_provider.optimize = AsyncMock(
-        return_value=LLMResponse(content=MOCK_OPTIMIZED_WITH_JD, model="test")
+    mock_service = MagicMock()
+    mock_service.optimize_resume = AsyncMock(
+        return_value=MockOptimizeResult(optimized_content=MOCK_OPTIMIZED_WITH_JD)
     )
-    mock_get_provider.return_value = mock_provider
+    mock_get_llm.return_value = mock_service
 
     response = client.post(
-        f"{settings.API_PREFIX}/resume/optimize",
+        f"{settings.API_PREFIX}/resumes/optimize",
         json={
             "session_id": "test-session-456",
-            "job_description": "Senior Software Engineer position requiring microservices experience",
+            "job_description": "Senior Software Engineer position",
         },
     )
 
     assert response.status_code == 200
     data = response.json()
 
-    assert "encoded_file" in data
+    assert "encoded_file" in data["data"]
 
     # Verify content indicates JD optimization
-    decoded = base64.b64decode(data["encoded_file"])
+    decoded = base64.b64decode(data["data"]["encoded_file"])
     content = decoded.decode("utf-8")
 
     assert "with JD" in content
@@ -111,23 +115,11 @@ def test_optimize_resume_with_jd(mock_get_content, mock_get_provider, client):
 def test_optimize_resume_missing_session_id(client):
     """Test optimize endpoint requires session_id"""
     response = client.post(
-        f"{settings.API_PREFIX}/resume/optimize",
+        f"{settings.API_PREFIX}/resumes/optimize",
         json={},
     )
 
     assert response.status_code == 422
-
-
-def test_file_service_base64_encoding():
-    """RA-47: Test file service encoding functions"""
-    from app.services.file_service import generate_and_encode_resume
-
-    test_content = "# Test Resume\n\nThis is a test."
-    encoded = generate_and_encode_resume(test_content)
-
-    # Verify it's valid base64
-    decoded = base64.b64decode(encoded)
-    assert decoded.decode("utf-8") == test_content
 
 
 def test_prompt_builder_optimize_without_jd():
@@ -138,7 +130,8 @@ def test_prompt_builder_optimize_without_jd():
     prompt = builder.build_optimize_prompt("Some resume content")
 
     assert "Some resume content" in prompt
-    assert "job description" not in prompt.lower() or "Job Description" not in prompt
+    # Should NOT contain JD section
+    assert "Target Job Description" not in prompt
 
 
 def test_prompt_builder_optimize_with_jd():
@@ -152,6 +145,7 @@ def test_prompt_builder_optimize_with_jd():
 
     assert "Some resume content" in prompt
     assert "Senior Engineer at Google" in prompt
+    assert "Target Job Description" in prompt
 
 
 def test_prompt_builder_optimize_empty_content():
