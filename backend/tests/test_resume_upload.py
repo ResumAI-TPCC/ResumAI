@@ -191,12 +191,11 @@ def test_match_endpoint_placeholder(client):
     assert response.json()["status"] == "ok"
 
 
-def test_optimize_endpoint_placeholder(client):
-    """Test optimize endpoint returns placeholder response"""
+def test_optimize_endpoint_requires_session_id(client):
+    """Test optimize endpoint requires session_id in request body"""
     response = client.post(f"{settings.API_PREFIX}/resume/optimize")
     
-    assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    assert response.status_code == 422  # Missing required body
 
 
 def test_analyze_endpoint_placeholder(client):

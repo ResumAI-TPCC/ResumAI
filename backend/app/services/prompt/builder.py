@@ -7,7 +7,11 @@ prompts to send to the LLM service.
 
 from typing import Optional
 
-from .templates import ANALYZE_PROMPT_TEMPLATE
+from .templates import (
+    ANALYZE_PROMPT_TEMPLATE,
+    OPTIMIZE_NO_JD_PROMPT_TEMPLATE,
+    OPTIMIZE_WITH_JD_PROMPT_TEMPLATE,
+)
 
 
 class PromptBuilder:
@@ -21,9 +25,6 @@ class PromptBuilder:
     def build_analyze_prompt(self, resume_content: str) -> str:
         """
         Build a prompt for resume analysis.
-
-        Takes the resume content and constructs a prompt that instructs
-        the LLM to analyze the resume and provide improvement suggestions.
 
         Args:
             resume_content: The text content of the resume to analyze.
@@ -40,6 +41,40 @@ class PromptBuilder:
         return ANALYZE_PROMPT_TEMPLATE.format(
             resume_content=resume_content.strip()
         )
+
+    def build_optimize_prompt(
+        self, resume_content: str, job_description: Optional[str] = None
+    ) -> str:
+        """
+        Build a prompt for resume optimization.
+
+        RA-45: Without JD - general optimization for better quality.
+        RA-46: With JD - targeted optimization aligned with job description.
+
+        Args:
+            resume_content: The text content of the resume to optimize.
+            job_description: Optional job description for targeted optimization.
+
+        Returns:
+            A formatted prompt string ready to send to the LLM.
+
+        Raises:
+            ValueError: If resume_content is empty or contains only whitespace.
+        """
+        if not resume_content or not resume_content.strip():
+            raise ValueError("resume_content cannot be empty")
+
+        if job_description and job_description.strip():
+            # RA-46: Optimize with JD
+            return OPTIMIZE_WITH_JD_PROMPT_TEMPLATE.format(
+                resume_content=resume_content.strip(),
+                job_description=job_description.strip(),
+            )
+        else:
+            # RA-45: Optimize without JD
+            return OPTIMIZE_NO_JD_PROMPT_TEMPLATE.format(
+                resume_content=resume_content.strip()
+            )
 
 
 # Module-level singleton instance

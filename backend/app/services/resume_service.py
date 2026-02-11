@@ -3,6 +3,9 @@ Resume Service Layer
 
 RA-23: Upload resume to GCS and return file_id
 RA-24: Parse resume file and extract structured data
+RA-45: Optimize resume without JD
+RA-46: Optimize resume with JD
+RA-47: Download optimized resume as base64 encoded file
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ from pypdf import PdfReader
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
+from app.schemas.optimize_schema import OptimizeResponse
 from app.schemas.resume_schema import (
     ContactInfo,
     Education,
@@ -27,6 +31,9 @@ from app.schemas.resume_schema import (
     ResumeUploadResponse,
     WorkExperience,
 )
+from app.services.file_service import generate_and_encode_resume
+from app.services.llm import get_llm_provider
+from app.services.prompt.builder import get_prompt_builder
 
 # Configuration
 ALLOWED_EXTS = {".pdf", ".doc", ".docx", ".txt"}
@@ -557,3 +564,112 @@ async def download_resume(file_id: str, storage_path: str) -> tuple[bytes, str, 
     )
     
     return content, content_type, filename
+
+
+# ============================================================================
+# RA-45/46/47: Resume Optimization and Download
+# ============================================================================
+
+
+async def get_resume_content(session_id: str) -> str:
+    """
+    Download and parse resume content from GCS by session_id.
+
+    Args:
+        session_id: The unique session/file identifier (UUID from upload)
+
+    Returns:
+        str: Parsed resume text content
+
+    Raises:
+        HTTPException: If file not found or parsing fails
+    """
+    client = _get_gcs_client()
+    bucket = client.bucket(settings.GCS_BUCKET_NAME)
+
+    # List blobs with the session prefix to find the file
+    prefix = f"{settings.GCS_OBJECT_PREFIX.strip('/')}/{session_id}/"
+    blobs = list(client.list_blobs(bucket, prefix=prefix))
+
+    if not blobs:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No resume file found for session: {session_id}",
+        )
+
+    # Take the first found file in the session directory
+    target_blob = blobs[0]
+    filename = target_blob.name
+    content_bytes = await run_in_threadpool(target_blob.download_as_bytes)
+
+    # Parse based on file extension
+    ext = Path(filename).suffix.lower()
+    if ext == ".pdf":
+        # Write to temp file for pypdf
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(content_bytes)
+            tmp.flush()
+            tmp_path = Path(tmp.name)
+        try:
+            return _extract_text_from_pdf(tmp_path)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+    elif ext == ".docx":
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
+            tmp.write(content_bytes)
+            tmp.flush()
+            tmp_path = Path(tmp.name)
+        try:
+            return _extract_text_from_docx(tmp_path)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+    elif ext == ".txt":
+        return content_bytes.decode("utf-8", errors="ignore")
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file type in storage: {ext}",
+        )
+
+
+async def optimize_resume(
+    session_id: str, job_description: Optional[str] = None
+) -> OptimizeResponse:
+    """
+    Optimize resume and return base64 encoded Markdown file.
+
+    RA-45: Without JD - general optimization
+    RA-46: With JD - targeted optimization
+    RA-47: Encode result as downloadable base64 file
+
+    Args:
+        session_id: Session ID from upload
+        job_description: Optional job description for targeted optimization
+
+    Returns:
+        OptimizeResponse with encoded_file, filename, and format
+    """
+    # Step 1: Get resume content from GCS (Service 1)
+    resume_content = await get_resume_content(session_id)
+
+    # Step 2: Build prompt (Service 2 - RA-45 or RA-46)
+    builder = get_prompt_builder()
+    prompt = builder.build_optimize_prompt(resume_content, job_description)
+
+    # Step 3: Send to LLM (Service 3)
+    provider = get_llm_provider()
+    response = await provider.optimize(
+        resume_content=resume_content,
+        job_description=job_description or "",
+        instructions=prompt,
+    )
+    optimized_content = response.content
+
+    # Step 4: Encode as base64 Markdown file (RA-47)
+    encoded_file = generate_and_encode_resume(optimized_content)
+
+    return OptimizeResponse(
+        encoded_file=encoded_file,
+        filename="optimized_resume.md",
+        format="markdown",
+    )
