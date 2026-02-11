@@ -15,10 +15,10 @@ from app.core.config import settings
 async def lifespan(app: FastAPI):
     """Application lifecycle management"""
     # Startup
-    print(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} starting...")
+    print(f"{settings.APP_NAME} v{settings.APP_VERSION} starting...")
     yield
     # Shutdown
-    print(f"👋 {settings.APP_NAME} shutting down...")
+    print(f"{settings.APP_NAME} shutting down...")
 
 
 def create_app() -> FastAPI:

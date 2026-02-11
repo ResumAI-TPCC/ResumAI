@@ -54,7 +54,7 @@ ResumAI is a web-based AI resume optimization platform designed to help users tr
 
 At the MVP stage, ResumAI supports the following user-facing functions:
 
-* Uploading resumes in PDF, DOCX, TXT, or plain text format  
+* Uploading resumes in PDF or DOCX format  
 * Inputting JD text  
 * AI-powered resume optimization using an external LLM provider  
 * Calculating resume–JD match score  
@@ -213,12 +213,12 @@ Key Components:
 
 ### 4.1 API Summary Table
 
-| Method | Endpoint | Name | Request Body | Response |
-| ----- | ----- | ----- | ----- | ----- |
-| **POST** | `/api/resumes` | Upload Resume | File (multipart) | session_id, expire_at |
-| **POST** | `/api/resumes/analyze` | Analyze Resume | session_id | suggestions |
-| **POST** | `/api/resumes/match` | Match with JD | session_id, job_description | match_score, suggestions |
-| **POST** | `/api/resumes/optimize` | Generate optimized file | session_id, JD (optional) | encoded_file |
+| Method   | Endpoint                | Name                    | Request Body                | Response                 |
+| -------- | ----------------------- | ----------------------- | --------------------------- | ------------------------ |
+| **POST** | `/api/resumes`          | Upload Resume           | File (multipart)            | session_id, expire_at    |
+| **POST** | `/api/resumes/analyze`  | Analyze Resume          | session_id                  | suggestions              |
+| **POST** | `/api/resumes/match`    | Match with JD           | session_id, job_description | match_score, suggestions |
+| **POST** | `/api/resumes/optimize` | Generate optimized file | session_id, JD (optional)   | encoded_file             |
 
 ### 4.2 API Endpoints
 
@@ -230,7 +230,7 @@ Description: Uploads and parses resume file, stores resume in GCS.
 
 Request Body (multipart/form-data):
 ```
-file: <resume_file>  // PDF, DOCX, DOC, TXT (max 5MB)
+file: <resume_file>  // PDF, DOCX (max 10MB)
 ```
 
 Response (201 Created):
@@ -372,18 +372,18 @@ Error Responses:
 
 ### 4.3 HTTP Status Codes
 
-| Code | Status | Usage |
-| ----- | ----- | ----- |
-| **200** | OK | Successful request |
-| **201** | Created | Resource created (upload) |
-| **400** | Bad Request | Invalid input |
-| **401** | Unauthorized | Auth required/invalid |
-| **404** | Not Found | Resource not found |
-| **422** | Unprocessable Entity | Cannot process file/data |
-| **429** | Too Many Requests | Rate limit exceeded |
-| **500** | Internal Server Error | Server error |
-| **502** | Bad Gateway | External service error |
-| **503** | Service Unavailable | Service down |
+| Code    | Status                | Usage                     |
+| ------- | --------------------- | ------------------------- |
+| **200** | OK                    | Successful request        |
+| **201** | Created               | Resource created (upload) |
+| **400** | Bad Request           | Invalid input             |
+| **401** | Unauthorized          | Auth required/invalid     |
+| **404** | Not Found             | Resource not found        |
+| **422** | Unprocessable Entity  | Cannot process file/data  |
+| **429** | Too Many Requests     | Rate limit exceeded       |
+| **500** | Internal Server Error | Server error              |
+| **502** | Bad Gateway           | External service error    |
+| **503** | Service Unavailable   | Service down              |
 
 ## 5. UI design
 
@@ -430,12 +430,12 @@ The frontend consists of a single-page application with a three-column layout:
 
 **Components:**
 
-| Component | Description |
-| --------- | ----------- |
-| **Sidebar** | Input panel with Company Name, Job Title, Job Description, Resume Upload, and Clear Session |
-| **FileUpload** | Drag-and-drop or click to upload resume (PDF, DOCX, TXT), shows upload status |
-| **AnalysisOutput** | Main content area showing JD Match Score, Scoring Principles, and Analysis Reasoning |
-| **ResumePreview** | Right panel with Match Score badge, document preview, and Download Polished Resume button |
+| Component          | Description                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------------- |
+| **Sidebar**        | Input panel with Company Name, Job Title, Job Description, Resume Upload, and Clear Session |
+| **FileUpload**     | Drag-and-drop or click to upload resume (PDF, DOCX), shows upload status                    |
+| **AnalysisOutput** | Main content area showing JD Match Score, Scoring Principles, and Analysis Reasoning        |
+| **ResumePreview**  | Right panel with Match Score badge, document preview, and Download Polished Resume button   |
 
 ### 5.2 Description of workflow and interaction
 
