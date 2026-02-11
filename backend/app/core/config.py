@@ -52,43 +52,26 @@ class Settings(BaseSettings):
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = False
     API_PREFIX: str = "/api"
+
+    # LLM Provider settings
     LLM_PROVIDER: str = "gemini"
+
+    # Gemini settings
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_TEMPERATURE: float = 0.7
+    GEMINI_MAX_TOKENS: int = 2048
+    GEMINI_TIMEOUT: float = 60.0
+    GEMINI_MAX_RETRIES: int = 3
+    GEMINI_RETRY_DELAY: float = 1.0
 
     # GCP / GCS settings
-    GCP_PROJECT_ID: str  # Mandatory, fail early if missing
-    GCS_BUCKET_NAME: str  # Mandatory, fail early if missing
+    GCP_PROJECT_ID: str = ""  # Mandatory, fail early if missing
+    GCS_BUCKET_NAME: str = ""  # Mandatory, fail early if missing
     GCS_OBJECT_PREFIX: str = "resumes"
-
-
-class EnvConfig:
-    """
-    Unified environment configuration.
-    All environment variables should be accessed through this class.
-    """
-
-    def __init__(self, settings: Settings):
-        self._settings = settings
-
-        # Organized configuration structure
-        self.app = AppConfig(
-            name=settings.APP_NAME,
-            version=settings.APP_VERSION,
-            debug=settings.DEBUG,
-        )
-
-        self.api = APIConfig(
-            prefix=settings.API_PREFIX,
-        )
-
-        self.llm = LLMConfig(
-            provider=settings.LLM_PROVIDER,
-            gemini=GeminiConfig(
-                api_key=settings.GEMINI_API_KEY,
-                model=settings.GEMINI_MODEL,
-            ),
-        )
+    GCP_SA_KEY: str = ""
+    GCP_PRIVATE_KEY: str = ""
+    GCP_PRIVATE_KEY_ID: str = ""
 
 @lru_cache
 def get_settings() -> Settings:

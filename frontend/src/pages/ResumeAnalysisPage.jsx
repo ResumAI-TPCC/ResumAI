@@ -19,6 +19,16 @@ function ResumeAnalysisPage() {
   useEffect(() => {
     const session = loadSession()
     if (session) {
+      // Check if session has expired
+      if (session.expire_at) {
+        const expireDate = new Date(session.expire_at)
+        if (expireDate < new Date()) {
+          console.log('Session expired, clearing...')
+          clearStorageSession()
+          return
+        }
+      }
+
       setSessionId(session.session_id || null)
       setCompanyName(session.companyName || '')
       setJobTitle(session.jobTitle || '')
@@ -36,20 +46,20 @@ function ResumeAnalysisPage() {
 
   const handleUpload = async () => {
     if (!selectedFile) return
-    
+
     setUploadError(null)
-    
+
     try {
       setIsUploading(true)
       const response = await uploadResume(selectedFile)
-      
-      if (response.status === 'created' && response.data) {
+
+      if (response.status === 'ok' && response.data) {
         const newSessionId = response.data.session_id
         const expireAt = response.data.expire_at
-        
+
         setSessionId(newSessionId)
         setUploadedFile(selectedFile)
-        
+
         // Save session to localStorage only on upload success
         // Include current form values for session restore
         saveSession({
