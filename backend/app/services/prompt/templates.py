@@ -1,26 +1,32 @@
 """
 Prompt Templates for LLM
-
-This module contains all prompt templates used for resume analysis and optimization.
-Templates use Python string formatting with named placeholders.
+Strictly aligned with Resume Schemas and Design Doc 4.2
 """
 
-ANALYZE_PROMPT_TEMPLATE = """You are a professional resume consultant with expertise in career development and hiring practices. Please analyze the following resume and provide actionable improvement suggestions.
+# --- Analyze Resume Template ---
+ANALYZE_PROMPT_TEMPLATE = """You are a professional resume consultant. Analyze the following resume and provide actionable improvement suggestions.
 
 ## Resume Content:
 {resume_content}
 
 ## Instructions:
-Analyze the resume thoroughly and provide specific, actionable suggestions for improvement.
+Analyze the resume thoroughly. Focus on:
+1. Content quality and relevance
+2. Use of action verbs and quantifiable achievements
+3. Skills presentation and keywords
+4. Overall structure and formatting
+5. Language clarity and professionalism
 
-Please return your analysis in JSON format with a "suggestions" array. Each suggestion should include:
-- category: The category of the suggestion ("content", "skills", "format", "language")
-- priority: The priority level ("high", "medium", "low")
-- title: A brief title for the suggestion
-- description: A detailed description of the issue and why it matters
-- example: A specific example of how to implement the improvement
+## Output Format:
+Return your analysis EXCLUSIVELY in JSON format with a "suggestions" array.
+Each suggestion MUST include these exact fields:
+- category: One of ["content", "skills", "format", "language"]
+- priority: One of ["high", "medium", "low"]
+- title: A brief title (max 10 words)
+- description: A detailed explanation of why this matters
+- example: A specific "Before vs After" example
 
-Return format:
+Example JSON Structure:
 ```json
 {{
   "suggestions": [
@@ -28,30 +34,76 @@ Return format:
       "category": "content",
       "priority": "high",
       "title": "Add quantifiable metrics",
-      "description": "Several achievements lack specific numbers. Quantifiable results make your accomplishments more credible and impactful to recruiters.",
-      "example": "Instead of 'Improved system performance', write 'Improved system performance by 40%, reducing page load time from 5s to 3s'"
+      "description": "Several achievements lack specific numbers. Recruiter value data-driven results.",
+      "example": "Instead of 'Improved performance', write 'Improved performance by 40%'"
     }}
   ]
 }}
 ```
-
-Focus on:
-1. Content quality and relevance
-2. Use of action verbs and quantifiable achievements
-3. Skills presentation and keywords
-4. Overall structure and formatting
-5. Language clarity and professionalism
 """
 
+# --- Match Resume Template ---
+MATCH_PROMPT_TEMPLATE = """You are a hiring manager. Match the following resume against the job description (JD).
 
-# RA-45: Optimize without JD
-OPTIMIZE_NO_JD_PROMPT_TEMPLATE = """You are a professional resume writer and career consultant. Your task is to rewrite and optimize the following resume to make it more professional, impactful, and ATS-friendly.
-
-## Original Resume Content:
+## Resume Content:
 {resume_content}
 
+## Job Description:
+{job_description}
+
 ## Instructions:
-Rewrite the entire resume in clean, professional Markdown format. Make the following improvements:
+1. Calculate a match score (0-100).
+2. Breakdown the score into 4 categories: skills, experience, education, and keywords.
+3. Provide specific suggestions to improve the match.
+
+## Output Format:
+Return your analysis EXCLUSIVELY in JSON format with the following structure:
+- match_score: Integer (0-100)
+- match_breakdown:
+    - skills_match: Integer (0-100)
+    - experience_match: Integer (0-100)
+    - education_match: Integer (0-100)
+    - keywords_match: Integer (0-100)
+- suggestions: An array of objects, each containing:
+    - category: String
+    - priority: "high", "medium", or "low"
+    - title: String
+    - description: String
+    - action: String (A specific action to take on the resume)
+
+Example JSON Structure:
+```json
+{{
+  "match_score": 75,
+  "match_breakdown": {{
+    "skills_match": 80,
+    "experience_match": 70,
+    "education_match": 90,
+    "keywords_match": 60
+  }},
+  "suggestions": [
+    {{
+      "category": "skills",
+      "priority": "high",
+      "title": "Highlight React experience",
+      "description": "The JD requires 3+ years of React.",
+      "action": "Move React projects to the top of your experience section"
+    }}
+  ]
+}}
+```
+"""
+
+# --- RA-45: Optimize Resume Without JD ---
+OPTIMIZE_NO_JD_PROMPT_TEMPLATE = """You are a professional resume writer. Rewrite the following resume to make it more professional, impactful, and ATS-friendly.
+
+## Resume Content:
+{resume_content}
+
+## Style/Template:
+{template}
+
+## Instructions:
 1. Strengthen action verbs and make language more impactful
 2. Add quantifiable metrics where possible (estimate reasonable numbers if needed)
 3. Improve formatting and structure for better readability
@@ -60,39 +112,23 @@ Rewrite the entire resume in clean, professional Markdown format. Make the follo
 6. Keep all factual information (names, dates, companies) unchanged
 
 ## Output Format:
-Return the optimized resume as clean Markdown text. Use proper Markdown headings (#, ##), bullet points (-), and bold (**) formatting. Do NOT wrap the output in a JSON object or code block - just return the raw Markdown content directly.
-
-Example structure:
-# [Full Name]
-**Email:** ... | **Phone:** ... | **Location:** ...
-
-## Professional Summary
-...
-
-## Work Experience
-### [Job Title] | [Company] | [Date Range]
-- Achievement 1
-- Achievement 2
-
-## Education
-...
-
-## Skills
-...
+Return the FULL optimized resume in clean, professional Markdown format. Use proper headings (#, ##), bullet points (-), and bold (**) formatting. Do NOT wrap output in JSON or code blocks - return raw Markdown only.
 """
 
 
-# RA-46: Optimize with JD
-OPTIMIZE_WITH_JD_PROMPT_TEMPLATE = """You are a professional resume writer and career consultant. Your task is to rewrite and optimize the following resume to be highly targeted for the specific job description provided.
+# --- RA-46: Optimize Resume With JD ---
+OPTIMIZE_WITH_JD_PROMPT_TEMPLATE = """You are a professional resume writer. Rewrite the following resume to be highly targeted for the specific job description provided.
 
-## Original Resume Content:
+## Resume Content:
 {resume_content}
 
 ## Target Job Description:
 {job_description}
 
+## Style/Template:
+{template}
+
 ## Instructions:
-Rewrite the entire resume in clean, professional Markdown format, specifically tailored for the target job. Make the following improvements:
 1. Prioritize and highlight experiences most relevant to the job description
 2. Mirror key terminology and skills mentioned in the job description
 3. Strengthen action verbs and quantify achievements relevant to the role
@@ -102,24 +138,9 @@ Rewrite the entire resume in clean, professional Markdown format, specifically t
 7. Keep all factual information (names, dates, companies) unchanged
 
 ## Output Format:
-Return the optimized resume as clean Markdown text. Use proper Markdown headings (#, ##), bullet points (-), and bold (**) formatting. Do NOT wrap the output in a JSON object or code block - just return the raw Markdown content directly.
-
-Example structure:
-# [Full Name]
-**Email:** ... | **Phone:** ... | **Location:** ...
-
-## Professional Summary
-[Targeted summary aligned with the job description]
-
-## Work Experience
-### [Job Title] | [Company] | [Date Range]
-- Achievement relevant to target job
-- Achievement with quantifiable metrics
-
-## Education
-...
-
-## Skills
-[Skills prioritized by relevance to job description]
+Return the FULL optimized resume in clean, professional Markdown format. Use proper headings (#, ##), bullet points (-), and bold (**) formatting. Do NOT wrap output in JSON or code blocks - return raw Markdown only.
 """
 
+
+# Backward-compatible alias used by builder
+OPTIMIZE_PROMPT_TEMPLATE = OPTIMIZE_WITH_JD_PROMPT_TEMPLATE
