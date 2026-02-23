@@ -1,12 +1,39 @@
+"""
+Pytest configuration for backend tests
+"""
+
 import os
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
-# Inject mock environment variables before app code initializes settings
-# This ensures Pydantic validation passes even if variables are missing in the environment
-os.environ.setdefault("GCP_PROJECT_ID", "mock-project-id")
-os.environ.setdefault("GCS_BUCKET_NAME", "mock-bucket-name")
+# Set environment variables for testing
+os.environ["GCS_BUCKET_NAME"] = "test-bucket"
+os.environ["GCP_PROJECT_ID"] = "test-project"
 
-# Ensure backend/app is importable
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+# Add backend directory to Python path so 'app' module can be imported
+backend_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(backend_dir))
+
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.main import create_app  # noqa: E402
+
+
+@pytest.fixture
+def mock_gcs():
+    """Mock GCS client for testing"""
+    with patch("app.services.resume_service._get_gcs_client") as mock_client:
+        mock_bucket = MagicMock()
+        mock_blob = MagicMock()
+        mock_bucket.blob.return_value = mock_blob
+        mock_client.return_value.bucket.return_value = mock_bucket
+        yield mock_client
+
+
+@pytest.fixture
+def client(mock_gcs):
+    """Create test client for all tests to reuse"""
+    app = create_app()
+    return TestClient(app)

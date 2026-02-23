@@ -1,30 +1,101 @@
-from fastapi.testclient import TestClient
+"""
+Tests for Resume Upload Endpoint (RA-24)
+"""
 
-from app.core.config import settings
+import io
+import pytest
+from fastapi.testclient import TestClient
 from app.main import create_app
 from app.services import resume_service
+from app.core.config import settings
 
 
-class FakeBlob:
-    def __init__(self) -> None:
-        self.data = None
-        self.content_type = None
-        self.name = None
+@pytest.fixture
+def sample_pdf_content():
+    """Create sample PDF content"""
+    return b"""%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/Contents 4 0 R
+/MediaBox [0 0 612 792]
+>>
+endobj
+4 0 obj
+<<
+/Length 44
+>>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(John Doe) Tj
+ET
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000214 00000 n
+trailer
+<<
+/Size 5
+/Root 1 0 R
+>>
+startxref
+306
+%%EOF"""
 
-    def upload_from_string(self, data: bytes, content_type: str | None = None) -> None:
-        self.data = data
-        self.content_type = content_type
+
+@pytest.fixture
+def sample_docx_content():
+    """Create sample DOCX content"""
+    from docx import Document
+    
+    doc = Document()
+    doc.add_paragraph("Jane Smith")
+    doc.add_paragraph("jane.smith@example.com")
+    doc.add_paragraph("+1-555-1234")
+    doc.add_paragraph("Skills: Python, FastAPI, Docker")
+    
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer.read()
 
 
 class FakeBucket:
-    def __init__(self) -> None:
+    def __init__(self):
         self.blobs = {}
 
-    def blob(self, name: str) -> FakeBlob:
-        blob = FakeBlob()
-        blob.name = name
-        self.blobs[name] = blob
-        return blob
+    def blob(self, name):
+        return FakeBlob(name, self)
+
+
+class FakeBlob:
+    def __init__(self, name, bucket):
+        self.name = name
+        self.bucket = bucket
+
+    def upload_from_string(self, content, content_type=None):
+        self.bucket.blobs[self.name] = content
 
 
 class FakeClient:
@@ -45,47 +116,63 @@ def test_resume_upload_success_pdf(monkeypatch):
     monkeypatch.setattr(resume_service, "_get_gcs_client", lambda: fake_client)
     monkeypatch.setattr(resume_service.settings, "GCS_BUCKET_NAME", "test-bucket")
     monkeypatch.setattr(resume_service.settings, "GCS_OBJECT_PREFIX", "resumes")
-    # Also need to ensure GCP_PROJECT_ID is present to avoid validation error
     monkeypatch.setattr(resume_service.settings, "GCP_PROJECT_ID", "test-project")
 
+    # Mock _validate_pdf_content to avoid pypdf parsing errors with fake content
+    monkeypatch.setattr(resume_service, "_validate_pdf_content", lambda content: None)
+
     files = {"file": ("test.pdf", b"%PDF-1.4\nfake\n", "application/pdf")}
-    r = client.post(f"{settings.API_PREFIX}/resume/", files=files)
+    r = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
 
     assert r.status_code == 201, r.text
-    data = r.json()
-    assert "file_id" in data
-    assert data["filename"] == "test.pdf"
-    # storage_path should NOT be in the response anymore (DTO filtering)
-    assert "storage_path" not in data
+    res = r.json()
+    assert res["status"] == "ok"
+    assert "session_id" in res["data"]
+    assert "expire_at" in res["data"]
+    # Removed extra fields according to Design Doc 4.2.1
+    assert "filename" not in res["data"]
+    assert "storage_path" not in res["data"]
     assert fake_client.bucket_name == "test-bucket"
     assert fake_client.bucket_obj.blobs
 
 
-def test_resume_upload_success_txt(monkeypatch):
+def test_resume_upload_success_docx(monkeypatch):
     app = create_app()
     client = TestClient(app)
 
     fake_client = FakeClient()
     monkeypatch.setattr(resume_service, "_get_gcs_client", lambda: fake_client)
     monkeypatch.setattr(resume_service.settings, "GCS_BUCKET_NAME", "test-bucket")
+    monkeypatch.setattr(resume_service.settings, "GCS_OBJECT_PREFIX", "resumes")
     monkeypatch.setattr(resume_service.settings, "GCP_PROJECT_ID", "test-project")
 
-    files = {"file": ("test.txt", b"hello world", "text/plain")}
-    r = client.post(f"{settings.API_PREFIX}/resume/", files=files)
+    files = {"file": ("test.docx", b"fake docx content", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
+    r = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
 
     assert r.status_code == 201, r.text
-    assert r.json()["filename"] == "test.txt"
+    assert r.json()["data"]["session_id"]
 
 
-def test_resume_upload_reject_exe(monkeypatch):
+def test_upload_resume_unsupported_format(monkeypatch):
     app = create_app()
     client = TestClient(app)
+    
+    files = {"file": ("test.exe", b"fake exe content", "application/x-msdownload")}
+    response = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
+    
+    assert response.status_code == 400
+    assert "unsupported" in response.json()["detail"].lower()
 
-    # Need to mock settings even for failures if validation triggers
-    monkeypatch.setattr(resume_service.settings, "GCS_BUCKET_NAME", "test-bucket")
-    monkeypatch.setattr(resume_service.settings, "GCP_PROJECT_ID", "test-project")
 
-    files = {"file": ("test.exe", b"hello", "application/x-msdownload")}
-    r = client.post(f"{settings.API_PREFIX}/resume/", files=files)
-
-    assert r.status_code == 400, r.text
+def test_upload_resume_file_too_large(monkeypatch):
+    app = create_app()
+    client = TestClient(app)
+    
+    # Create a file larger than 10MB
+    large_content = b"x" * (11 * 1024 * 1024)
+    files = {"file": ("large.pdf", large_content, "application/pdf")}
+    
+    response = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
+    
+    assert response.status_code == 413
+    assert "too large" in response.json()["detail"].lower()

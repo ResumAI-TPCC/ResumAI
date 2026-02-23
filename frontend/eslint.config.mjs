@@ -61,14 +61,36 @@ export default [
     },
 
     // ------------------------------------------------------------
-    // 3) 测试代码：Jest 环境
+    // 3) 测试代码：Jest 环境 + React/JSX 支持
     // ------------------------------------------------------------
     {
-        files: ['**/*.test.{js,jsx}', '**/__tests__/**/*.{js,jsx}'],
+        files: ['**/*.test.{js,jsx}', '**/__tests__/**/*.{js,jsx}', '**/tests/**/*.{js,jsx}'],
+
+        plugins: {
+            react,
+            'react-hooks': reactHooks,
+        },
+
         languageOptions: {
-            globals: {
-                ...globals.jest,
+            ecmaVersion: 'latest',
+            sourceType: 'module',
+            parserOptions: {
+                ecmaFeatures: { jsx: true },
             },
+            globals: {
+                ...globals.browser,  // File, FormData, XMLHttpRequest, etc.
+                ...globals.jest,     // describe, test, expect, jest, etc.
+            },
+        },
+
+        settings: {
+            react: { version: 'detect' },
+        },
+
+        rules: {
+            ...react.configs.recommended.rules,
+            ...reactHooks.configs.recommended.rules,
+            'react/react-in-jsx-scope': 'off',
         },
     },
 

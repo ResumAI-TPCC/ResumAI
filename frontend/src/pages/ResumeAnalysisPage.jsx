@@ -49,20 +49,20 @@ function ResumeAnalysisPage() {
 
   const handleUpload = async () => {
     if (!selectedFile) return
-    
+
     setUploadError(null)
-    
+
     try {
       setIsUploading(true)
       const response = await uploadResume(selectedFile)
-      
-      if (response.status === 'created' && response.data) {
+
+      if (response.status === 'ok' && response.data) {
         const newSessionId = response.data.session_id
         const expireAt = response.data.expire_at
-        
+
         setSessionId(newSessionId)
         setUploadedFile(selectedFile)
-        
+
         // Save session to localStorage only on upload success
         // Include current form values for session restore
         saveSession({
