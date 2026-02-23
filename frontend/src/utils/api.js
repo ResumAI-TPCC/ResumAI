@@ -143,13 +143,12 @@ export async function analyzeResume(sessionId) {
 /**
  * Match resume with job description
  * @param {string} sessionId - Session ID
- * @param {string} resumeContent - Resume Content
  * @param {string} jobDescription - Job description text
  * @param {string} jobTitle - Job title (optional)
  * @param {string} companyName - Company name (optional)
  * @returns {Promise<Object>} Match score and suggestions
  */
-export async function matchResumeWithJob(sessionId, resumeContent, jobDescription, jobTitle = '', companyName = '') {
+export async function matchResumeWithJob(sessionId, jobDescription, jobTitle = '', companyName = '') {
   const response = await fetch(`${API_BASE_URL}/resumes/match`, {
     method: 'POST',
     headers: {
@@ -157,7 +156,6 @@ export async function matchResumeWithJob(sessionId, resumeContent, jobDescriptio
     },
     body: JSON.stringify({
       session_id: sessionId,
-      resume_content: resumeContent,
       job_description: jobDescription,
       job_title: jobTitle,
       company_name: companyName,
