@@ -17,11 +17,21 @@ function ResumeAnalysisPage() {
   const [uploadError, setUploadError] = useState(null)
   const [matchResult, setMatchResult] = useState(null) 
   const [isMatching, setIsMatching] = useState(false)
-
+  
   // Load session data on mount
   useEffect(() => {
     const session = loadSession()
     if (session) {
+      // Check if session has expired
+      if (session.expire_at) {
+        const expireDate = new Date(session.expire_at)
+        if (expireDate < new Date()) {
+          console.log('Session expired, clearing...')
+          clearStorageSession()
+          return
+        }
+      }
+      
       setSessionId(session.session_id || null)
       setCompanyName(session.companyName || '')
       setJobTitle(session.jobTitle || '')
@@ -109,7 +119,7 @@ function ResumeAnalysisPage() {
       setIsMatching(true);
       setUploadError(null);
       
-      const result = await matchResumeWithJob(sessionId, resumeContent, jobDescription, jobTitle, companyName);
+      const result = await matchResumeWithJob(sessionId, jobDescription, jobTitle, companyName);
       
       setMatchResult(result); 
       console.log("match score:", result.score);
