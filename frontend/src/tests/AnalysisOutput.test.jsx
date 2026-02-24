@@ -284,7 +284,7 @@ describe('AnalysisOutput Component', () => {
       expect(generateButton).not.toBeDisabled()
     })
 
-    test('Download button is clickable after analysis', async () => {
+    test('Download button is disabled without optimized data', async () => {
       render(<AnalysisOutput sessionId="test-session-123" />)
       fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
       
@@ -292,7 +292,18 @@ describe('AnalysisOutput Component', () => {
         expect(screen.getByRole('button', { name: /Download Polished Resume/i })).toBeInTheDocument()
       })
       
-      // Button should be clickable (feature pending implementation)
+      const downloadButton = screen.getByRole('button', { name: /Download Polished Resume/i })
+      expect(downloadButton).toBeDisabled()
+    })
+
+    test('Download button is enabled with optimized data', async () => {
+      render(<AnalysisOutput sessionId="test-session-123" optimizedData={{ encoded_file: 'dGVzdA==' }} />)
+      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Download Polished Resume/i })).toBeInTheDocument()
+      })
+      
       const downloadButton = screen.getByRole('button', { name: /Download Polished Resume/i })
       expect(downloadButton).not.toBeDisabled()
     })
