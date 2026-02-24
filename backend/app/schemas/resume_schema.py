@@ -140,8 +140,7 @@ class ResumeOptimizeRequest(BaseModel):
 
 class OptimizeResponseData(BaseModel):
     """Inner data for optimize response"""
-    encoded_file: str = Field(..., description="Base64 encoded PDF file")
-    optimized_html: str = Field("", description="HTML preview of optimized resume")
+    encoded_file: str = Field(..., description="Base64 encoded optimized file")
 
 
 class ResumeOptimizeResponse(BaseModel):

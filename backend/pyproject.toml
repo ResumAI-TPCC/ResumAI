@@ -15,7 +15,6 @@ dependencies = [
     "uvicorn[standard] (==0.27.0)",
     "httpx (==0.26.0)",
     "google-cloud-storage (==2.16.0)",
-    "google-genai (>=1.0.0)",
     "python-dotenv (==1.0.0)",
     "pydantic-settings (==2.1.0)",
     "python-multipart (==0.0.18)",
@@ -24,9 +23,7 @@ dependencies = [
     "pytest (>=9.0.2,<10.0.0)",
     "pytest-asyncio (>=1.0.0)",
     "ruff (>=0.14.10,<0.15.0)",
-    "olefile (>=0.47,<0.48)",
-    "markdown (>=3.5.0,<4.0.0)",
-    "xhtml2pdf (>=0.2.11,<1.0.0)"
+    "olefile (>=0.47,<0.48)"
 ]
 
 
