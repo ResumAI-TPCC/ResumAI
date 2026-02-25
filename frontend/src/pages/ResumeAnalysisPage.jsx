@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
 import AnalysisOutput from '../components/AnalysisOutput'
 import ResumePreview from '../components/ResumePreview'
-import { uploadResume } from '../utils/api'
+import { uploadResume, optimizeResume } from '../utils/api'
 import { saveSession, loadSession, clearSession as clearStorageSession } from '../utils/storage'
 
 function ResumeAnalysisPage() {
@@ -14,6 +14,8 @@ function ResumeAnalysisPage() {
   const [uploadedFile, setUploadedFile] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
+  const [optimizedData, setOptimizedData] = useState(null)
+  const [isOptimizing, setIsOptimizing] = useState(false)
 
   // Load session data on mount
   useEffect(() => {
@@ -98,6 +100,43 @@ function ResumeAnalysisPage() {
     setJobDescription(value)
   }
 
+  const handleOptimize = async () => {
+    if (!sessionId) return
+    setIsOptimizing(true)
+    try {
+      const result = await optimizeResume(sessionId, jobDescription || '', 'modern')
+      setOptimizedData(result.data)
+    } catch (error) {
+      console.error('Optimize error:', error)
+    } finally {
+      setIsOptimizing(false)
+    }
+  }
+
+  const handleDownloadPdf = () => {
+    if (!optimizedData?.encoded_file) return
+    try {
+      const byteCharacters = atob(optimizedData.encoded_file)
+      const byteNumbers = new Array(byteCharacters.length)
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i)
+      }
+      const byteArray = new Uint8Array(byteNumbers)
+      const blob = new Blob([byteArray], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'optimized_resume.pdf'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('PDF download error:', error)
+      alert('Failed to download PDF. The file may be corrupted. Please try generating again.')
+    }
+  }
+
   const handleClearSession = () => {
     if (window.confirm('Are you sure you want to clear the session? All data will be lost.')) {
       clearStorageSession()
@@ -108,6 +147,7 @@ function ResumeAnalysisPage() {
       setSelectedFile(null)
       setUploadedFile(null)
       setUploadError(null)
+      setOptimizedData(null)
     }
   }
 
@@ -138,12 +178,17 @@ function ResumeAnalysisPage() {
         jobDescription={jobDescription}
         companyName={companyName}
         jobTitle={jobTitle}
+        isOptimizing={isOptimizing}
+        optimizedData={optimizedData}
+        onGenerateResume={handleOptimize}
+        onDownloadResume={handleDownloadPdf}
       />
 
       {/* Right preview area */}
       <ResumePreview
         sessionId={sessionId}
         uploadedFile={uploadedFile}
+        optimizedHtml={optimizedData?.optimized_html || ''}
       />
     </div>
   )

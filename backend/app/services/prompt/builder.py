@@ -4,7 +4,12 @@ Constructs prompts for LLM based on resume content and JD.
 """
 
 from typing import Optional
-from .templates import ANALYZE_PROMPT_TEMPLATE, MATCH_PROMPT_TEMPLATE, OPTIMIZE_PROMPT_TEMPLATE
+from .templates import (
+    ANALYZE_PROMPT_TEMPLATE,
+    MATCH_PROMPT_TEMPLATE,
+    OPTIMIZE_NO_JD_PROMPT_TEMPLATE,
+    OPTIMIZE_WITH_JD_PROMPT_TEMPLATE,
+)
 
 
 class PromptBuilder:
@@ -34,15 +39,28 @@ class PromptBuilder:
         )
 
     def build_optimize_prompt(self, resume_content: str, job_description: Optional[str] = None, template: str = "modern") -> str:
-        """Build a prompt for resume optimization."""
+        """
+        Build a prompt for resume optimization.
+
+        RA-45: Without JD - general optimization for better quality.
+        RA-46: With JD - targeted optimization aligned with job description.
+        """
         if not resume_content or not resume_content.strip():
             raise ValueError("resume_content cannot be empty")
 
-        return OPTIMIZE_PROMPT_TEMPLATE.format(
-            resume_content=resume_content.strip(),
-            job_description=job_description.strip() if job_description else "None provided",
-            template=template
-        )
+        if job_description and job_description.strip():
+            # RA-46: Optimize with JD
+            return OPTIMIZE_WITH_JD_PROMPT_TEMPLATE.format(
+                resume_content=resume_content.strip(),
+                job_description=job_description.strip(),
+                template=template,
+            )
+        else:
+            # RA-45: Optimize without JD
+            return OPTIMIZE_NO_JD_PROMPT_TEMPLATE.format(
+                resume_content=resume_content.strip(),
+                template=template,
+            )
 
 
 # Singleton instance
