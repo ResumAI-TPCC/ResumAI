@@ -64,8 +64,8 @@ export async function uploadResume(file, onProgress = null) {
       reject(new Error('Upload cancelled'));
     });
 
-    // Send request to /api/resumes (per design doc)
-    xhr.open('POST', `${API_BASE_URL}/resumes`);
+    // Send request to /api/resumes/ (trailing slash required by FastAPI router)
+    xhr.open('POST', `${API_BASE_URL}/resumes/`);
     xhr.send(formData);
   });
 }
