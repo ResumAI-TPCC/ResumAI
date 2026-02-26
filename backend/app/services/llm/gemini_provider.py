@@ -44,16 +44,23 @@ class GeminiProvider(BaseLLMProvider):
         self.timeout = settings.GEMINI_TIMEOUT
         self.max_retries = settings.GEMINI_MAX_RETRIES
         self.retry_delay = settings.GEMINI_RETRY_DELAY
+        self.helicone_api_key = settings.HELICONE_API_KEY
 
         if not self.api_key:
             logger.warning("GEMINI_API_KEY is not set. LLM features will not work.")
 
         # Construct base URL with model and API key
-        self.base_url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{self.model}:generateContent?key={self.api_key}"
-        )
-
+        if self.helicone_api_key:
+            self.base_url = (
+                f"https://gateway.helicone.ai/v1beta/models/"
+                f"{{model}}:generateContent?key={self.api_key}"
+            )
+        else:
+            self.base_url = (
+                f"https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{{model}}:generateContent?key={self.api_key}"
+            )
+    
     @property
     def provider_name(self) -> str:
         """Return provider name"""
@@ -123,10 +130,7 @@ class GeminiProvider(BaseLLMProvider):
     def _build_url(self, model: Optional[str] = None) -> str:
         """Build API URL with model"""
         use_model = model or self.model
-        return (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{use_model}:generateContent?key={self.api_key}"
-        )
+        return self.base_url.format(model=use_model)
 
     def _build_payload(
         self,
@@ -146,11 +150,19 @@ class GeminiProvider(BaseLLMProvider):
         }
 
     async def _make_request(self, url: str, payload: dict) -> Dict[str, Any]:
-        """Send HTTP request to Gemini API"""
+        """Send HTTP request to Gemini API via Helicone Proxy"""
         headers = {
             "Content-Type": "application/json",
         }
 
+        if self.helicone_api_key:
+            headers.update({
+                "Helicone-Auth": f"Bearer {self.helicone_api_key}",
+                "Helicone-Target-URL": "https://generativelanguage.googleapis.com",
+                "Helicone-Property-Provider": "Gemini",
+                "Helicone-Property-Feature": "Resume-Optimization"
+            })
+        
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(

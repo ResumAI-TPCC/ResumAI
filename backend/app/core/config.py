@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     GCP_PRIVATE_KEY: str = ""
     GCP_PRIVATE_KEY_ID: str = ""
 
+    # Helicone settings
+    HELICONE_API_KEY: str = ""
+
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance"""
