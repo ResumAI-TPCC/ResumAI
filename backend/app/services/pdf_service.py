@@ -89,15 +89,24 @@ a {
 
 def markdown_to_pdf(markdown_content: str) -> bytes:
     """
-    Convert Markdown text to a PDF byte stream.
+    Convert Markdown text to a professionally styled PDF byte stream.
+    
+    This function implements a three-stage pipeline:
+    1. Convert Markdown to HTML using python-markdown
+    2. Apply professional resume CSS styling
+    3. Generate PDF using xhtml2pdf (pisa)
+    
+    The resulting PDF is formatted for A4 paper with professional typography,
+    section headers, and consistent spacing suitable for resume presentation.
 
     Args:
-        markdown_content: The optimized resume in Markdown format.
-
+        markdown_content: The optimized resume in Markdown format
+        
     Returns:
-        PDF content as bytes.
-
+        bytes: PDF file content ready for download or storage
+        
     Raises:
+        ValueError: If markdown_content is empty or invalid
         ValueError: If conversion fails.
     """
     # Step 1: Markdown → HTML

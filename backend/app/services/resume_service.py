@@ -32,13 +32,81 @@ from app.schemas.resume_schema import (
     ResumeUploadData,
     WorkExperience,
 )
+from app.core.error_templates import (
+    INVALID_SESSION_ID,
+    SESSION_EXPIRED,
+    SESSION_NOT_FOUND,
+    INVALID_FILE_TYPE,
+    MISSING_FILE,
+    SCANNED_PDF_NOT_SUPPORTED,
+    INVALID_PDF_FORMAT,
+    PDF_READ_ERROR,
+    EMPTY_FILE,
+    GCS_UPLOAD_FAILED,
+    GCS_BUCKET_NOT_FOUND,
+)
 
 # Configuration - Supported file types per design doc
 ALLOWED_EXTS = {".pdf", ".docx", ".doc", ".txt"}
-MAX_SIZE_BYTES = 5 * 1024 * 1024  # 5MB
 
-# Global GCS client instance for reuse
-_gcs_client: Optional[storage.Client] = None
+# UUID validation pattern
+UUID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+)
+
+
+# ============================================================================
+# Session Validation Functions
+# ============================================================================
+
+
+def _validate_session_id(session_id: str) -> None:
+    """Validate session ID is a proper UUID format to prevent path traversal attacks.
+    
+    Args:
+        session_id: Session ID to validate
+        
+    Raises:
+        HTTPException(400): If session_id is not a valid UUID format
+    """
+    if not session_id or not UUID_PATTERN.match(session_id):
+        raise HTTPException(
+            status_code=INVALID_SESSION_ID.code,
+            detail=INVALID_SESSION_ID.detail,
+        )
+
+
+def _validate_session_expiry(blob: storage.Blob) -> None:
+    """Validate that the session has not expired based on blob metadata.
+    
+    Args:
+        blob: GCS blob containing the resume file
+        
+    Raises:
+        HTTPException(404): If session has expired
+    """
+    if not blob.metadata:
+        # If no metadata, assume it's an old file without expiration - allow it
+        return
+    
+    expire_at_str = blob.metadata.get("expire_at")
+    if not expire_at_str:
+        # No expiration set, allow it
+        return
+    
+    try:
+        expire_at = datetime.fromisoformat(expire_at_str.replace("Z", "+00:00"))
+        now = datetime.now(timezone.utc)
+        
+        if now > expire_at:
+            raise HTTPException(
+                status_code=SESSION_EXPIRED.code,
+                detail=SESSION_EXPIRED.detail,
+            )
+    except ValueError as e:
+        # Invalid date format in metadata, log but allow access
+        # (Don't break functionality due to metadata issues)
+        pass
 
 
 # ============================================================================
@@ -47,35 +115,39 @@ _gcs_client: Optional[storage.Client] = None
 
 
 def _get_gcs_client() -> storage.Client:
-    """Get or create a GCS client instance."""
-    global _gcs_client
-    if _gcs_client is not None:
-        return _gcs_client
-
+    """
+    Create a new GCS client instance for each operation.
+    
+    The Google Cloud Storage SDK handles connection pooling internally,
+    so creating new client instances per operation is efficient and avoids
+    global state management issues.
+    
+    Returns:
+        storage.Client: New GCS client instance
+    """
     credentials = _build_service_account_credentials()
 
     # Use Application Default Credentials (ADC) if no explicit credentials provided
     if credentials is not None:
-        _gcs_client = storage.Client(
+        return storage.Client(
             project=settings.GCP_PROJECT_ID or None, credentials=credentials
         )
     else:
-        _gcs_client = storage.Client(project=settings.GCP_PROJECT_ID or None)
-    return _gcs_client
+        return storage.Client(project=settings.GCP_PROJECT_ID or None)
 
 
 def _validate_filename(filename: str) -> None:
     """Validate file extension and name."""
     if not filename:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Missing filename"
+            status_code=MISSING_FILE.code, detail=MISSING_FILE.detail
         )
 
     ext = Path(filename).suffix.lower()
     if ext not in ALLOWED_EXTS:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file type: {ext}. Allowed: {sorted(ALLOWED_EXTS)}",
+            status_code=INVALID_FILE_TYPE.code,
+            detail=INVALID_FILE_TYPE.detail,
         )
 
 
@@ -115,15 +187,29 @@ def _validate_pdf_content(content: bytes) -> None:
 
         if not has_text:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Scanned PDFs are not supported. Please upload a text-based PDF.",
+                status_code=SCANNED_PDF_NOT_SUPPORTED.code,
+                detail=SCANNED_PDF_NOT_SUPPORTED.detail,
             )
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except (IOError, OSError) as exc:
+        # File I/O errors
+        raise HTTPException(
+            status_code=PDF_READ_ERROR.code,
+            detail=PDF_READ_ERROR.detail,
+        ) from exc
+    except ValueError as exc:
+        # PDF parsing errors
+        raise HTTPException(
+            status_code=INVALID_PDF_FORMAT.code,
+            detail=INVALID_PDF_FORMAT.detail,
+        ) from exc
     except Exception as exc:
-        if isinstance(exc, HTTPException):
-            raise exc
+        # Unexpected errors
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid or corrupted PDF file: {exc}",
+            detail=f"PDF validation failed: {str(exc)}",
         ) from exc
 
 
@@ -139,16 +225,30 @@ def _parse_pdf_to_text(content: bytes) -> str:
         result = "\n".join(full_text).strip()
         if not result:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="No extractable text found in PDF. Scanned PDFs are not supported.",
+                status_code=SCANNED_PDF_NOT_SUPPORTED.code,
+                detail=SCANNED_PDF_NOT_SUPPORTED.detail,
             )
         return result
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except (IOError, OSError) as exc:
+        # File I/O errors
+        raise HTTPException(
+            status_code=PDF_READ_ERROR.code,
+            detail=PDF_READ_ERROR.detail,
+        ) from exc
+    except ValueError as exc:
+        # PDF parsing/format errors
+        raise HTTPException(
+            status_code=INVALID_PDF_FORMAT.code,
+            detail=INVALID_PDF_FORMAT.detail,
+        ) from exc
     except Exception as exc:
-        if isinstance(exc, HTTPException):
-            raise exc
+        # Unexpected errors
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Failed to parse PDF content: {exc}",
+            detail=f"PDF parsing error: {str(exc)}",
         ) from exc
 
 
@@ -187,16 +287,30 @@ def _parse_docx_to_markdown(content: bytes) -> str:
         result = "\n\n".join(md_lines).strip()
         if not result:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="No text found in DOCX file.",
+                status_code=EMPTY_FILE.code,
+                detail=EMPTY_FILE.detail,
             )
         return result
-    except Exception as exc:
-        if isinstance(exc, HTTPException):
-            raise exc
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except (IOError, OSError) as exc:
+        # File I/O errors
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Failed to parse DOCX content: {exc}",
+            detail=f"Could not read DOCX file: {str(exc)}",
+        ) from exc
+    except (AttributeError, KeyError) as exc:
+        # DOCX structure/format errors
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid DOCX format: {str(exc)}",
+        ) from exc
+    except Exception as exc:
+        # Unexpected errors
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"DOCX parsing error: {str(exc)}",
         ) from exc
 
 
@@ -246,8 +360,23 @@ def _parse_doc_to_text(content: bytes) -> str:
 
 async def get_resume_content(session_id: str) -> str:
     """
-    Download and parse resume content from GCS.
+    Retrieve resume file from GCS by session_id and return extracted text.
+    Validates session ID format and expiration before retrieval.
+    
+    Args:
+        session_id: UUID session identifier
+        
+    Returns:
+        str: Extracted text content from resume
+        
+    Raises:
+        HTTPException(400): Invalid session ID format
+        HTTPException(404): Session expired or not found
+        HTTPException(422): Unsupported file type
     """
+    # Validate session ID format to prevent path traversal
+    _validate_session_id(session_id)
+    
     client = _get_gcs_client()
     bucket = client.bucket(settings.GCS_BUCKET_NAME)
     
@@ -257,12 +386,16 @@ async def get_resume_content(session_id: str) -> str:
     
     if not blobs:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No resume file found for session: {session_id}",
+            status_code=SESSION_NOT_FOUND.code,
+            detail=SESSION_NOT_FOUND.detail,
         )
     
     # Strategy: Take the first found file in the session directory
     target_blob = blobs[0]
+    
+    # Validate session has not expired 
+    _validate_session_expiry(target_blob)
+    
     filename = target_blob.name
     content_bytes = await run_in_threadpool(target_blob.download_as_bytes)
     
@@ -300,8 +433,8 @@ async def upload_resume_to_gcs(file: UploadFile) -> ResumeUploadResponse:
 
     if not settings.GCS_BUCKET_NAME:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="GCS bucket not configured",
+            status_code=GCS_BUCKET_NOT_FOUND.code,
+            detail=GCS_BUCKET_NOT_FOUND.detail,
         )
 
     file_id = str(uuid.uuid4())
@@ -324,12 +457,14 @@ async def upload_resume_to_gcs(file: UploadFile) -> ResumeUploadResponse:
         )
     except Exception as exc:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"GCS upload failed: {exc}",
+            status_code=GCS_UPLOAD_FAILED.code,
+            detail=GCS_UPLOAD_FAILED.detail,
         ) from exc
 
-    # Set expiration to 24 hours from now
-    expire_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+    # Set expiration time based on configuration
+    expire_at = (
+        datetime.now(timezone.utc) + timedelta(hours=settings.SESSION_EXPIRY_HOURS)
+    ).isoformat()
 
     return ResumeUploadResponse(
         code=201,
@@ -343,6 +478,7 @@ async def upload_resume_to_gcs(file: UploadFile) -> ResumeUploadResponse:
 
 async def _read_file_content(file: UploadFile) -> bytes:
     """Read file content with size limit check."""
+    max_size = settings.MAX_FILE_SIZE_MB * 1024 * 1024
     size = 0
     chunks = []
     try:
@@ -351,10 +487,10 @@ async def _read_file_content(file: UploadFile) -> bytes:
             if not chunk:
                 break
             size += len(chunk)
-            if size > MAX_SIZE_BYTES:
+            if size > max_size:
                 raise HTTPException(
-                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                    detail=f"File too large. Max {MAX_SIZE_BYTES // (1024 * 1024)}MB",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File too large. Max {settings.MAX_FILE_SIZE_MB}MB",
                 )
             chunks.append(chunk)
     finally:
@@ -365,10 +501,17 @@ async def _read_file_content(file: UploadFile) -> bytes:
 def _do_gcs_upload(
     content: bytes, object_name: str, content_type: Optional[str]
 ) -> None:
-    """Synchronous GCS upload operation."""
+    """Synchronous GCS upload operation with expiration metadata."""
     client = _get_gcs_client()
     bucket = client.bucket(settings.GCS_BUCKET_NAME)
     blob = bucket.blob(object_name)
+    
+    # Set expiration metadata
+    expire_at = (
+        datetime.now(timezone.utc) + timedelta(hours=settings.SESSION_EXPIRY_HOURS)
+    ).isoformat()
+    blob.metadata = {"expire_at": expire_at}
+    
     blob.upload_from_string(
         content, content_type=content_type or "application/octet-stream"
     )

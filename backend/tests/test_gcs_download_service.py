@@ -111,7 +111,7 @@ class TestGCSDownloadService:
         with pytest.raises(HTTPException) as exc_info:
             _validate_filename("")
         assert exc_info.value.status_code == 400
-        assert "Missing filename" in str(exc_info.value.detail)
+        assert "No file provided" in str(exc_info.value.detail)
 
 
 class TestContentParsing:

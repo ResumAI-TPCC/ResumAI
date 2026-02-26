@@ -6,14 +6,21 @@ Uses pydantic-settings to manage environment variables and configuration
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
+
+from dotenv import load_dotenv
+# Get the path to .env file (backend/.env)
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+ENV_FILE = BASE_DIR / ".env"
+
+# Load .env file explicitly into environment variables
+load_dotenv(ENV_FILE, override=False)
 
 
 class Settings(BaseSettings):
     """Application settings class - reads from environment variables"""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",  # Ignore undefined environment variables
     )
@@ -44,8 +51,11 @@ class Settings(BaseSettings):
     GCP_PRIVATE_KEY: str = ""
     GCP_PRIVATE_KEY_ID: str = ""
 
-    # Helicone settings
-    HELICONE_API_KEY: str = ""
+    # Security settings
+    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+
+    # File upload settings
+    MAX_FILE_SIZE_MB: int = 5
 
 @lru_cache
 def get_settings() -> Settings:

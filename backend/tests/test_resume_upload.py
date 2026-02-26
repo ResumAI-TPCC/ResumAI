@@ -174,5 +174,5 @@ def test_upload_resume_file_too_large(monkeypatch):
     
     response = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
     
-    assert response.status_code == 413
+    assert response.status_code == 400
     assert "too large" in response.json()["detail"].lower()
