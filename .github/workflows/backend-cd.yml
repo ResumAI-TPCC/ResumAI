@@ -43,6 +43,14 @@ jobs:
         docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/backend-test:${{ github.sha }}
 
     - name: 'Deploy to Cloud Run'
+      env:
+        ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
+        LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+        GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME }}
+        GCS_OBJECT_PREFIX: ${{ secrets.GCS_OBJECT_PREFIX }}
       run: |
         gcloud run deploy test-service \
           --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/backend-test:${{ github.sha }} \
@@ -50,4 +58,11 @@ jobs:
           --platform managed \
           --port 8000 \
           --allow-unauthenticated \
-          --set-env-vars LLM_PROVIDER=${{ secrets.LLM_PROVIDER }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},GEMINI_MODEL=${{ secrets.GEMINI_MODEL }},GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET_NAME }},GCS_OBJECT_PREFIX=${{ secrets.GCS_OBJECT_PREFIX }},ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }},APP_VERSION=QA
+          --update-env-vars "LLM_PROVIDER=$LLM_PROVIDER" \
+          --update-env-vars "GEMINI_API_KEY=$GEMINI_API_KEY" \
+          --update-env-vars "GEMINI_MODEL=$GEMINI_MODEL" \
+          --update-env-vars "GCP_PROJECT_ID=$GCP_PROJECT_ID" \
+          --update-env-vars "GCS_BUCKET_NAME=$GCS_BUCKET_NAME" \
+          --update-env-vars "GCS_OBJECT_PREFIX=$GCS_OBJECT_PREFIX" \
+          --update-env-vars "ALLOWED_ORIGINS=$ALLOWED_ORIGINS" \
+          --update-env-vars "APP_VERSION=QA"
