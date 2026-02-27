@@ -36,7 +36,10 @@ def create_app() -> FastAPI:
     # Configure CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Should restrict to specific domains in production
+        allow_origins=[
+            "https://resumai-platform.web.app",
+            "https://resumai-platform.firebaseapp.com",
+        ],  # Should restrict to specific domains in production
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
