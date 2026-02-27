@@ -14,7 +14,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000
  * Request: multipart/form-data with 'file' field
  * Response: { status, data: { sid, timestamp, expireAt } }
  * 
- * @param {File} file - The resume file to upload (PDF, DOCX, DOC, TXT, max 5MB)
+ * @param {File} file - The resume file to upload (PDF, DOCX, max 10MB)
  * @param {function} onProgress - Optional progress callback (0-100)
  * @returns {Promise<Object>} - Response with sid and metadata
  */
@@ -64,8 +64,8 @@ export async function uploadResume(file, onProgress = null) {
       reject(new Error('Upload cancelled'));
     });
 
-    // Send request to /api/resumes (per design doc)
-    xhr.open('POST', `${API_BASE_URL}/resumes`);
+    // Send request to /api/resumes/ (trailing slash required by FastAPI router)
+    xhr.open('POST', `${API_BASE_URL}/resumes/`);
     xhr.send(formData);
   });
 }
@@ -123,9 +123,9 @@ export async function analyzeResume(sessionId) {
   } catch (error) {
     // Re-throw validation errors
     if (error.message.includes('Session ID is required') ||
-        error.message.includes('Resume not found') ||
-        error.message.includes('Invalid request') ||
-        error.message.includes('Server error')) {
+      error.message.includes('Resume not found') ||
+      error.message.includes('Invalid request') ||
+      error.message.includes('Server error')) {
       throw error;
     }
 

@@ -15,10 +15,10 @@ from app.core.config import settings
 async def lifespan(app: FastAPI):
     """Application lifecycle management"""
     # Startup
-    print(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} starting...")
+    print(f"{settings.APP_NAME} v{settings.APP_VERSION} starting...")
     yield
     # Shutdown
-    print(f"👋 {settings.APP_NAME} shutting down...")
+    print(f"{settings.APP_NAME} shutting down...")
 
 
 def create_app() -> FastAPI:
@@ -36,7 +36,10 @@ def create_app() -> FastAPI:
     # Configure CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Should restrict to specific domains in production
+        allow_origins=[
+            "https://resumai-platform.web.app",
+            "https://resumai-platform.firebaseapp.com",
+        ],  # Should restrict to specific domains in production
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

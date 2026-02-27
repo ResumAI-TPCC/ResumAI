@@ -17,11 +17,13 @@ function ResumePreview({
   uploadedFile, 
   matchScore, 
   isOptimizing, 
-  optimizedFile,
+  optimizedData,
   onOptimize,
   onDownload 
 }) {
   const [isGenerateToggled, setIsGenerateToggled] = useState(false)
+  const optimizedHtml = optimizedData?.optimized_html || ''
+  const hasOptimizedFile = Boolean(optimizedData?.encoded_file)
 
   // Props validation
   void sessionId
@@ -43,11 +45,10 @@ function ResumePreview({
   }
 
   return (
-    <aside className="w-80 bg-white border-l border-gray-200 p-6 h-screen overflow-y-auto flex flex-col">
-      {/* Header: Title + small match badge */}
-      <div className="flex items-center justify-between mb-4">
+    <aside className="w-80 bg-white border-l border-gray-200 h-screen flex flex-col">
+      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
         <div>
-          <p className="font-bold text-lg text-gray-800">Resume Preview</p>
+          <h2 className="font-bold text-lg text-gray-800">Resume Preview</h2>
           <p className="text-xs text-gray-500">Document Preview</p>
         </div>
         {matchScore !== null && matchScore !== undefined ? (
@@ -56,6 +57,34 @@ function ResumePreview({
           </div>
         ) : (
           <div className="text-xs text-gray-400">&nbsp;</div>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4">
+        {optimizedHtml ? (
+          <>
+            <style>{`
+              .resume-preview h1 { font-size: 1.25rem; font-weight: 700; color: #1a1a2e; border-bottom: 2px solid #1a1a2e; padding-bottom: 4px; margin-bottom: 8px; text-align: center; }
+              .resume-preview h2 { font-size: 1rem; font-weight: 600; color: #1a1a2e; border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; margin-top: 14px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+              .resume-preview h3 { font-size: 0.9rem; font-weight: 600; color: #333; margin-top: 8px; margin-bottom: 4px; }
+              .resume-preview p { margin: 2px 0 6px 0; }
+              .resume-preview ul { padding-left: 16px; margin: 2px 0; }
+              .resume-preview li { margin-bottom: 2px; }
+              .resume-preview strong { color: #1a1a2e; }
+              .resume-preview em { color: #555; }
+            `}</style>
+            <div
+              className="resume-preview text-sm text-gray-700 leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: optimizedHtml }}
+            />
+          </>
+        ) : (
+          <div className="text-gray-400 text-center mt-8">
+            <svg className="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="text-sm">Optimized resume will appear here after generation</p>
+          </div>
         )}
       </div>
 
@@ -115,7 +144,7 @@ function ResumePreview({
           )}
 
           {/* Optimized File Info */}
-          {optimizedFile && (
+          {hasOptimizedFile && (
             <div className="bg-green-50 border border-green-200 rounded-md p-3">
               <p className="text-xs text-green-700 font-medium mb-2">? Polished Resume Ready</p>
               <p className="text-xs text-green-600">
@@ -129,7 +158,7 @@ function ResumePreview({
         <div className="border-t border-gray-200 pt-6 pb-4">
           <button
             onClick={handleDownload}
-            disabled={!optimizedFile || !isGenerateToggled || !sessionId}
+            disabled={!hasOptimizedFile || !isGenerateToggled || !sessionId}
             className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -158,9 +187,9 @@ ResumePreview.propTypes = {
   }),
   matchScore: PropTypes.number,
   isOptimizing: PropTypes.bool,
-  optimizedFile: PropTypes.shape({
-    name: PropTypes.string,
-    content: PropTypes.string,
+  optimizedData: PropTypes.shape({
+    encoded_file: PropTypes.string,
+    optimized_html: PropTypes.string,
   }),
   onOptimize: PropTypes.func,
   onDownload: PropTypes.func,
