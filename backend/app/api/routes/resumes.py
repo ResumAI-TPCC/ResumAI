@@ -4,7 +4,6 @@ Resume API Routes
 
 from __future__ import annotations
 
-import base64
 from fastapi import APIRouter, File, UploadFile, HTTPException, status
 
 from app.schemas.resume_schema import (
@@ -23,6 +22,7 @@ from app.schemas.resume_schema import (
     OptimizeResponseData,
 )
 from app.services.resume_service import get_resume_content, upload_resume_to_gcs
+from app.services.file_service import generate_and_encode_resume
 from app.services.prompt.builder import get_prompt_builder
 from app.services.llm.llm_service import get_llm_service
 from app.services.llm.exceptions import (
@@ -218,9 +218,10 @@ async def optimize_resume(request: ResumeOptimizeRequest):
         llm = get_llm_service()
         result = await llm.optimize_resume(prompt)
 
-        # 4. Map to response (Encoding content as base64 for download simulation if needed)
-        # For MVP, we might return raw markdown or a base64 encoded version as specified in doc
-        encoded_content = base64.b64encode(result.optimized_content.encode()).decode()
+        # 4. Generate and encode file for download
+        # Note: Using markdown format for MVP. PDF generation is available
+        # in app.services.pdf_service and reserved for future use.
+        encoded_content = generate_and_encode_resume(result.optimized_content)
 
         return ResumeOptimizeResponse(
             code=200,
