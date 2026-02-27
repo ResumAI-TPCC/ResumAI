@@ -8,7 +8,7 @@ See: https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/
 
 import asyncio
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from google import genai
 from google.genai import types

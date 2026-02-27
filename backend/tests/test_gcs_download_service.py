@@ -6,7 +6,6 @@ and parsing their content for further processing.
 """
 
 import pytest
-from unittest.mock import patch
 
 
 # Mock classes for GCS client
