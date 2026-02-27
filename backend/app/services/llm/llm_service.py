@@ -6,9 +6,11 @@ Handles prompt sending and response parsing
 import json
 import logging
 import re
+from functools import lru_cache
 from typing import Optional
 
-from .gemini_provider import GeminiProvider
+from .factory import get_llm_provider
+from .base import BaseLLMProvider
 from .schemas import (
     Suggestion,
     AnalyzeResult,
@@ -25,27 +27,25 @@ class LLMService:
     LLM Service class - Middle layer
     """
 
-    def __init__(self, provider: Optional[GeminiProvider] = None):
-        """Initialize LLM service with Gemini provider"""
-        self.provider = provider or GeminiProvider()
+    def __init__(self, provider: Optional[BaseLLMProvider] = None):
+        """Initialize LLM service with provider from factory"""
+        self.provider = provider or get_llm_provider()
 
     async def analyze_resume(self, prompt: str) -> AnalyzeResult:
         """Analyze resume and return structured suggestions"""
-        data = await self.provider.send_prompt(prompt)
-        raw_content = self.provider._extract_content(data)
-
+        response = await self.provider.analyze(prompt, "")  # Pass empty string for job_description
+        
         # Parse response into structured format
-        suggestions = self._parse_suggestions(raw_content, include_example=True)
+        suggestions = self._parse_suggestions(response.content, include_example=True)
         return AnalyzeResult(suggestions=suggestions)
 
     async def match_resume(self, prompt: str) -> MatchResult:
         """Match resume with JD and return score with suggestions"""
-        data = await self.provider.send_prompt(prompt)
-        raw_content = self.provider._extract_content(data)
-
+        response = await self.provider.match(prompt, "")  # Pass empty string for job_description
+        
         # Parse response into structured format
-        match_score, breakdown = self._parse_match_score(raw_content)
-        suggestions = self._parse_suggestions(raw_content, include_action=True)
+        match_score, breakdown = self._parse_match_score(response.explanation)
+        suggestions = self._parse_suggestions(response.explanation, include_action=True)
 
         return MatchResult(
             match_score=match_score,
@@ -55,9 +55,8 @@ class LLMService:
 
     async def optimize_resume(self, prompt: str) -> OptimizeResult:
         """Optimize resume and return improved content"""
-        data = await self.provider.send_prompt(prompt)
-        raw_content = self.provider._extract_content(data)
-        return OptimizeResult(optimized_content=raw_content)
+        response = await self.provider.optimize(prompt, "", None)  # Pass empty strings
+        return OptimizeResult(optimized_content=response.content)
 
     def _parse_suggestions(
         self,
@@ -80,8 +79,9 @@ class LLMService:
         if json_match:
             try:
                 return json.loads(json_match.group(1))
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse JSON from markdown block: {e}")
+                logger.debug(f"Content: {json_match.group(1)[:500]}...")
 
         # Try raw JSON
         try:
@@ -94,8 +94,12 @@ class LLMService:
         if match:
             try:
                 return json.loads(match.group())
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse extracted JSON: {e}")
+                logger.debug(f"Extracted JSON preview: {match.group()[:500]}...")
+                # Check if JSON appears truncated
+                if not match.group().rstrip().endswith('}'):
+                    logger.error("JSON appears truncated - response likely cut off due to token limit")
         return None
 
     def _parse_suggestions_from_json(
@@ -160,13 +164,7 @@ class LLMService:
         return score, breakdown
 
 
-# Singleton instance
-_llm_service_instance: Optional[LLMService] = None
-
-
+@lru_cache
 def get_llm_service() -> LLMService:
-    """Get or create LLM service instance"""
-    global _llm_service_instance
-    if _llm_service_instance is None:
-        _llm_service_instance = LLMService()
-    return _llm_service_instance
+    """Get cached LLM service instance (singleton pattern)"""
+    return LLMService()

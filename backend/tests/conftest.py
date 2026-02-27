@@ -24,7 +24,7 @@ from app.main import create_app  # noqa: E402
 @pytest.fixture
 def mock_gcs():
     """Mock GCS client for testing"""
-    with patch("app.services.resume_service._get_gcs_client") as mock_client:
+    with patch("app.services.storage.gcs_service.get_gcs_client") as mock_client:
         mock_bucket = MagicMock()
         mock_blob = MagicMock()
         mock_bucket.blob.return_value = mock_blob

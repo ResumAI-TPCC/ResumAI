@@ -122,18 +122,18 @@ function ResumeAnalysisPage() {
         byteNumbers[i] = byteCharacters.charCodeAt(i)
       }
       const byteArray = new Uint8Array(byteNumbers)
-      const blob = new Blob([byteArray], { type: 'application/pdf' })
+      const blob = new Blob([byteArray], { type: 'text/markdown' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = 'optimized_resume.pdf'
+      link.download = 'optimized_resume.md'
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
     } catch (error) {
-      console.error('PDF download error:', error)
-      alert('Failed to download PDF. The file may be corrupted. Please try generating again.')
+      console.error('Download error:', error)
+      alert('Failed to download resume. Please try generating again.')
     }
   }
 
