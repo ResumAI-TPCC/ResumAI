@@ -4,9 +4,9 @@ Tests for Resume Upload Endpoint (RA-24)
 
 import io
 import pytest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from app.main import create_app
-from app.services import resume_service
 from app.core.config import settings
 
 
@@ -87,12 +87,17 @@ class FakeBucket:
 
     def blob(self, name):
         return FakeBlob(name, self)
+    
+    def exists(self):
+        """Mock bucket.exists() to return True"""
+        return True
 
 
 class FakeBlob:
     def __init__(self, name, bucket):
         self.name = name
         self.bucket = bucket
+        self.metadata = {}
 
     def upload_from_string(self, content, content_type=None):
         self.bucket.blobs[self.name] = content
@@ -108,49 +113,51 @@ class FakeClient:
         return self.bucket_obj
 
 
-def test_resume_upload_success_pdf(monkeypatch):
+def test_resume_upload_success_pdf():
     app = create_app()
     client = TestClient(app)
 
     fake_client = FakeClient()
-    monkeypatch.setattr(resume_service, "_get_gcs_client", lambda: fake_client)
-    monkeypatch.setattr(resume_service.settings, "GCS_BUCKET_NAME", "test-bucket")
-    monkeypatch.setattr(resume_service.settings, "GCS_OBJECT_PREFIX", "resumes")
-    monkeypatch.setattr(resume_service.settings, "GCP_PROJECT_ID", "test-project")
+    
+    # Patch at usage location: where functions are called, not where they're defined
+    with patch("app.services.storage.gcs_service.get_gcs_client", return_value=fake_client), \
+         patch("app.services.resume_service.validate_pdf_content", return_value=None), \
+         patch.object(settings, "GCS_BUCKET_NAME", "test-bucket"), \
+         patch.object(settings, "GCS_OBJECT_PREFIX", "resumes"), \
+         patch.object(settings, "GCP_PROJECT_ID", "test-project"):
+        
+        files = {"file": ("test.pdf", b"%PDF-1.4\nfake\n", "application/pdf")}
+        r = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
 
-    # Mock _validate_pdf_content to avoid pypdf parsing errors with fake content
-    monkeypatch.setattr(resume_service, "_validate_pdf_content", lambda content: None)
-
-    files = {"file": ("test.pdf", b"%PDF-1.4\nfake\n", "application/pdf")}
-    r = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
-
-    assert r.status_code == 201, r.text
-    res = r.json()
-    assert res["status"] == "ok"
-    assert "session_id" in res["data"]
-    assert "expire_at" in res["data"]
-    # Removed extra fields according to Design Doc 4.2.1
-    assert "filename" not in res["data"]
-    assert "storage_path" not in res["data"]
-    assert fake_client.bucket_name == "test-bucket"
-    assert fake_client.bucket_obj.blobs
+        assert r.status_code == 201, r.text
+        res = r.json()
+        assert res["status"] == "ok"
+        assert "session_id" in res["data"]
+        assert "expire_at" in res["data"]
+        # Removed extra fields according to Design Doc 4.2.1
+        assert "filename" not in res["data"]
+        assert "storage_path" not in res["data"]
+        assert fake_client.bucket_name == "test-bucket"
+        assert fake_client.bucket_obj.blobs
 
 
-def test_resume_upload_success_docx(monkeypatch):
+def test_resume_upload_success_docx():
     app = create_app()
     client = TestClient(app)
 
     fake_client = FakeClient()
-    monkeypatch.setattr(resume_service, "_get_gcs_client", lambda: fake_client)
-    monkeypatch.setattr(resume_service.settings, "GCS_BUCKET_NAME", "test-bucket")
-    monkeypatch.setattr(resume_service.settings, "GCS_OBJECT_PREFIX", "resumes")
-    monkeypatch.setattr(resume_service.settings, "GCP_PROJECT_ID", "test-project")
+    
+    # Use unittest.mock.patch to patch functions in their usage context
+    with patch("app.services.storage.gcs_service.get_gcs_client", return_value=fake_client), \
+         patch.object(settings, "GCS_BUCKET_NAME", "test-bucket"), \
+         patch.object(settings, "GCS_OBJECT_PREFIX", "resumes"), \
+         patch.object(settings, "GCP_PROJECT_ID", "test-project"):
+        
+        files = {"file": ("test.docx", b"fake docx content", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
+        r = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
 
-    files = {"file": ("test.docx", b"fake docx content", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
-    r = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
-
-    assert r.status_code == 201, r.text
-    assert r.json()["data"]["session_id"]
+        assert r.status_code == 201, r.text
+        assert r.json()["data"]["session_id"]
 
 
 def test_upload_resume_unsupported_format(monkeypatch):
@@ -174,5 +181,5 @@ def test_upload_resume_file_too_large(monkeypatch):
     
     response = client.post(f"{settings.API_PREFIX}/resumes/", files=files)
     
-    assert response.status_code == 413
+    assert response.status_code == 400
     assert "too large" in response.json()["detail"].lower()

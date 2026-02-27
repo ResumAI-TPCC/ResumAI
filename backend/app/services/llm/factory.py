@@ -67,3 +67,13 @@ def clear_provider_cache() -> None:
     global _provider_instance
     _provider_instance = None
 
+
+# ============================================================================
+# Provider Registration - Register providers at module initialization
+# ============================================================================
+
+from .gemini_provider import GeminiProvider  # noqa: E402
+
+# Register Gemini provider
+register_provider("gemini", GeminiProvider)
+

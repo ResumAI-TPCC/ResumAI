@@ -1,13 +1,18 @@
 """
 Google Gemini LLM Provider Implementation
-Sends prompts to Gemini API and handles responses
+Sends prompts to Gemini API and handles responses using Google GenAI SDK
+
+Note: Migrated from deprecated google-generativeai to google-genai package.
+See: https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
 """
 
 import asyncio
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional
 
-import httpx
+from google import genai
+from google.genai import types
+from google.api_core import exceptions as google_exceptions
 
 from app.core.config import settings
 
@@ -30,7 +35,7 @@ class GeminiProvider(BaseLLMProvider):
 
     Responsibilities:
     - Receive prompts from upstream services
-    - Send HTTP requests to Gemini API
+    - Send requests to Gemini API using official Google GenAI SDK
     - Handle errors (timeout, rate limiting, authentication failures, etc.)
     - Parse responses and return structured results
     """
@@ -38,27 +43,25 @@ class GeminiProvider(BaseLLMProvider):
     def __init__(self, api_key: Optional[str] = None):
         """Initialize Gemini provider with settings from config"""
         self.api_key = api_key or settings.GEMINI_API_KEY
-        self.model = settings.GEMINI_MODEL
+        self.model_name = settings.GEMINI_MODEL
         self.temperature = settings.GEMINI_TEMPERATURE
         self.max_tokens = settings.GEMINI_MAX_TOKENS
         self.timeout = settings.GEMINI_TIMEOUT
         self.max_retries = settings.GEMINI_MAX_RETRIES
         self.retry_delay = settings.GEMINI_RETRY_DELAY
-        self.helicone_api_key = settings.HELICONE_API_KEY
 
         if not self.api_key:
             logger.warning("GEMINI_API_KEY is not set. LLM features will not work.")
-
-        # Construct base URL with model and API key
-        if self.helicone_api_key:
-            self.base_url = (
-                f"https://gateway.helicone.ai/v1beta/models/"
-                f"{{model}}:generateContent?key={self.api_key}"
-            )
+            self.client = None
+            self.model = None
         else:
-            self.base_url = (
-                f"https://generativelanguage.googleapis.com/v1beta/models/"
-                f"{{model}}:generateContent?key={self.api_key}"
+            # Initialize the client with API key
+            self.client = genai.Client(api_key=self.api_key)
+            
+            # Store generation config for model calls
+            self.generation_config = types.GenerateContentConfig(
+                temperature=self.temperature,
+                max_output_tokens=self.max_tokens,
             )
     
     @property
@@ -72,18 +75,18 @@ class GeminiProvider(BaseLLMProvider):
         model: Optional[str] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
-    ) -> Dict[str, Any]:
+    ) -> types.GenerateContentResponse:
         """
-        Send prompt to Gemini API and return raw response
+        Send prompt to Gemini API and return response
 
         Args:
             prompt: The prompt to send
-            model: Optional model override
+            model: Optional model override (not used, set at initialization)
             temperature: Optional temperature override
             max_tokens: Optional max_tokens override
 
         Returns:
-            dict: Raw API response data
+            GenerateContentResponse: API response object
 
         Raises:
             LLMAuthenticationError: Invalid API key
@@ -92,19 +95,33 @@ class GeminiProvider(BaseLLMProvider):
             LLMResponseError: Failed to parse response
             LLMServiceUnavailableError: Service unavailable
         """
-        # Build URL (model might be overridden)
-        url = self._build_url(model)
-        payload = self._build_payload(prompt, temperature, max_tokens)
+        if not self.client:
+            raise LLMAuthenticationError("Gemini API key not configured")
+        
+        # Build generation config with overrides
+        config = self.generation_config
+        if temperature is not None or max_tokens is not None:
+            config = types.GenerateContentConfig(
+                temperature=temperature if temperature is not None else self.temperature,
+                max_output_tokens=max_tokens if max_tokens is not None else self.max_tokens,
+            )
 
         # Make request with retry logic
         last_exception = None
         for attempt in range(self.max_retries):
             try:
-                return await self._make_request(url, payload)
+                # Use async generate_content
+                response = await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=config,
+                )
 
-            except LLMRateLimitError as e:
-                # Wait and retry on rate limit
-                last_exception = e
+                return response
+
+            except google_exceptions.ResourceExhausted as e:
+                # Rate limit exceeded
+                last_exception = LLMRateLimitError(str(e))
                 wait_time = self.retry_delay * (2**attempt)  # Exponential backoff
                 logger.warning(
                     f"Rate limited, retrying in {wait_time}s "
@@ -112,135 +129,81 @@ class GeminiProvider(BaseLLMProvider):
                 )
                 await asyncio.sleep(wait_time)
 
-            except LLMTimeoutError as e:
-                # Retry on timeout
-                last_exception = e
+            except google_exceptions.DeadlineExceeded as e:
+                # Request timeout
+                last_exception = LLMTimeoutError(str(e))
                 logger.warning(
                     f"Request timeout, retrying "
                     f"(attempt {attempt + 1}/{self.max_retries})"
                 )
 
-            except (LLMAuthenticationError, LLMResponseError):
-                # These errors should not be retried
-                raise
+            except (google_exceptions.Unauthenticated, google_exceptions.PermissionDenied) as e:
+                # Authentication errors should not be retried
+                logger.error(f"Authentication error: {e}")
+                raise LLMAuthenticationError(str(e))
+
+            except google_exceptions.InvalidArgument as e:
+                # Bad request, don't retry
+                logger.error(f"Invalid argument: {e}")
+                raise LLMResponseError(str(e))
+
+            except google_exceptions.ServiceUnavailable as e:
+                # Service unavailable, retry
+                last_exception = LLMServiceUnavailableError(str(e))
+                wait_time = self.retry_delay * (2**attempt)
+                logger.warning(
+                    f"Service unavailable, retrying in {wait_time}s "
+                    f"(attempt {attempt + 1}/{self.max_retries})"
+                )
+                await asyncio.sleep(wait_time)
+
+            except Exception as e:
+                # Unexpected error
+                logger.error(f"Unexpected error during Gemini API call: {e}")
+                raise LLMException(f"Unexpected error: {e}")
 
         # All retries exhausted
         raise last_exception or LLMException("All retry attempts failed")
 
-    def _build_url(self, model: Optional[str] = None) -> str:
-        """Build API URL with model"""
-        use_model = model or self.model
-        return self.base_url.format(model=use_model)
-
-    def _build_payload(
-        self,
-        prompt: str,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-    ) -> dict:
-        """Build API request payload for Gemini"""
-        return {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "temperature": temperature
-                if temperature is not None
-                else self.temperature,
-                "maxOutputTokens": max_tokens or self.max_tokens,
-            },
-        }
-
-    async def _make_request(self, url: str, payload: dict) -> Dict[str, Any]:
-        """Send HTTP request to Gemini API via Helicone Proxy"""
-        headers = {
-            "Content-Type": "application/json",
-        }
-
-        if self.helicone_api_key:
-            headers.update({
-                "Helicone-Auth": f"Bearer {self.helicone_api_key}",
-                "Helicone-Target-URL": "https://generativelanguage.googleapis.com",
-                "Helicone-Property-Provider": "Gemini",
-                "Helicone-Property-Feature": "Resume-Optimization"
-            })
-        
+    def _extract_content(self, response: types.GenerateContentResponse) -> str:
+        """Extract text content from Gemini response"""
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    url,
-                    headers=headers,
-                    json=payload,
-                )
-
-                # Handle HTTP status codes
-                self._handle_status_code(response)
-
-                # Return parsed JSON
-                return response.json()
-
-        except httpx.TimeoutException:
-            logger.error("Gemini API request timeout")
-            raise LLMTimeoutError()
-
-        except httpx.ConnectError:
-            logger.error("Failed to connect to Gemini API")
-            raise LLMServiceUnavailableError("Cannot connect to Gemini service")
-
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error: {e.response.status_code}")
-            raise LLMException(f"HTTP error: {e.response.status_code}")
-
-    def _handle_status_code(self, response: httpx.Response) -> None:
-        """Handle HTTP status codes"""
-        if response.status_code == 200:
-            return
-
-        if response.status_code == 400:
-            # Check if it's an API key issue
-            try:
-                error_data = response.json()
-                error_message = error_data.get("error", {}).get("message", "")
-                if "API key" in error_message:
-                    raise LLMAuthenticationError(error_message)
-            except (ValueError, KeyError):
-                pass
-            raise LLMException("Bad request to Gemini API", status_code=400)
-
-        if response.status_code == 401 or response.status_code == 403:
-            raise LLMAuthenticationError()
-
-        if response.status_code == 429:
-            raise LLMRateLimitError()
-
-        if response.status_code >= 500:
-            raise LLMServiceUnavailableError(
-                f"Gemini API returned {response.status_code}"
-            )
-
-        # Handle other errors
-        try:
-            error_data = response.json()
-            error_message = error_data.get("error", {}).get("message", "Unknown error")
-        except Exception:
-            error_message = response.text
-
-        raise LLMException(
-            f"Gemini API error: {error_message}", status_code=response.status_code
-        )
-
-    def _extract_content(self, data: dict) -> str:
-        """Extract content from Gemini API response"""
-        try:
-            # Gemini response structure:
-            # { "candidates": [{ "content": { "parts": [{ "text": "..." }] } }] }
-            return data["candidates"][0]["content"]["parts"][0]["text"]
-        except (KeyError, IndexError, TypeError) as e:
+            content = response.text
+            
+            # Check if response was truncated due to token limit
+            if hasattr(response, 'candidates') and response.candidates:
+                candidate = response.candidates[0]
+                if hasattr(candidate, 'finish_reason'):
+                    finish_reason = str(candidate.finish_reason)
+                    if 'MAX_TOKENS' in finish_reason or 'LENGTH' in finish_reason:
+                        logger.warning(
+                            f"Response truncated due to token limit. "
+                            f"Finish reason: {finish_reason}. "
+                            f"Consider increasing GEMINI_MAX_TOKENS (current: {self.max_tokens})"
+                        )
+                    elif finish_reason not in ['STOP', 'FinishReason.STOP']:
+                        logger.warning(f"Unexpected finish reason: {finish_reason}")
+            
+            # Log content length for debugging
+            logger.debug(f"Extracted content length: {len(content)} characters")
+            
+            return content
+        except (AttributeError, ValueError) as e:
             logger.error(f"Failed to extract content from response: {e}")
             raise LLMResponseError(f"Invalid response format: {e}")
 
-    def _extract_usage(self, data: dict) -> Optional[dict]:
-        """Extract usage information from Gemini API response"""
-        # Gemini includes usage in usageMetadata
-        return data.get("usageMetadata")
+    def _extract_usage(self, response: types.GenerateContentResponse) -> Optional[dict]:
+        """Extract usage information from Gemini response"""
+        try:
+            if hasattr(response, "usage_metadata"):
+                return {
+                    "prompt_token_count": response.usage_metadata.prompt_token_count,
+                    "candidates_token_count": response.usage_metadata.candidates_token_count,
+                    "total_token_count": response.usage_metadata.total_token_count,
+                }
+        except Exception as e:
+            logger.warning(f"Could not extract usage metadata: {e}")
+        return None
 
     # Implementation of abstract methods from BaseLLMProvider
 
@@ -265,12 +228,12 @@ class GeminiProvider(BaseLLMProvider):
         # This method receives the complete prompt
         prompt = resume_content  # Upstream should pass the full constructed prompt
 
-        data = await self.send_prompt(prompt)
+        response = await self.send_prompt(prompt)
 
         return LLMResponse(
-            content=self._extract_content(data),
-            model=self.model,
-            usage=self._extract_usage(data),
+            content=self._extract_content(response),
+            model=self.model_name,
+            usage=self._extract_usage(response),
         )
 
     async def analyze(
@@ -291,12 +254,12 @@ class GeminiProvider(BaseLLMProvider):
         # Note: Prompt construction is handled by upstream service
         prompt = resume_content  # Upstream should pass the full constructed prompt
 
-        data = await self.send_prompt(prompt)
+        response = await self.send_prompt(prompt)
 
         return LLMResponse(
-            content=self._extract_content(data),
-            model=self.model,
-            usage=self._extract_usage(data),
+            content=self._extract_content(response),
+            model=self.model_name,
+            usage=self._extract_usage(response),
         )
 
     async def match(
@@ -317,8 +280,8 @@ class GeminiProvider(BaseLLMProvider):
         # Note: Prompt construction is handled by upstream service
         prompt = resume_content  # Upstream should pass the full constructed prompt
 
-        data = await self.send_prompt(prompt)
-        content = self._extract_content(data)
+        response = await self.send_prompt(prompt)
+        content = self._extract_content(response)
 
         # Parse the response to extract score and suggestions
         # This is a simplified implementation - actual parsing logic
@@ -350,5 +313,5 @@ async def send_to_gemini(
         str: LLM response content
     """
     provider = GeminiProvider()
-    data = await provider.send_prompt(prompt, model, temperature, max_tokens)
-    return provider._extract_content(data)
+    response = await provider.send_prompt(prompt, model, temperature, max_tokens)
+    return provider._extract_content(response)

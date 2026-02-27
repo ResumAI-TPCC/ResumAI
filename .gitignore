@@ -231,3 +231,7 @@ frontend/build/
 
 # OS junk
 .DS_Store
+
+# Coding Assistants
+copilot-instructions.md
+CLAUDE.md

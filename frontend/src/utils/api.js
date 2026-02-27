@@ -5,7 +5,9 @@
  * Based on Design Doc: 4.2.1 Upload & Parse Resume
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+import { ENV } from '../config/env.js'
+
+const API_BASE_URL = ENV.API_BASE_URL;
 
 /**
  * Upload resume file to backend with progress tracking

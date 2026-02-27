@@ -6,7 +6,6 @@ and parsing their content for further processing.
 """
 
 import pytest
-from unittest.mock import patch
 
 
 # Mock classes for GCS client
@@ -59,59 +58,34 @@ class FakeGCSClient:
 class TestGCSDownloadService:
     """Test suite for GCS download functionality."""
 
-    def test_build_object_path_with_prefix(self):
-        """Test building object path with prefix."""
-        from app.services.resume_service import _build_object_name
-
-        file_id = "test-uuid-123"
-        filename = "resume.pdf"
-
-        # Test with default prefix
-        with patch("app.services.resume_service.settings") as mock_settings:
-            mock_settings.GCS_OBJECT_PREFIX = "resumes"
-            result = _build_object_name(file_id, filename)
-            assert result == "resumes/test-uuid-123/resume.pdf"
-
-    def test_build_object_path_without_prefix(self):
-        """Test building object path without prefix."""
-        from app.services.resume_service import _build_object_name
-
-        file_id = "test-uuid-123"
-        filename = "resume.pdf"
-
-        with patch("app.services.resume_service.settings") as mock_settings:
-            mock_settings.GCS_OBJECT_PREFIX = ""
-            result = _build_object_name(file_id, filename)
-            assert result == "test-uuid-123/resume.pdf"
-
     def test_validate_filename_valid_extensions(self):
         """Test filename validation with valid extensions."""
-        from app.services.resume_service import _validate_filename
+        from app.services.validators.file_validator import validate_filename
 
         # Should not raise for valid extensions
         valid_files = ["resume.pdf", "resume.docx"]
         for filename in valid_files:
-            _validate_filename(filename)  # Should not raise
+            validate_filename(filename)  # Should not raise
 
     def test_validate_filename_invalid_extension(self):
         """Test filename validation rejects invalid extensions."""
         from fastapi import HTTPException
-        from app.services.resume_service import _validate_filename
+        from app.services.validators.file_validator import validate_filename
 
         with pytest.raises(HTTPException) as exc_info:
-            _validate_filename("virus.exe")
+            validate_filename("virus.exe")
         assert exc_info.value.status_code == 400
         assert "Unsupported file type" in str(exc_info.value.detail)
 
     def test_validate_filename_empty(self):
         """Test filename validation rejects empty filename."""
         from fastapi import HTTPException
-        from app.services.resume_service import _validate_filename
+        from app.services.validators.file_validator import validate_filename
 
         with pytest.raises(HTTPException) as exc_info:
-            _validate_filename("")
+            validate_filename("")
         assert exc_info.value.status_code == 400
-        assert "Missing filename" in str(exc_info.value.detail)
+        assert "No file provided" in str(exc_info.value.detail)
 
 
 class TestContentParsing:
