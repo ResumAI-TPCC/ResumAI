@@ -36,9 +36,9 @@ class Settings(BaseSettings):
 
     # Gemini settings
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_MODEL: str = "gemini-2.5-flash"
     GEMINI_TEMPERATURE: float = 0.7
-    GEMINI_MAX_TOKENS: int = 2048
+    GEMINI_MAX_TOKENS: int = 8192
     GEMINI_TIMEOUT: float = 60.0
     GEMINI_MAX_RETRIES: int = 3
     GEMINI_RETRY_DELAY: float = 1.0
@@ -56,6 +56,7 @@ class Settings(BaseSettings):
 
     # File upload settings
     MAX_FILE_SIZE_MB: int = 5
+    SESSION_EXPIRY_HOURS: int = 24
 
 @lru_cache
 def get_settings() -> Settings:

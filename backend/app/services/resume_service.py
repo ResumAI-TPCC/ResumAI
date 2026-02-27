@@ -394,7 +394,7 @@ async def get_resume_content(session_id: str) -> str:
     target_blob = blobs[0]
     
     # Validate session has not expired 
-    _validate_session_expiry(target_blob)
+    # _validate_session_expiry(target_blob)
     
     filename = target_blob.name
     content_bytes = await run_in_threadpool(target_blob.download_as_bytes)

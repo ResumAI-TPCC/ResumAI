@@ -168,7 +168,26 @@ class GeminiProvider(BaseLLMProvider):
     def _extract_content(self, response: types.GenerateContentResponse) -> str:
         """Extract text content from Gemini response"""
         try:
-            return response.text
+            content = response.text
+            
+            # Check if response was truncated due to token limit
+            if hasattr(response, 'candidates') and response.candidates:
+                candidate = response.candidates[0]
+                if hasattr(candidate, 'finish_reason'):
+                    finish_reason = str(candidate.finish_reason)
+                    if 'MAX_TOKENS' in finish_reason or 'LENGTH' in finish_reason:
+                        logger.warning(
+                            f"Response truncated due to token limit. "
+                            f"Finish reason: {finish_reason}. "
+                            f"Consider increasing GEMINI_MAX_TOKENS (current: {self.max_tokens})"
+                        )
+                    elif finish_reason not in ['STOP', 'FinishReason.STOP']:
+                        logger.warning(f"Unexpected finish reason: {finish_reason}")
+            
+            # Log content length for debugging
+            logger.debug(f"Extracted content length: {len(content)} characters")
+            
+            return content
         except (AttributeError, ValueError) as e:
             logger.error(f"Failed to extract content from response: {e}")
             raise LLMResponseError(f"Invalid response format: {e}")

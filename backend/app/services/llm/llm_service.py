@@ -79,8 +79,9 @@ class LLMService:
         if json_match:
             try:
                 return json.loads(json_match.group(1))
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse JSON from markdown block: {e}")
+                logger.debug(f"Content: {json_match.group(1)[:500]}...")
 
         # Try raw JSON
         try:
@@ -93,8 +94,12 @@ class LLMService:
         if match:
             try:
                 return json.loads(match.group())
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse extracted JSON: {e}")
+                logger.debug(f"Extracted JSON preview: {match.group()[:500]}...")
+                # Check if JSON appears truncated
+                if not match.group().rstrip().endswith('}'):
+                    logger.error("JSON appears truncated - response likely cut off due to token limit")
         return None
 
     def _parse_suggestions_from_json(
