@@ -11,7 +11,6 @@ export const ENV = {
   
   // Application Metadata
   APP_VERSION: import.meta.env.VITE_APP_VERSION || '0.1.0',
-  NODE_ENV: import.meta.env.MODE || 'development',
 }
 
 // Readonly to prevent accidental mutations
