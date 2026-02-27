@@ -50,4 +50,14 @@ jobs:
           --platform managed \
           --port 8000 \
           --allow-unauthenticated \
-          --set-env-vars LLM_PROVIDER=${{ secrets.LLM_PROVIDER }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},GEMINI_MODEL=${{ secrets.GEMINI_MODEL }},GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET_NAME }},GCS_OBJECT_PREFIX=${{ secrets.GCS_OBJECT_PREFIX }},ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }},APP_VERSION=QA
+          --set-env-vars "LLM_PROVIDER=$LLM_PROVIDER,GEMINI_API_KEY=$GEMINI_API_KEY,GEMINI_MODEL=$GEMINI_MODEL,GCP_PROJECT_ID=$GCP_PROJECT_ID,GCS_BUCKET_NAME=$GCS_BUCKET_NAME,GCS_OBJECT_PREFIX=$GCS_OBJECT_PREFIX,ALLOWED_ORIGINS=$ALLOWED_ORIGINS,APP_VERSION=$APP_VERSION"
+        env:
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME }}
+          GCS_OBJECT_PREFIX: ${{ secrets.GCS_OBJECT_PREFIX }}
+          ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
+          APP_VERSION: "QA"
+          
