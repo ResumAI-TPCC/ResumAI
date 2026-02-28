@@ -25,6 +25,7 @@ from app.schemas.resume_schema import (
 from app.services.resume_service import get_resume_content, upload_resume_to_gcs
 from app.services.prompt.builder import get_prompt_builder
 from app.services.llm.llm_service import get_llm_service
+from app.services.pdf_service import markdown_to_pdf
 
 router = APIRouter()
 
@@ -134,9 +135,9 @@ async def optimize_resume(request: ResumeOptimizeRequest):
     llm = get_llm_service()
     result = await llm.optimize_resume(prompt)
 
-    # 4. Map to response (Encoding content as base64 for download simulation if needed)
-    # For MVP, we might return raw markdown or a base64 encoded version as specified in doc
-    encoded_content = base64.b64encode(result.optimized_content.encode()).decode()
+    # 4. Convert Markdown to PDF and encode as base64
+    pdf_bytes = markdown_to_pdf(result.optimized_content)
+    encoded_content = base64.b64encode(pdf_bytes).decode()
 
     return ResumeOptimizeResponse(
         code=200,
