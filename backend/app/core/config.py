@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     GCP_PRIVATE_KEY_ID: str = ""
 
     # Security settings
-    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    ALLOWED_ORIGINS: str = ""
 
     # File upload settings
     MAX_FILE_SIZE_MB: int = 5
