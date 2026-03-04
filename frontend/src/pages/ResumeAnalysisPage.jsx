@@ -174,6 +174,7 @@ function ResumeAnalysisPage() {
 
       {/* Center analysis area */}
       <AnalysisOutput
+        key={sessionId || 'empty'}
         sessionId={sessionId}
         jobDescription={jobDescription}
         companyName={companyName}
@@ -186,6 +187,7 @@ function ResumeAnalysisPage() {
 
       {/* Right preview area */}
       <ResumePreview
+        key={sessionId ? `preview-${sessionId}` : 'preview-empty'}
         sessionId={sessionId}
         uploadedFile={uploadedFile}
         optimizedHtml={optimizedData?.optimized_html || ''}
