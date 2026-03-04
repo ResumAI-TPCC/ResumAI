@@ -70,7 +70,7 @@ export function loadSession() {
  */
 export function clearSession() {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.clear();
     return true;
   } catch (error) {
     console.error('Failed to clear session:', error);
