@@ -104,6 +104,11 @@ export async function analyzeResume(sessionId) {
       throw new Error(errorData.message || 'Resume not found. Please upload your resume again.');
     }
 
+    // Handle 422 Unprocessable Entity - file format incompatible for analysis
+    if (response.status === 422) {
+      throw new Error('The file format is incompatible for analysis. Please use PDF or DOCX.');
+    }
+
     if (response.status === 500) {
       const errorData = await response.json().catch(() => ({ message: 'Server error' }));
       throw new Error(errorData.message || 'Server error occurred. Please try again later.');
@@ -127,7 +132,8 @@ export async function analyzeResume(sessionId) {
     if (error.message.includes('Session ID is required') ||
       error.message.includes('Resume not found') ||
       error.message.includes('Invalid request') ||
-      error.message.includes('Server error')) {
+      error.message.includes('Server error') ||
+      error.message.includes('file format is incompatible')) {
       throw error;
     }
 
