@@ -1,12 +1,10 @@
 import { useState, useRef, useCallback } from 'react'
 import PropTypes from 'prop-types'
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ACCEPTED_TYPES = [
   'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/msword',
-  'text/plain'
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 ]
 
 function FileUpload({ onFileSelect, uploadedFile, isUploaded = false, onRemoveFile }) {
@@ -15,20 +13,18 @@ function FileUpload({ onFileSelect, uploadedFile, isUploaded = false, onRemoveFi
   const fileInputRef = useRef(null)
 
   const validateFile = useCallback((file) => {
-    // Check file type
+    // Check file type - only allow PDF and DOCX (block .doc)
     const isValidType = ACCEPTED_TYPES.includes(file.type) ||
-      file.name.endsWith('.pdf') ||
-      file.name.endsWith('.docx') ||
-      file.name.endsWith('.doc') ||
-      file.name.endsWith('.txt')
+      file.name.toLowerCase().endsWith('.pdf') ||
+      file.name.toLowerCase().endsWith('.docx')
 
     if (!isValidType) {
-      return { valid: false, error: 'Unsupported file format. Please upload PDF, DOCX, DOC or TXT files.' }
+      return { valid: false, error: 'Only PDF and DOCX formats under 10MB are supported.' }
     }
 
     // Check file size
     if (file.size > MAX_FILE_SIZE) {
-      return { valid: false, error: 'File size exceeds 5MB limit. Please upload a smaller file.' }
+      return { valid: false, error: 'Only PDF and DOCX formats under 10MB are supported.' }
     }
 
     return { valid: true, error: null }
@@ -150,7 +146,7 @@ function FileUpload({ onFileSelect, uploadedFile, isUploaded = false, onRemoveFi
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.docx,.doc,.txt"
+          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           onChange={handleFileInput}
           className="hidden"
         />
@@ -186,7 +182,7 @@ function FileUpload({ onFileSelect, uploadedFile, isUploaded = false, onRemoveFi
             {isDragging ? 'Release to upload file' : 'Click to upload or drag and drop'}
           </p>
           <p className="text-xs text-gray-500">
-            PDF, DOCX, DOC, TXT (Max 5MB)
+            PDF, DOCX (Max 10MB)
           </p>
         </div>
 
