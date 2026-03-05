@@ -24,7 +24,10 @@ function ResumeAnalysisPage() {
   // Optimize resume states
   const [optimizedData, setOptimizedData] = useState(null)
   const [isOptimizing, setIsOptimizing] = useState(false)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analyzeLoadingSource, setAnalyzeLoadingSource] = useState(null)
   const [matchScore, setMatchScore] = useState(null)
+  const [analyzeSignal, setAnalyzeSignal] = useState(0)
 
 
   // Load session data on mount
@@ -46,7 +49,10 @@ function ResumeAnalysisPage() {
     setUploadedFile(null)
     setSessionId(null)
     setOptimizedData(null)
+    setIsAnalyzing(false)
+    setAnalyzeLoadingSource(null)
     setMatchScore(null)
+    setAnalyzeSignal(0)
   }
 
   const handleUpload = async () => {
@@ -88,7 +94,10 @@ function ResumeAnalysisPage() {
     setUploadedFile(null)
     setSessionId(null)
     setOptimizedData(null)
+    setIsAnalyzing(false)
+    setAnalyzeLoadingSource(null)
     setMatchScore(null)
+    setAnalyzeSignal(0)
   }
 
 
@@ -117,7 +126,10 @@ function ResumeAnalysisPage() {
       setUploadedFile(null)
       setUploadError(null)
       setOptimizedData(null)
+      setIsAnalyzing(false)
+      setAnalyzeLoadingSource(null)
       setMatchScore(null)
+      setAnalyzeSignal(0)
     }
   }
 
@@ -126,7 +138,7 @@ function ResumeAnalysisPage() {
    * Calls the optimize API and stores the result
    */
   const handleOptimize = async () => {
-    if (!sessionId) {
+    if (!sessionId || !uploadedFile) {
       return
     }
 
@@ -165,11 +177,11 @@ function ResumeAnalysisPage() {
       }
       const byteArray = new Uint8Array(byteNumbers)
 
-      const blob = new Blob([byteArray], { type: 'application/pdf' })
+      const blob = new Blob([byteArray], { type: 'text/markdown;charset=utf-8' })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = 'optimized_resume.pdf'
+      link.download = 'optimized_resume.md'
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -188,48 +200,68 @@ function ResumeAnalysisPage() {
     setMatchScore(score)
   }
 
+  const canAnalyze = Boolean(sessionId && uploadedFile)
+
+  const handleAnalyzeStatusChange = (status) => {
+    setIsAnalyzing(status)
+    if (!status) {
+      setAnalyzeLoadingSource(null)
+    }
+  }
+
+  const triggerAnalyze = (source) => {
+    if (!canAnalyze || isAnalyzing) return
+    setAnalyzeLoadingSource(source)
+    setAnalyzeSignal((value) => value + 1)
+  }
+
   return (
     <div className="h-screen bg-gray-50 flex overflow-hidden">
       {/* Left sidebar */}
       <Sidebar
-        sessionId={sessionId}
         companyName={companyName}
         jobTitle={jobTitle}
         jobDescription={jobDescription}
         selectedFile={selectedFile}
         uploadedFile={uploadedFile}
         isUploading={isUploading}
+        isAnalyzing={isAnalyzing}
+        isAnalyzeLoading={isAnalyzing && analyzeLoadingSource === 'sidebar'}
         uploadError={uploadError}
+        canAnalyze={canAnalyze}
         onCompanyNameChange={handleCompanyNameChange}
         onJobTitleChange={handleJobTitleChange}
         onJobDescriptionChange={handleJobDescriptionChange}
         onFileSelect={handleFileSelect}
         onRemoveFile={handleRemoveFile}
         onUpload={handleUpload}
+        onAnalyze={() => triggerAnalyze('sidebar')}
         onClearSession={handleClearSession}
       />
 
       {/* Center analysis area */}
       <AnalysisOutput
         sessionId={sessionId}
+        canAnalyze={canAnalyze}
         jobDescription={jobDescription}
         companyName={companyName}
         jobTitle={jobTitle}
         onMatchScoreUpdate={handleAnalysisComplete}
-        isOptimizing={isOptimizing}
-        optimizedData={optimizedData}
-        onGenerateResume={handleOptimize}
-        onDownloadResume={handleDownloadResume}
+        onAnalyzeStatusChange={handleAnalyzeStatusChange}
+        analyzeSignal={analyzeSignal}
       />
 
       <ResumePreview
-        sessionId={sessionId}
         uploadedFile={uploadedFile}
         matchScore={matchScore}
         isOptimizing={isOptimizing}
+        isAnalyzing={isAnalyzing}
+        isReanalyzing={isAnalyzing && analyzeLoadingSource === 'reanalyze'}
+        actionsEnabled={canAnalyze}
         optimizedData={optimizedData}
         onOptimize={handleOptimize}
         onDownload={handleDownloadResume}
+        onReanalyze={() => triggerAnalyze('reanalyze')}
       />
 
     </div>
