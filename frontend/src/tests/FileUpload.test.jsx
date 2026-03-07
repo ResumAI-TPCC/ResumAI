@@ -35,8 +35,8 @@ describe('FileUpload Component', () => {
       )
       
       expect(screen.getByText(/Click to upload or drag and drop/i)).toBeInTheDocument()
-      expect(screen.getByText(/PDF, DOCX, DOC, TXT/i)).toBeInTheDocument()
-      expect(screen.getByText(/Max 5MB/i)).toBeInTheDocument()
+      expect(screen.getByText(/PDF, DOCX/i)).toBeInTheDocument()
+      expect(screen.getByText(/Max 10MB/i)).toBeInTheDocument()
     })
 
     test('renders file info when uploadedFile is provided', () => {
@@ -110,7 +110,7 @@ describe('FileUpload Component', () => {
       expect(mockOnFileSelect).toHaveBeenCalledWith(file)
     })
 
-    test('accepts valid TXT file', () => {
+    test('rejects unsupported file type (.txt)', () => {
       render(
         <FileUpload 
           onFileSelect={mockOnFileSelect} 
@@ -123,7 +123,25 @@ describe('FileUpload Component', () => {
       
       fireEvent.change(input, { target: { files: [file] } })
       
-      expect(mockOnFileSelect).toHaveBeenCalledWith(file)
+      expect(mockOnFileSelect).not.toHaveBeenCalled()
+      expect(screen.getByText(/Only PDF and DOCX formats under 10MB are supported/i)).toBeInTheDocument()
+    })
+
+    test('rejects unsupported file type (.doc)', () => {
+      render(
+        <FileUpload 
+          onFileSelect={mockOnFileSelect} 
+          onRemoveFile={mockOnRemoveFile}
+        />
+      )
+      
+      const file = createMockFile('resume.doc', 1024, 'application/msword')
+      const input = document.querySelector('input[type="file"]')
+      
+      fireEvent.change(input, { target: { files: [file] } })
+      
+      expect(mockOnFileSelect).not.toHaveBeenCalled()
+      expect(screen.getByText(/Only PDF and DOCX formats under 10MB are supported/i)).toBeInTheDocument()
     })
 
     test('rejects unsupported file type (.exe)', () => {
@@ -140,7 +158,7 @@ describe('FileUpload Component', () => {
       fireEvent.change(input, { target: { files: [file] } })
       
       expect(mockOnFileSelect).not.toHaveBeenCalled()
-      expect(screen.getByText(/Unsupported file format/i)).toBeInTheDocument()
+      expect(screen.getByText(/Only PDF and DOCX formats under 10MB are supported/i)).toBeInTheDocument()
     })
 
     test('rejects unsupported file type (.js)', () => {
@@ -157,10 +175,10 @@ describe('FileUpload Component', () => {
       fireEvent.change(input, { target: { files: [file] } })
       
       expect(mockOnFileSelect).not.toHaveBeenCalled()
-      expect(screen.getByText(/Unsupported file format/i)).toBeInTheDocument()
+      expect(screen.getByText(/Only PDF and DOCX formats under 10MB are supported/i)).toBeInTheDocument()
     })
 
-    test('rejects file exceeding 5MB limit', () => {
+    test('rejects file exceeding 10MB limit', () => {
       render(
         <FileUpload 
           onFileSelect={mockOnFileSelect} 
@@ -168,16 +186,16 @@ describe('FileUpload Component', () => {
         />
       )
       
-      const file = createMockFile('large.pdf', 6 * 1024 * 1024, 'application/pdf')
+      const file = createMockFile('large.pdf', 11 * 1024 * 1024, 'application/pdf')
       const input = document.querySelector('input[type="file"]')
       
       fireEvent.change(input, { target: { files: [file] } })
       
       expect(mockOnFileSelect).not.toHaveBeenCalled()
-      expect(screen.getByText(/File size exceeds 5MB/i)).toBeInTheDocument()
+      expect(screen.getByText(/Only PDF and DOCX formats under 10MB are supported/i)).toBeInTheDocument()
     })
 
-    test('accepts file exactly at 5MB limit', () => {
+    test('accepts file exactly at 10MB limit', () => {
       render(
         <FileUpload 
           onFileSelect={mockOnFileSelect} 
@@ -185,7 +203,7 @@ describe('FileUpload Component', () => {
         />
       )
       
-      const file = createMockFile('exact.pdf', 5 * 1024 * 1024, 'application/pdf')
+      const file = createMockFile('exact.pdf', 10 * 1024 * 1024, 'application/pdf')
       const input = document.querySelector('input[type="file"]')
       
       fireEvent.change(input, { target: { files: [file] } })
