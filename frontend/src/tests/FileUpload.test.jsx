@@ -124,7 +124,7 @@ describe('FileUpload Component', () => {
       fireEvent.change(input, { target: { files: [file] } })
       
       expect(mockOnFileSelect).not.toHaveBeenCalled()
-      expect(screen.getByText(/Only PDF and DOCX formats under 10MB are supported/i)).toBeInTheDocument()
+      expect(screen.getByText(/Unsupported file format.*Please upload PDF, DOCX files/i)).toBeInTheDocument()
     })
 
     test('rejects unsupported file type (.doc)', () => {
@@ -141,7 +141,7 @@ describe('FileUpload Component', () => {
       fireEvent.change(input, { target: { files: [file] } })
       
       expect(mockOnFileSelect).not.toHaveBeenCalled()
-      expect(screen.getByText(/Only PDF and DOCX formats under 10MB are supported/i)).toBeInTheDocument()
+      expect(screen.getByText(/Unsupported file format.*Please upload PDF, DOCX files/i)).toBeInTheDocument()
     })
 
     test('rejects unsupported file type (.exe)', () => {
@@ -158,7 +158,7 @@ describe('FileUpload Component', () => {
       fireEvent.change(input, { target: { files: [file] } })
       
       expect(mockOnFileSelect).not.toHaveBeenCalled()
-      expect(screen.getByText(/Only PDF and DOCX formats under 10MB are supported/i)).toBeInTheDocument()
+      expect(screen.getByText(/Unsupported file format.*Please upload PDF, DOCX files/i)).toBeInTheDocument()
     })
 
     test('rejects unsupported file type (.js)', () => {
@@ -175,7 +175,7 @@ describe('FileUpload Component', () => {
       fireEvent.change(input, { target: { files: [file] } })
       
       expect(mockOnFileSelect).not.toHaveBeenCalled()
-      expect(screen.getByText(/Only PDF and DOCX formats under 10MB are supported/i)).toBeInTheDocument()
+      expect(screen.getByText(/Unsupported file format.*Please upload PDF, DOCX files/i)).toBeInTheDocument()
     })
 
     test('rejects file exceeding 10MB limit', () => {
@@ -192,7 +192,7 @@ describe('FileUpload Component', () => {
       fireEvent.change(input, { target: { files: [file] } })
       
       expect(mockOnFileSelect).not.toHaveBeenCalled()
-      expect(screen.getByText(/Only PDF and DOCX formats under 10MB are supported/i)).toBeInTheDocument()
+      expect(screen.getByText(/File size exceeds 10MB limit.*Please upload a smaller file/i)).toBeInTheDocument()
     })
 
     test('accepts file exactly at 10MB limit', () => {

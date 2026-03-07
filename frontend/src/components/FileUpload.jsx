@@ -19,13 +19,11 @@ function FileUpload({ onFileSelect, uploadedFile = null, isUploaded = false, onR
       file.name.toLowerCase().endsWith('.docx')
 
     if (!isValidType) {
-      return { valid: false, error: 'Only PDF and DOCX formats under 10MB are supported.' }
-    }
+      return { valid: false, error: 'Unsupported file format. Please upload PDF, DOCX files.' }    }
 
     // Check file size
     if (file.size > MAX_FILE_SIZE) {
-      return { valid: false, error: 'Only PDF and DOCX formats under 10MB are supported.' }
-    }
+      return { valid: false, error: 'File size exceeds 10MB limit. Please upload a smaller file.' }    }
 
     return { valid: true, error: null }
   }, [])
