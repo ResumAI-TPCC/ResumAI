@@ -7,13 +7,13 @@ const ACCEPTED_TYPES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 ]
 
-function FileUpload({ onFileSelect, uploadedFile, isUploaded = false, onRemoveFile }) {
+function FileUpload({ onFileSelect, uploadedFile = null, isUploaded = false, onRemoveFile }) {
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState(null)
   const fileInputRef = useRef(null)
 
   const validateFile = useCallback((file) => {
-    // Check file type - only allow PDF and DOCX (block .doc)
+    // Check file type - only allow PDF and DOCX
     const isValidType = ACCEPTED_TYPES.includes(file.type) ||
       file.name.toLowerCase().endsWith('.pdf') ||
       file.name.toLowerCase().endsWith('.docx')
@@ -215,11 +215,6 @@ FileUpload.propTypes = {
   }),
   isUploaded: PropTypes.bool,
   onRemoveFile: PropTypes.func.isRequired,
-}
-
-FileUpload.defaultProps = {
-  uploadedFile: null,
-  isUploaded: false,
 }
 
 export default FileUpload
