@@ -73,7 +73,9 @@ describe('AnalysisOutput Component', () => {
       const button = screen.getByRole('button', { name: /Analyze Resume/i })
       fireEvent.click(button)
       
-      expect(analyzeResume).toHaveBeenCalledWith('test-session-123')
+      await waitFor(() => {
+        expect(analyzeResume).toHaveBeenCalledWith('test-session-123')
+      })
     })
 
     test('displays suggestions after analysis', async () => {
@@ -118,9 +120,12 @@ describe('AnalysisOutput Component', () => {
 
       render(<AnalysisOutput sessionId="test-session-123" />)
       
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
+      const button = screen.getByRole('button', { name: /Analyze Resume/i })
+      fireEvent.click(button)
       
-      expect(screen.getByText(/Analyzing.../i)).toBeInTheDocument()
+      await waitFor(() => {
+        expect(screen.getByText(/Analyzing.../i)).toBeInTheDocument()
+      })
     })
   })
 
@@ -143,14 +148,17 @@ describe('AnalysisOutput Component', () => {
         />
       )
       
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Match/i }))
+      const button = screen.getByRole('button', { name: /Analyze Match/i })
+      fireEvent.click(button)
       
-      expect(matchResumeWithJob).toHaveBeenCalledWith(
-        'test-session-123',
-        'We are looking for a senior engineer...',
-        'Senior Engineer',
-        'TechCorp'
-      )
+      await waitFor(() => {
+        expect(matchResumeWithJob).toHaveBeenCalledWith(
+          'test-session-123',
+          'We are looking for a senior engineer...',
+          'Senior Engineer',
+          'TechCorp'
+        )
+      })
     })
 
     test('displays match score after analysis', async () => {
