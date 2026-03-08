@@ -254,7 +254,11 @@ function AnalysisOutput({ sessionId, jobDescription, companyName, jobTitle, isOp
                           {suggestion.example && (
                             <div className="bg-gray-50 rounded p-2">
                               <p className="text-xs text-gray-500 mb-1">Example:</p>
-                              <p className="text-sm text-gray-700 italic">{suggestion.example}</p>
+                              <p className="text-sm text-gray-700 italic whitespace-pre-line">
+                                {typeof suggestion.example === 'string'
+                                  ? suggestion.example.replace(/\s*(After\b)/g, '\nAfter')
+                                  : suggestion.example}
+                              </p>
                             </div>
                           )}
                           {suggestion.action && (
