@@ -241,6 +241,7 @@ function ResumeAnalysisPage() {
 
       {/* Center analysis area */}
       <AnalysisOutput
+        key={sessionId || 'empty'}
         sessionId={sessionId}
         canAnalyze={canAnalyze}
         jobDescription={jobDescription}
