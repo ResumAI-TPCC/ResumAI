@@ -58,7 +58,7 @@ function Sidebar({
               type="text"
               value={companyName || ''}
               onChange={(e) => onCompanyNameChange(e.target.value)}
-              placeholder="Enter company name"
+              placeholder="(Optional) Enter company name"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
             />
           </div>
@@ -73,7 +73,7 @@ function Sidebar({
               type="text"
               value={jobTitle || ''}
               onChange={(e) => onJobTitleChange(e.target.value)}
-              placeholder="Enter job title"
+              placeholder="(Optional) Enter job title"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
             />
           </div>
