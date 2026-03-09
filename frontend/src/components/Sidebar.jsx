@@ -2,25 +2,25 @@ import PropTypes from 'prop-types'
 import FileUpload from './FileUpload'
 
 function Sidebar({ 
-  sessionId, 
   companyName, 
   jobTitle, 
   jobDescription, 
   selectedFile,
   uploadedFile,
   isUploading,
+  isAnalyzing,
+  isAnalyzeLoading,
   uploadError,
+  canAnalyze,
   onCompanyNameChange,
   onJobTitleChange,
   onJobDescriptionChange,
   onFileSelect,
   onRemoveFile,
   onUpload,
+  onAnalyze,
   onClearSession 
 }) {
-  // sessionId reserved for future use
-  void sessionId
-
   const handleClearJD = () => {
     onJobDescriptionChange('')
   }
@@ -147,6 +147,26 @@ function Sidebar({
             )}
           </div>
 
+          <div>
+            <button
+              onClick={onAnalyze}
+              disabled={!canAnalyze || isAnalyzing}
+              className="w-full px-4 py-2.5 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isAnalyzeLoading ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>{jobDescription && jobDescription.trim() ? 'Matching Resume...' : 'Analyzing Resume...'}</span>
+                </>
+              ) : (
+                <span>{jobDescription && jobDescription.trim() ? 'Match Resume' : 'Analyze Resume'}</span>
+              )}
+            </button>
+          </div>
+
           {/* Clear Session Button */}
           <div className="pt-2">
             <button
@@ -166,7 +186,6 @@ function Sidebar({
 }
 
 Sidebar.propTypes = {
-  sessionId: PropTypes.string,
   companyName: PropTypes.string,
   jobTitle: PropTypes.string,
   jobDescription: PropTypes.string,
@@ -179,13 +198,17 @@ Sidebar.propTypes = {
     size: PropTypes.number,
   }),
   isUploading: PropTypes.bool,
+  isAnalyzing: PropTypes.bool,
+  isAnalyzeLoading: PropTypes.bool,
   uploadError: PropTypes.string,
+  canAnalyze: PropTypes.bool,
   onCompanyNameChange: PropTypes.func.isRequired,
   onJobTitleChange: PropTypes.func.isRequired,
   onJobDescriptionChange: PropTypes.func.isRequired,
   onFileSelect: PropTypes.func.isRequired,
   onRemoveFile: PropTypes.func.isRequired,
   onUpload: PropTypes.func.isRequired,
+  onAnalyze: PropTypes.func.isRequired,
   onClearSession: PropTypes.func.isRequired,
 }
 

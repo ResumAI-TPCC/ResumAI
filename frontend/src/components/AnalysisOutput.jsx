@@ -1,19 +1,32 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import PropTypes from 'prop-types'
 import { matchResumeWithJob, analyzeResume } from '../utils/api'
 
-function AnalysisOutput({ sessionId, jobDescription, companyName, jobTitle, isOptimizing, optimizedData, onGenerateResume, onDownloadResume }) {
+function AnalysisOutput({
+  sessionId,
+  canAnalyze,
+  jobDescription,
+  companyName,
+  jobTitle,
+  onMatchScoreUpdate,
+  onAnalyzeStatusChange,
+  analyzeSignal,
+}) {
+
   const [analysisData, setAnalysisData] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [error, setError] = useState(null)
 
   const handleAnalyze = async () => {
+    if (isAnalyzing) return
+
     if (!sessionId) {
       setError('Please upload a resume first')
       return
     }
 
     setIsAnalyzing(true)
+    onAnalyzeStatusChange?.(true)
     setError(null)
 
     try {
@@ -27,10 +40,17 @@ function AnalysisOutput({ sessionId, jobDescription, companyName, jobTitle, isOp
           companyName || ''
         )
         
+        const matchScore = result.data?.match_score || 68
+        
+        // Notify parent component of match score
+        if (onMatchScoreUpdate) {
+          onMatchScoreUpdate(matchScore)
+        }
+        
         // Set data for match analysis
         setAnalysisData({
           type: 'match',
-          matchScore: result.data?.match_score || 68,
+          matchScore,
           matchBreakdown: result.data?.match_breakdown || {
             skills_match: 85,
             experience_match: 75,
@@ -77,16 +97,15 @@ function AnalysisOutput({ sessionId, jobDescription, companyName, jobTitle, isOp
       setError(err.message || 'Failed to analyze resume')
     } finally {
       setIsAnalyzing(false)
+      onAnalyzeStatusChange?.(false)
     }
   }
 
-  const handleGenerateResume = () => {
-    if (onGenerateResume) onGenerateResume()
-  }
-
-  const handleDownloadResume = () => {
-    if (onDownloadResume) onDownloadResume()
-  }
+  useEffect(() => {
+    if (analyzeSignal > 0) {
+      handleAnalyze()
+    }
+  }, [analyzeSignal])
 
   return (
     <main className="flex-1 p-6 bg-gray-50 overflow-y-auto">
@@ -107,30 +126,13 @@ function AnalysisOutput({ sessionId, jobDescription, companyName, jobTitle, isOp
               </svg>
             </div>
             <h2 className="text-lg font-semibold text-gray-800 mb-2">
-              {jobDescription && jobDescription.trim() ? 'Ready to Analyze Match' : 'Ready to Analyze Resume'}
+              {jobDescription && jobDescription.trim() ? 'Ready to Match Resume' : 'Ready to Analyze Resume'}
             </h2>
             <p className="text-gray-600 mb-6 text-sm">
-              {!sessionId && 'Please upload your resume to get started'}
-              {sessionId && (!jobDescription || !jobDescription.trim()) && 'Click the button below to analyze your resume'}
-              {sessionId && jobDescription && jobDescription.trim() && 'Click the button below to analyze your resume against the job description'}
+              {!canAnalyze && 'Please upload your resume to get started'}
+              {canAnalyze && (!jobDescription || !jobDescription.trim()) && 'Use the Analyze button in the left panel'}
+              {canAnalyze && jobDescription && jobDescription.trim() && 'Use the Match Resume button in the left panel'}
             </p>
-            <button
-              onClick={handleAnalyze}
-              disabled={!sessionId || isAnalyzing}
-              className="px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-            >
-              {isAnalyzing ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" role="status" aria-label="Loading">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Analyzing...
-                </span>
-              ) : (
-                jobDescription && jobDescription.trim() ? 'Analyze Match' : 'Analyze Resume'
-              )}
-            </button>
             {error && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-red-600 text-sm">{error}</p>
@@ -142,43 +144,6 @@ function AnalysisOutput({ sessionId, jobDescription, companyName, jobTitle, isOp
         {/* Analysis Results */}
         {analysisData && (
           <div className="space-y-4">
-            {/* Match Score Card - Only for match type */}
-            {analysisData.type === 'match' && (
-              <div className="relative overflow-hidden rounded-lg shadow-lg">
-                <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-purple-600 p-6 text-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="flex items-baseline gap-2">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                        </svg>
-                        <h2 className="text-sm font-medium">Match Score</h2>
-                      </div>
-                      <div className="mt-2 flex items-baseline">
-                        <span className="text-5xl font-bold">{analysisData.matchScore}</span>
-                        <span className="text-2xl font-medium ml-1">/100</span>
-                      </div>
-                    </div>
-                    <div className="hidden sm:block">
-                      <svg className="w-20 h-20 opacity-30" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                        <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  </div>
-                  {/* Progress bar */}
-                  <div className="mt-4">
-                    <div className="w-full bg-white bg-opacity-30 rounded-full h-2.5">
-                      <div 
-                        className="bg-white h-2.5 rounded-full transition-all duration-500"
-                        style={{ width: `${analysisData.matchScore}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Scoring Principles - Only for match type */}
             {analysisData.type === 'match' && (
               <div className="bg-white rounded-lg shadow p-6">
@@ -271,50 +236,6 @@ function AnalysisOutput({ sessionId, jobDescription, companyName, jobTitle, isOp
               </div>
             )}
 
-            {/* Action Buttons */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  onClick={handleGenerateResume}
-                  disabled={isOptimizing}
-                  className="flex-1 px-4 py-2.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:bg-purple-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                >
-                  {isOptimizing ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      {optimizedData ? 'Regenerate Resume' : 'Generate Polished Resume'}
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={handleDownloadResume}
-                  disabled={!optimizedData}
-                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  Download Polished Resume
-                </button>
-              </div>
-              <button
-                onClick={handleAnalyze}
-                disabled={isAnalyzing}
-                className="mt-3 w-full px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 disabled:bg-gray-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {isAnalyzing ? 'Re-analyzing...' : 'Re-analyze'}
-              </button>
-            </div>
           </div>
         )}
       </div>
@@ -324,16 +245,13 @@ function AnalysisOutput({ sessionId, jobDescription, companyName, jobTitle, isOp
 
 AnalysisOutput.propTypes = {
   sessionId: PropTypes.string,
+  canAnalyze: PropTypes.bool,
   jobDescription: PropTypes.string,
   companyName: PropTypes.string,
   jobTitle: PropTypes.string,
-  isOptimizing: PropTypes.bool,
-  optimizedData: PropTypes.shape({
-    encoded_file: PropTypes.string,
-    optimized_html: PropTypes.string,
-  }),
-  onGenerateResume: PropTypes.func,
-  onDownloadResume: PropTypes.func,
+  onMatchScoreUpdate: PropTypes.func,
+  onAnalyzeStatusChange: PropTypes.func,
+  analyzeSignal: PropTypes.number,
 }
 
 export default AnalysisOutput
