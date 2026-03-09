@@ -1,15 +1,7 @@
-/**
- * AnalysisOutput Component Tests
- * 
- * RA-31/32: Resume Analysis Results UI Testing
- * Tests for analysis display, match score, suggestions, and action buttons
- */
-
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import AnalysisOutput from '../components/AnalysisOutput'
 
-// Mock the API functions
 jest.mock('../utils/api', () => ({
   analyzeResume: jest.fn(),
   matchResumeWithJob: jest.fn(),
@@ -22,57 +14,46 @@ describe('AnalysisOutput Component', () => {
     jest.clearAllMocks()
   })
 
-  // RA-31: Empty State Tests
   describe('Empty State', () => {
-    test('renders empty state when no sessionId', () => {
+    test('renders upload hint when analysis is not available', () => {
       render(<AnalysisOutput />)
-      
-      expect(screen.getByText(/Please upload your resume/i)).toBeInTheDocument()
+      expect(screen.getByText(/Please upload your resume to get started/i)).toBeInTheDocument()
     })
 
-    test('renders "Ready to Analyze" when sessionId provided without JD', () => {
-      render(<AnalysisOutput sessionId="test-session-123" />)
-      
-      expect(screen.getByText(/Click the button below to analyze/i)).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /Analyze Resume/i })).toBeInTheDocument()
+    test('renders left-panel analyze hint when analysis is available without JD', () => {
+      render(<AnalysisOutput sessionId="test-session-123" canAnalyze analyzeSignal={0} />)
+      expect(screen.getByText(/Ready to Analyze Resume/i)).toBeInTheDocument()
+      expect(screen.getByText(/Use the Analyze button in the left panel/i)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Analyze Resume/i })).not.toBeInTheDocument()
     })
 
-    test('renders "Ready to Analyze Match" when sessionId and JD provided', () => {
+    test('renders left-panel match hint when JD exists', () => {
       render(
-        <AnalysisOutput 
-          sessionId="test-session-123" 
-          jobDescription="Senior Software Engineer position..." 
+        <AnalysisOutput
+          sessionId="test-session-123"
+          canAnalyze
+          jobDescription="Senior Software Engineer position"
+          analyzeSignal={0}
         />
       )
-      
-      expect(screen.getByText(/analyze your resume against the job description/i)).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /Analyze Match/i })).toBeInTheDocument()
-    })
 
-    test('analyze button is disabled without sessionId', () => {
-      render(<AnalysisOutput />)
-      
-      const button = screen.getByRole('button', { name: /Analyze Resume/i })
-      expect(button).toBeDisabled()
+      expect(screen.getByText(/Ready to Match Resume/i)).toBeInTheDocument()
+      expect(screen.getByText(/Use the Match Resume button in the left panel/i)).toBeInTheDocument()
     })
   })
 
-  // RA-32: Analyze Resume Tests (without JD)
   describe('Analyze Resume (without JD)', () => {
-    test('calls analyzeResume API when button clicked', async () => {
-      analyzeResume.mockResolvedValue({
-        data: {
-          suggestions: [
-            { category: 'content', priority: 'high', title: 'Add Summary', description: 'Add a professional summary' }
-          ]
-        }
-      })
+    test('calls analyzeResume API when analyzeSignal increases', async () => {
+      analyzeResume.mockResolvedValue({ data: { suggestions: [] } })
 
-      render(<AnalysisOutput sessionId="test-session-123" />)
-      
-      const button = screen.getByRole('button', { name: /Analyze Resume/i })
-      fireEvent.click(button)
-      
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+      }
+
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
       await waitFor(() => {
         expect(analyzeResume).toHaveBeenCalledWith('test-session-123')
       })
@@ -82,21 +63,23 @@ describe('AnalysisOutput Component', () => {
       analyzeResume.mockResolvedValue({
         data: {
           suggestions: [
-            { 
-              category: 'content', 
-              priority: 'high', 
-              title: 'Add Professional Summary', 
+            {
+              category: 'content',
+              priority: 'high',
+              title: 'Add Professional Summary',
               description: 'Include a 2-3 sentence summary',
-              example: 'Results-driven software engineer with 5+ years...'
-            }
-          ]
-        }
+            },
+          ],
+        },
       })
 
-      render(<AnalysisOutput sessionId="test-session-123" />)
-      
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
-      
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
       await waitFor(() => {
         expect(screen.getByText(/Add Professional Summary/i)).toBeInTheDocument()
         expect(screen.getByText(/Include a 2-3 sentence summary/i)).toBeInTheDocument()
@@ -106,51 +89,56 @@ describe('AnalysisOutput Component', () => {
     test('shows error when analysis fails', async () => {
       analyzeResume.mockRejectedValue(new Error('Analysis failed'))
 
-      render(<AnalysisOutput sessionId="test-session-123" />)
-      
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
-      
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
       await waitFor(() => {
         expect(screen.getByText(/Analysis failed/i)).toBeInTheDocument()
       })
     })
 
-    test('shows loading state during analysis', async () => {
-      analyzeResume.mockImplementation(() => new Promise(() => {})) // Never resolves
+    test('invokes analyze status callback during analyze lifecycle', async () => {
+      const onAnalyzeStatusChange = jest.fn()
+      analyzeResume.mockResolvedValue({ data: { suggestions: [] } })
 
-      render(<AnalysisOutput sessionId="test-session-123" />)
-      
-      const button = screen.getByRole('button', { name: /Analyze Resume/i })
-      fireEvent.click(button)
-      
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+        onAnalyzeStatusChange,
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
       await waitFor(() => {
-        expect(screen.getByText(/Analyzing.../i)).toBeInTheDocument()
+        expect(onAnalyzeStatusChange).toHaveBeenCalledWith(true)
+        expect(onAnalyzeStatusChange).toHaveBeenCalledWith(false)
       })
     })
   })
 
-  // RA-32: Match Analysis Tests (with JD)
   describe('Match Analysis (with JD)', () => {
-    test('calls matchResumeWithJob API when JD provided', async () => {
+    test('calls matchResumeWithJob API when JD is provided', async () => {
       matchResumeWithJob.mockResolvedValue({
         data: {
           match_score: 75,
-          suggestions: []
-        }
+          suggestions: [],
+        },
       })
 
-      render(
-        <AnalysisOutput 
-          sessionId="test-session-123" 
-          jobDescription="We are looking for a senior engineer..."
-          jobTitle="Senior Engineer"
-          companyName="TechCorp"
-        />
-      )
-      
-      const button = screen.getByRole('button', { name: /Analyze Match/i })
-      fireEvent.click(button)
-      
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+        jobDescription: 'We are looking for a senior engineer...',
+        jobTitle: 'Senior Engineer',
+        companyName: 'TechCorp',
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
       await waitFor(() => {
         expect(matchResumeWithJob).toHaveBeenCalledWith(
           'test-session-123',
@@ -161,191 +149,108 @@ describe('AnalysisOutput Component', () => {
       })
     })
 
-    test('displays match score after analysis', async () => {
+    test('displays match analysis sections after match request', async () => {
       matchResumeWithJob.mockResolvedValue({
         data: {
-          match_score: 85,
-          suggestions: []
-        }
+          match_score: 70,
+          suggestions: [],
+        },
       })
 
-      render(
-        <AnalysisOutput 
-          sessionId="test-session-123" 
-          jobDescription="Software Engineer position"
-        />
-      )
-      
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Match/i }))
-      
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+        jobDescription: 'Software Engineer position',
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
       await waitFor(() => {
-        expect(screen.getByText('85')).toBeInTheDocument()
-        expect(screen.getByText('/100')).toBeInTheDocument()
+        expect(screen.getByText(/Scoring Principles/i)).toBeInTheDocument()
+        expect(screen.getByText(/Analysis Reasoning/i)).toBeInTheDocument()
       })
     })
 
-    test('displays scoring principles for match analysis', async () => {
+    test('passes match score to parent callback', async () => {
+      const onMatchScoreUpdate = jest.fn()
       matchResumeWithJob.mockResolvedValue({
-        data: { match_score: 70, suggestions: [] }
+        data: {
+          match_score: 85,
+          suggestions: [],
+        },
       })
 
-      render(
-        <AnalysisOutput 
-          sessionId="test-session-123" 
-          jobDescription="Software Engineer position"
-        />
-      )
-      
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Match/i }))
-      
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+        jobDescription: 'Software Engineer position',
+        onMatchScoreUpdate,
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
       await waitFor(() => {
-        expect(screen.getByText(/Scoring Principles/i)).toBeInTheDocument()
-        expect(screen.getByText(/Skill Match/i)).toBeInTheDocument()
-        expect(screen.getByText(/Experience Alignment/i)).toBeInTheDocument()
-        expect(screen.getByText(/Education & Background/i)).toBeInTheDocument()
+        expect(onMatchScoreUpdate).toHaveBeenCalledWith(85)
       })
     })
   })
 
-  // Suggestion Priority Display Tests
   describe('Suggestion Priority Display', () => {
-    test('displays high priority suggestions with red indicator', async () => {
+    test('displays high priority suggestions with H marker', async () => {
       analyzeResume.mockResolvedValue({
         data: {
-          suggestions: [
-            { category: 'content', priority: 'high', title: 'Critical Issue', description: 'Fix this' }
-          ]
-        }
+          suggestions: [{ category: 'content', priority: 'high', title: 'Critical Issue', description: 'Fix this' }],
+        },
       })
 
-      render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
-      
+      const { rerender } = render(<AnalysisOutput sessionId="test-session-123" canAnalyze analyzeSignal={0} />)
+      rerender(<AnalysisOutput sessionId="test-session-123" canAnalyze analyzeSignal={1} />)
+
       await waitFor(() => {
         expect(screen.getByText('H')).toBeInTheDocument()
       })
     })
 
-    test('displays medium priority suggestions with yellow indicator', async () => {
+    test('displays medium priority suggestions with M marker', async () => {
       analyzeResume.mockResolvedValue({
         data: {
-          suggestions: [
-            { category: 'format', priority: 'medium', title: 'Medium Issue', description: 'Consider this' }
-          ]
-        }
+          suggestions: [{ category: 'format', priority: 'medium', title: 'Medium Issue', description: 'Consider this' }],
+        },
       })
 
-      render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
-      
+      const { rerender } = render(<AnalysisOutput sessionId="test-session-123" canAnalyze analyzeSignal={0} />)
+      rerender(<AnalysisOutput sessionId="test-session-123" canAnalyze analyzeSignal={1} />)
+
       await waitFor(() => {
         expect(screen.getByText('M')).toBeInTheDocument()
       })
     })
 
-    test('displays low priority suggestions with blue indicator', async () => {
+    test('displays low priority suggestions with L marker', async () => {
       analyzeResume.mockResolvedValue({
         data: {
-          suggestions: [
-            { category: 'style', priority: 'low', title: 'Minor Issue', description: 'Optional' }
-          ]
-        }
+          suggestions: [{ category: 'style', priority: 'low', title: 'Minor Issue', description: 'Optional' }],
+        },
       })
 
-      render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
-      
+      const { rerender } = render(<AnalysisOutput sessionId="test-session-123" canAnalyze analyzeSignal={0} />)
+      rerender(<AnalysisOutput sessionId="test-session-123" canAnalyze analyzeSignal={1} />)
+
       await waitFor(() => {
         expect(screen.getByText('L')).toBeInTheDocument()
       })
     })
   })
 
-  // Action Buttons Tests
-  describe('Action Buttons', () => {
-    beforeEach(async () => {
-      analyzeResume.mockResolvedValue({
-        data: { suggestions: [] }
-      })
-    })
-
-    test('shows Generate and Download buttons after analysis', async () => {
-      render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
-      
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Generate Polished Resume/i })).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: /Download Polished Resume/i })).toBeInTheDocument()
-      })
-    })
-
-    test('Generate button is clickable after analysis', async () => {
-      render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
-      
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Generate Polished Resume/i })).toBeInTheDocument()
-      })
-      
-      // Button should be clickable (feature pending implementation)
-      const generateButton = screen.getByRole('button', { name: /Generate Polished Resume/i })
-      expect(generateButton).not.toBeDisabled()
-    })
-
-    test('Download button is disabled without optimized data', async () => {
-      render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
-      
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Download Polished Resume/i })).toBeInTheDocument()
-      })
-      
-      const downloadButton = screen.getByRole('button', { name: /Download Polished Resume/i })
-      expect(downloadButton).toBeDisabled()
-    })
-
-    test('Download button is enabled with optimized data', async () => {
-      render(<AnalysisOutput sessionId="test-session-123" optimizedData={{ encoded_file: 'dGVzdA==' }} />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
-      
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Download Polished Resume/i })).toBeInTheDocument()
-      })
-      
-      const downloadButton = screen.getByRole('button', { name: /Download Polished Resume/i })
-      expect(downloadButton).not.toBeDisabled()
-    })
-
-    test('shows Re-analyze button after analysis', async () => {
-      render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
-      
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Re-analyze/i })).toBeInTheDocument()
-      })
-    })
-  })
-
-  // Error Handling Tests
   describe('Error Handling', () => {
-    test('shows error when sessionId is missing but button clicked', async () => {
-      // This shouldn't happen due to disabled button, but testing the logic
-      render(<AnalysisOutput sessionId="" />)
-      
-      // Force-enable and click (simulating edge case)
-      const button = screen.getByRole('button', { name: /Analyze Resume/i })
-      expect(button).toBeDisabled()
-    })
+    test('shows error when analyze is triggered without sessionId', async () => {
+      const { rerender } = render(<AnalysisOutput analyzeSignal={0} />)
+      rerender(<AnalysisOutput analyzeSignal={1} />)
 
-    test('handles API timeout gracefully', async () => {
-      analyzeResume.mockRejectedValue(new Error('Network timeout'))
-
-      render(<AnalysisOutput sessionId="test-session-123" />)
-      fireEvent.click(screen.getByRole('button', { name: /Analyze Resume/i }))
-      
       await waitFor(() => {
-        expect(screen.getByText(/Network timeout/i)).toBeInTheDocument()
+        expect(screen.getByText(/Please upload a resume first/i)).toBeInTheDocument()
       })
     })
   })
 })
+
