@@ -201,6 +201,12 @@ async def match_resume(request: ResumeMatchRequest):
     except HTTPException:
         # Re-raise HTTP exceptions
         raise
+    except ValueError as e:
+        # JD quality validation errors from PromptBuilder
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        ) from e
     except ContentModerationError as e:
         raise HTTPException(
             status_code=CONTENT_MODERATION_OUTPUT_BLOCKED.code,
