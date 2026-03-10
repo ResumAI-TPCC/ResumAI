@@ -211,6 +211,8 @@ function ResumeAnalysisPage() {
 
   const triggerAnalyze = (source) => {
     if (!canAnalyze || isAnalyzing) return
+    // RA-59: Clear stale match score immediately so the right panel also shows loading state
+    setMatchScore(null)
     setAnalyzeLoadingSource(source)
     setAnalyzeSignal((value) => value + 1)
   }
