@@ -18,6 +18,10 @@ from .schemas import (
     MatchResult,
     OptimizeResult,
 )
+from app.services.validators.content_moderator import (
+    get_content_moderator,
+    ContentModerationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +39,13 @@ class LLMService:
         """Analyze resume and return structured suggestions"""
         response = await self.provider.analyze(prompt, "")  # Pass empty string for job_description
         
+        # RA-62: Check output content safety
+        moderator = get_content_moderator()
+        is_safe, reason = moderator.check_output(response.content)
+        if not is_safe:
+            logger.warning(f"LLM analyze output blocked: {reason}")
+            raise ContentModerationError(reason)
+
         # Parse response into structured format
         suggestions = self._parse_suggestions(response.content, include_example=True)
         return AnalyzeResult(suggestions=suggestions)
@@ -43,6 +54,13 @@ class LLMService:
         """Match resume with JD and return score with suggestions"""
         response = await self.provider.match(prompt, "")  # Pass empty string for job_description
         
+        # RA-62: Check output content safety
+        moderator = get_content_moderator()
+        is_safe, reason = moderator.check_output(response.explanation)
+        if not is_safe:
+            logger.warning(f"LLM match output blocked: {reason}")
+            raise ContentModerationError(reason)
+
         # Parse response into structured format
         match_score, breakdown = self._parse_match_score(response.explanation)
         suggestions = self._parse_suggestions(response.explanation, include_action=True)
@@ -56,6 +74,14 @@ class LLMService:
     async def optimize_resume(self, prompt: str) -> OptimizeResult:
         """Optimize resume and return improved content"""
         response = await self.provider.optimize(prompt, "", None)  # Pass empty strings
+
+        # RA-62: Check output content safety
+        moderator = get_content_moderator()
+        is_safe, reason = moderator.check_output(response.content)
+        if not is_safe:
+            logger.warning(f"LLM optimize output blocked: {reason}")
+            raise ContentModerationError(reason)
+
         return OptimizeResult(optimized_content=response.content)
 
     def _parse_suggestions(

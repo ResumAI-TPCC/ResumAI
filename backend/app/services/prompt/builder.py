@@ -9,6 +9,7 @@ from .templates import (
     MATCH_PROMPT_TEMPLATE,
     OPTIMIZE_NO_JD_PROMPT_TEMPLATE,
     OPTIMIZE_WITH_JD_PROMPT_TEMPLATE,
+    SAFETY_INSTRUCTION,
 )
 
 
@@ -23,6 +24,7 @@ class PromptBuilder:
             raise ValueError("resume_content cannot be empty")
 
         return ANALYZE_PROMPT_TEMPLATE.format(
+            safety_instruction=SAFETY_INSTRUCTION,
             resume_content=resume_content.strip()
         )
 
@@ -34,6 +36,7 @@ class PromptBuilder:
             raise ValueError("job_description cannot be empty")
 
         return MATCH_PROMPT_TEMPLATE.format(
+            safety_instruction=SAFETY_INSTRUCTION,
             resume_content=resume_content.strip(),
             job_description=job_description.strip()
         )
@@ -51,6 +54,7 @@ class PromptBuilder:
         if job_description and job_description.strip():
             # RA-46: Optimize with JD
             return OPTIMIZE_WITH_JD_PROMPT_TEMPLATE.format(
+                safety_instruction=SAFETY_INSTRUCTION,
                 resume_content=resume_content.strip(),
                 job_description=job_description.strip(),
                 template=template,
@@ -58,6 +62,7 @@ class PromptBuilder:
         else:
             # RA-45: Optimize without JD
             return OPTIMIZE_NO_JD_PROMPT_TEMPLATE.format(
+                safety_instruction=SAFETY_INSTRUCTION,
                 resume_content=resume_content.strip(),
                 template=template,
             )

@@ -245,6 +245,24 @@ MISSING_JOB_DESCRIPTION = ErrorTemplate(
 )
 
 # ============================================================================
+# Content Moderation Errors (400)
+# ============================================================================
+
+CONTENT_MODERATION_INPUT_BLOCKED = ErrorTemplate(
+    code=400,
+    status="error",
+    detail="Content contains inappropriate material and cannot be processed.",
+    internal_message="Input content moderation check failed"
+)
+
+CONTENT_MODERATION_OUTPUT_BLOCKED = ErrorTemplate(
+    code=500,
+    status="error",
+    detail="AI generated content that could not pass safety checks. Please try again.",
+    internal_message="Output content moderation check failed"
+)
+
+# ============================================================================
 # Generic Errors (500)
 # ============================================================================
 
