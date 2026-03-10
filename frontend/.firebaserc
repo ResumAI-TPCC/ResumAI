@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "resumai-platform"
-  }
+  },
+  "targets": {
+    "resumai-platform": {
+      "hosting": {
+        "platform_site": [
+          "resumai-platform"
+        ],
+        "app_site": [
+          "resumai-application"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

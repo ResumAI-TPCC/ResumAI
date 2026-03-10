@@ -1,0 +1,139 @@
+name: Production CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag'
+        required: true
+        default: ''
+      deploy_backend:
+        description: 'Deploy backend (true/false)'
+        required: false
+        default: 'true'
+      deploy_frontend:
+        description: 'Deploy frontend (true/false)'
+        required: false
+        default: 'true'
+
+permissions:
+  contents: 'write'
+
+jobs:
+  validate-branch:
+    name: Validate branch is main
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ github.ref }}
+    steps:
+      - name: Fail if not main
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "Workflow can only be run on the 'main' branch. Current ref: $GITHUB_REF";
+            exit 1;
+          fi
+
+    create-release:
+      name: Create GitHub Release
+      needs: validate-branch
+      runs-on: ubuntu-latest
+      steps:
+        - name: Create Release
+          uses: actions/create-release@v1
+          with:
+            tag_name: ${{ github.event.inputs.version }}
+            release_name: ${{ github.event.inputs.version }}
+            body: 'Automated release from prod-cd workflow'
+            draft: false
+            prerelease: false
+            token: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-backend:
+    name: Deploy Backend to Cloud Run (prod)
+    needs: validate-branch
+    if: ${{ github.event.inputs.deploy_backend == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 'Google auth'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ secrets.PROD_GCP_SA_KEY }}'
+
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v2'
+
+      - name: 'Configure Docker'
+        run: |
+          gcloud auth configure-docker --quiet
+
+      - name: 'Build and Push Container'
+        run: |
+          docker build -t gcr.io/${{ secrets.PROD_GCP_PROJECT_ID }}/backend-prod:${{ github.sha }} -f Dockerfile .
+          docker push gcr.io/${{ secrets.PROD_GCP_PROJECT_ID }}/backend-prod:${{ github.sha }}
+
+      - name: 'Deploy to Cloud Run'
+        env:
+          ALLOWED_ORIGINS: ${{ secrets.PROD_ALLOWED_ORIGINS }}
+          LLM_PROVIDER: ${{ secrets.PROD_LLM_PROVIDER }}
+          GEMINI_API_KEY: ${{ secrets.PROD_GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ secrets.PROD_GEMINI_MODEL }}
+          GCP_PROJECT_ID: ${{ secrets.PROD_GCP_PROJECT_ID }}
+          GCS_BUCKET_NAME: ${{ secrets.PROD_GCS_BUCKET_NAME }}
+          GCS_OBJECT_PREFIX: ${{ secrets.PROD_GCS_OBJECT_PREFIX }}
+          APP_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          gcloud run deploy prod-service \
+            --image gcr.io/${{ secrets.PROD_GCP_PROJECT_ID }}/backend-prod:${{ github.sha }} \
+            --region asia-southeast1 \
+            --platform managed \
+            --port 8000 \
+            --allow-unauthenticated \
+            --update-env-vars "LLM_PROVIDER=$LLM_PROVIDER" \
+            --update-env-vars "GEMINI_API_KEY=$GEMINI_API_KEY" \
+            --update-env-vars "GEMINI_MODEL=$GEMINI_MODEL" \
+            --update-env-vars "GCP_PROJECT_ID=$GCP_PROJECT_ID" \
+            --update-env-vars "GCS_BUCKET_NAME=$GCS_BUCKET_NAME" \
+            --update-env-vars "GCS_OBJECT_PREFIX=$GCS_OBJECT_PREFIX" \
+            --update-env-vars "ALLOWED_ORIGINS=$ALLOWED_ORIGINS" \
+            --update-env-vars "APP_VERSION=$APP_VERSION"
+
+  deploy-frontend:
+    name: Deploy Frontend to Firebase (prod)
+    needs: validate-branch
+    if: ${{ github.event.inputs.deploy_frontend == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build project
+        working-directory: frontend
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: ${{ secrets.PROD_VITE_API_BASE_URL }}
+          VITE_APP_VERSION: ${{ github.event.inputs.version }}
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.PROD_GCP_SA_KEY }}
+          projectId: resumai-platform
+          target: app_site
+          channelId: live
+          entryPoint: frontend
