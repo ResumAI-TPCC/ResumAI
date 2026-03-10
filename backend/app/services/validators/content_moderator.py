@@ -75,12 +75,25 @@ class ContentModerator:
         r"\b(nude|naked|xxx)\b",
         r"\b(sexual\s+content|erotic|obscen[ei]|explicit\s+content)\b",
         r"\b(sex\s+worker|prostitut[ei]|escort\s+service)\b",
+        r"\b(hentai|orgasm|genital|penis|vagina)\b",
+        r"\b(rape|molest|pedophil[ei])\b",
     ]
 
     # Hate speech / discriminatory patterns
+    # Includes racial slurs, homophobic slurs, and other derogatory terms
     HATE_SPEECH_PATTERNS: List[str] = [
-        r"\b(racial\s+slur|white\s+supremac[yi]|nazi)\b",
-        r"\b(hate\s+speech|ethnic\s+cleansing)\b",
+        r"\b(racial\s+slur|white\s+supremac[yi]|nazi|neonazi|neo[- ]nazi)\b",
+        r"\b(hate\s+speech|ethnic\s+cleansing|genocide)\b",
+        # Racial slurs
+        r"\b(nigger|nigga|chink|gook|spic|wetback|kike|beaner)\b",
+        r"\b(coon|darkie|paki|towelhead|raghead|redskin)\b",
+        # Homophobic / transphobic slurs
+        r"\b(faggot|fag|dyke|tranny)\b",
+        # General profanity used as slurs / harassment
+        r"\b(fucker|motherfucker|fuckface)\b",
+        r"\b(bitch|whore|slut|cunt)\b(?!\s+(creek|river)\b)",  # exclude place names like "Cunt Creek"
+        # Dehumanizing language
+        r"\b(subhuman|untermensch|vermin)\b",
     ]
 
     # Prompt injection patterns

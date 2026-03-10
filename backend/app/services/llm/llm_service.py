@@ -196,6 +196,27 @@ class LLMService:
         re.IGNORECASE
     )
 
+    # Patterns that indicate the LLM refused the request or included a safety
+    # disclaimer in its output. If these appear, the entire output should be
+    # rejected rather than displayed as resume content.
+    _LLM_REFUSAL_PATTERNS = re.compile(
+        r'('
+        # Direct refusal statements
+        r'\bI\s+am\s+sorry\b.*\b(violat|cannot|can\'t|unable|refuse|inappropriate|safety\s+guideline)|'
+        r'\bI\s+cannot\s+(fulfill|comply|complete|process|generate)\b|'
+        r'\bI\s+can\'t\s+(fulfill|comply|complete|process|generate)\b|'
+        r'\bI\'m\s+unable\s+to\b|'
+        # Safety/policy disclaimers
+        r'\bviolat\w*\s+(my|the|our)\s+(safety|content|usage)\s+(guideline|polic|rule)|'
+        r'\bagainst\s+(my|the|our)\s+(safety|content|usage)\s+(guideline|polic|rule)|'
+        r'\b(safety|content)\s+guidelines?\s+(prevent|prohibit|restrict|do\s+not\s+allow)|'
+        # Apology + refusal combo
+        r'\bapologi[zs]e\b.*\b(cannot|can\'t|unable|inappropriate)|'
+        r'\bfulfill\s+(the\s+)?user\'?s?\s+request\b'
+        r')',
+        re.IGNORECASE
+    )
+
     def _clean_optimize_output(self, content: str) -> str:
         """
         Clean LLM optimize output by removing non-resume artifacts.
@@ -205,16 +226,35 @@ class LLMService:
         resume output. This method scans ALL lines and removes content
         that would not belong in a real professional resume.
 
+        If the LLM output contains a refusal or safety disclaimer (e.g.,
+        "I am sorry, I cannot fulfill this request..."), the entire output
+        is rejected by raising ContentModerationError, so the frontend
+        receives a clear error instead of seeing the refusal text as
+        resume content.
+
         Strategy:
-        - For heading lines (#): strip any detected editorial phrase
-          from the line while preserving the rest.
-        - For body lines: remove entire lines that are purely editorial
-          (e.g., standalone "Note: ...", "Bug found", etc.)
-        - For bullet points and paragraphs containing legitimate resume
-          content mixed with artifacts: strip only the artifact portion.
+        1. First check if the LLM refused the request entirely — if so,
+           raise an error immediately.
+        2. For heading lines (#): strip any detected editorial phrase
+           from the line while preserving the rest.
+        3. For body lines: remove entire lines that are purely editorial.
+        4. For mixed content: strip only the artifact portion.
         """
         if not content or not content.strip():
             return content
+
+        # Check if LLM refused the request or included safety disclaimers.
+        # This means the input likely contained inappropriate content that
+        # bypassed our input checks but was caught by the LLM's own safety.
+        refusal_match = self._LLM_REFUSAL_PATTERNS.search(content)
+        if refusal_match:
+            logger.warning(
+                f"LLM output contains refusal/disclaimer: '{refusal_match.group()[:100]}'"
+            )
+            raise ContentModerationError(
+                "Your input contained content that could not be processed. "
+                "Please revise your resume or job description and try again."
+            )
 
         lines = content.split('\n')
         cleaned_lines = []
