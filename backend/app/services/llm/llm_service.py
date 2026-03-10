@@ -302,20 +302,47 @@ class LLMService:
         return '\n'.join(cleaned_lines)
 
     def _parse_match_score(self, content: str) -> tuple[int, MatchBreakdown]:
-        """Parse match score and breakdown from LLM response"""
+        """
+        Parse match score and breakdown from LLM response.
+
+        Includes reasonability checks:
+        - All scores are clamped to 0-100 range.
+        - The overall match_score is validated against the weighted average
+          of breakdown scores. If they deviate significantly, the weighted
+          average is used instead (prevents LLM from inflating the total).
+        """
         json_data = self._extract_json(content)
         breakdown = MatchBreakdown()
         score = 0
 
         if json_data and isinstance(json_data, dict):
-            score = int(json_data.get("match_score", 0))
+            # Clamp all scores to 0-100
+            score = max(0, min(100, int(json_data.get("match_score", 0))))
             bd = json_data.get("match_breakdown", {})
             breakdown = MatchBreakdown(
-                skills_match=int(bd.get("skills_match", 0)),
-                experience_match=int(bd.get("experience_match", 0)),
-                education_match=int(bd.get("education_match", 0)),
-                keywords_match=int(bd.get("keywords_match", 0)),
+                skills_match=max(0, min(100, int(bd.get("skills_match", 0)))),
+                experience_match=max(0, min(100, int(bd.get("experience_match", 0)))),
+                education_match=max(0, min(100, int(bd.get("education_match", 0)))),
+                keywords_match=max(0, min(100, int(bd.get("keywords_match", 0)))),
             )
+
+            # Validate: overall score should be close to weighted average
+            # Weights: skills 35%, experience 25%, education 15%, keywords 25%
+            expected_score = round(
+                breakdown.skills_match * 0.35
+                + breakdown.experience_match * 0.25
+                + breakdown.education_match * 0.15
+                + breakdown.keywords_match * 0.25
+            )
+
+            if abs(score - expected_score) > 15:
+                logger.warning(
+                    f"Match score deviation: LLM returned {score}, "
+                    f"weighted average is {expected_score}. "
+                    f"Using weighted average."
+                )
+                score = expected_score
+
         return score, breakdown
 
 
