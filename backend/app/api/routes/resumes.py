@@ -23,6 +23,7 @@ from app.schemas.resume_schema import (
 )
 from app.services.resume_service import get_resume_content, upload_resume_to_gcs
 from app.services.file_service import generate_and_encode_resume
+from app.services.pdf_service import markdown_to_pdf
 from app.services.prompt.builder import get_prompt_builder
 from app.services.llm.llm_service import get_llm_service
 from app.services.llm.exceptions import (
@@ -218,10 +219,10 @@ async def optimize_resume(request: ResumeOptimizeRequest):
         llm = get_llm_service()
         result = await llm.optimize_resume(prompt)
 
-        # 4. Generate and encode file for download
-        # Note: Using markdown format for MVP. PDF generation is available
-        # in app.services.pdf_service and reserved for future use.
-        encoded_content = generate_and_encode_resume(result.optimized_content)
+        # 4. Convert optimized content to PDF and encode as base64
+        import base64
+        pdf_bytes = markdown_to_pdf(result.optimized_content)
+        encoded_content = base64.b64encode(pdf_bytes).decode()
 
         return ResumeOptimizeResponse(
             code=200,
