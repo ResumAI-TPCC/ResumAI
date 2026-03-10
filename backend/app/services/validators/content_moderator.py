@@ -60,7 +60,8 @@ class ContentModerator:
     VIOLENCE_PATTERNS: List[str] = [
         r"\b(murder|assassinat[ei]|massacre|slaughter)\b",
         r"\b(bomb(?:ing)?|terroris[tm]|weapon|firearm)\b",
-        r"\b(stab(?:bed|bing)?|gore|dismember|mutilat[ei]|tortur[ei])\b",
+        r"\b(stab(?:bed|bing)?|dismember|mutilat[ei]|tortur[ei])\b",
+        r"\b(gory|blood\s*and\s*gore|violent\s+gore)\b",  # "gore" only in explicit violent context, avoids matching names like "Al Gore"
         r"\b(suicide|self[- ]?harm)\b",
         r"\bkill(?:ing|ed|s)?\b(?!\s*it\b)",  # "kill" but not "kill it" (slang for doing well)
         r"\bshoot(?:ing|s)?\b(?!\s+for\b)",  # "shoot" but not "shoot for" (as in "shoot for the stars")
@@ -102,7 +103,10 @@ class ContentModerator:
         r"ignore\s+(previous|above|all|prior)\s+(instructions?|prompts?|rules?)",
         r"(you\s+are\s+now|from\s+now\s+on\s+you\s+are)\s+",
         r"(act\s+as|pretend\s+to\s+be|roleplay\s+as)\s+",
-        r"(system\s*:\s*|<\|im_start\|>|<\|im_end\|>)",
+        r"(<\|im_start\|>|<\|im_end\|>)",
+        # "system: <instruction>" — only match when followed by instruction-like words
+        # Avoids false positives on "System: Linux", "System: ROS2", etc.
+        r"\bsystem\s*:\s*(you\s|your\s|now\s|from\s|ignore|forget|override|disregard|do\s+not)",
         r"(disregard|forget)\s+(all\s+)?(previous|prior|above)",
         r"do\s+not\s+follow\s+(your|the)\s+(rules|instructions|guidelines)",
         r"override\s+(your|the|all)\s+(rules|instructions|safety)",
