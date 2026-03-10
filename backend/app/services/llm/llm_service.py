@@ -82,7 +82,10 @@ class LLMService:
             logger.warning(f"LLM optimize output blocked: {reason}")
             raise ContentModerationError(reason)
 
-        return OptimizeResult(optimized_content=response.content)
+        # RA-62: Clean LLM output artifacts
+        cleaned_content = self._clean_optimize_output(response.content)
+
+        return OptimizeResult(optimized_content=cleaned_content)
 
     def _parse_suggestions(
         self,
@@ -171,6 +174,92 @@ class LLMService:
             example="N/A" if include_example else None,
             action="N/A" if include_action else None
         )]
+
+    # Patterns for non-resume editorial/meta content that LLM may inject.
+    # Used by _clean_optimize_output to detect and remove artifacts.
+    # These match standalone phrases that would never appear in a real resume.
+    _EDITORIAL_PATTERNS = re.compile(
+        r'('
+        # Status/issue markers injected by LLM
+        r'\bbug\s+found\b|\bissue\s+found\b|\berror\s+found\b|'
+        # Editorial labels (standalone, not part of job descriptions like "bug reporting")
+        r'(?:^|\s)note\s*:\s|(?:^|\s)warning\s*:\s|(?:^|\s)todo\s*:\s|(?:^|\s)fixme\s*:\s|'
+        # Feedback/commentary that doesn't belong in a resume
+        r'(?:^|\s)feedback\s*:\s|(?:^|\s)observation\s*:\s|(?:^|\s)comment\s*:\s|'
+        # Improvement markers (belong in analysis output, not in resume)
+        r'\bimprovement\s+needed\b|\bneeds\s+improvement\b|\baction\s+required\b|'
+        # LLM self-referencing phrases
+        r'\b(?:as\s+an?\s+AI|as\s+a\s+language\s+model|I\s+(?:have|cannot|can\'t)\s+)\b|'
+        # Meta-commentary about the resume itself
+        r'\b(?:this\s+resume\s+(?:needs|lacks|should|could)|the\s+candidate\s+should)\b'
+        r')',
+        re.IGNORECASE
+    )
+
+    def _clean_optimize_output(self, content: str) -> str:
+        """
+        Clean LLM optimize output by removing non-resume artifacts.
+
+        LLM sometimes injects editorial comments, meta-observations, or
+        injected text (from prompt injection via JD) into the optimized
+        resume output. This method scans ALL lines and removes content
+        that would not belong in a real professional resume.
+
+        Strategy:
+        - For heading lines (#): strip any detected editorial phrase
+          from the line while preserving the rest.
+        - For body lines: remove entire lines that are purely editorial
+          (e.g., standalone "Note: ...", "Bug found", etc.)
+        - For bullet points and paragraphs containing legitimate resume
+          content mixed with artifacts: strip only the artifact portion.
+        """
+        if not content or not content.strip():
+            return content
+
+        lines = content.split('\n')
+        cleaned_lines = []
+
+        for line in lines:
+            stripped = line.strip()
+
+            if not stripped:
+                # Preserve blank lines for formatting
+                cleaned_lines.append(line)
+                continue
+
+            if self._EDITORIAL_PATTERNS.search(stripped):
+                if stripped.startswith('#'):
+                    # Heading line: remove the editorial phrase, keep the rest
+                    cleaned = self._EDITORIAL_PATTERNS.sub('', stripped).strip()
+                    # Clean up leftover separators like " - " or " : "
+                    cleaned = re.sub(r'^\s*#+\s*[-–—:]\s*', lambda m: m.group().split('-')[0].split('–')[0].split('—')[0].split(':')[0], cleaned)
+                    cleaned = re.sub(r'\s*[-–—]\s*$', '', cleaned)
+                    if cleaned.strip('#').strip():
+                        logger.info(
+                            f"Cleaned heading artifact: '{stripped}' -> '{cleaned}'"
+                        )
+                        cleaned_lines.append(cleaned)
+                    # else: heading is entirely editorial, skip it
+                else:
+                    # Body line: check if the entire line is editorial
+                    cleaned = self._EDITORIAL_PATTERNS.sub('', stripped).strip()
+                    # Remove leftover bullet markers or separators
+                    cleaned = re.sub(r'^[-*]\s*$', '', cleaned).strip()
+                    if cleaned:
+                        # Line has real content mixed in, keep the cleaned version
+                        logger.info(
+                            f"Cleaned body artifact: '{stripped}' -> '{cleaned}'"
+                        )
+                        cleaned_lines.append(cleaned)
+                    else:
+                        # Entire line was editorial, remove it
+                        logger.info(
+                            f"Removed editorial line: '{stripped}'"
+                        )
+            else:
+                cleaned_lines.append(line)
+
+        return '\n'.join(cleaned_lines)
 
     def _parse_match_score(self, content: str) -> tuple[int, MatchBreakdown]:
         """Parse match score and breakdown from LLM response"""

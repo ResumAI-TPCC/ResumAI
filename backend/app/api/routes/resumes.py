@@ -75,7 +75,7 @@ async def analyze_resume(request: ResumeAnalyzeRequest):
         if not is_safe:
             raise HTTPException(
                 status_code=CONTENT_MODERATION_INPUT_BLOCKED.code,
-                detail=CONTENT_MODERATION_INPUT_BLOCKED.detail
+                detail=reason
             )
 
         # 2. Build prompt (Service 2)
@@ -110,7 +110,7 @@ async def analyze_resume(request: ResumeAnalyzeRequest):
     except ContentModerationError as e:
         raise HTTPException(
             status_code=CONTENT_MODERATION_OUTPUT_BLOCKED.code,
-            detail=CONTENT_MODERATION_OUTPUT_BLOCKED.detail
+            detail=e.message
         ) from e
     except LLMServiceUnavailableError as e:
         raise HTTPException(
@@ -156,13 +156,13 @@ async def match_resume(request: ResumeMatchRequest):
         if not is_safe:
             raise HTTPException(
                 status_code=CONTENT_MODERATION_INPUT_BLOCKED.code,
-                detail=CONTENT_MODERATION_INPUT_BLOCKED.detail
+                detail=reason
             )
         is_safe, reason = moderator.check_input(request.job_description)
         if not is_safe:
             raise HTTPException(
                 status_code=CONTENT_MODERATION_INPUT_BLOCKED.code,
-                detail=CONTENT_MODERATION_INPUT_BLOCKED.detail
+                detail=reason
             )
 
         # 2. Build match prompt (Service 2)
@@ -204,7 +204,7 @@ async def match_resume(request: ResumeMatchRequest):
     except ContentModerationError as e:
         raise HTTPException(
             status_code=CONTENT_MODERATION_OUTPUT_BLOCKED.code,
-            detail=CONTENT_MODERATION_OUTPUT_BLOCKED.detail
+            detail=e.message
         ) from e
     except LLMServiceUnavailableError as e:
         raise HTTPException(
@@ -250,14 +250,14 @@ async def optimize_resume(request: ResumeOptimizeRequest):
         if not is_safe:
             raise HTTPException(
                 status_code=CONTENT_MODERATION_INPUT_BLOCKED.code,
-                detail=CONTENT_MODERATION_INPUT_BLOCKED.detail
+                detail=reason
             )
         if request.job_description:
             is_safe, reason = moderator.check_input(request.job_description)
             if not is_safe:
                 raise HTTPException(
                     status_code=CONTENT_MODERATION_INPUT_BLOCKED.code,
-                    detail=CONTENT_MODERATION_INPUT_BLOCKED.detail
+                    detail=reason
                 )
 
         # 2. Build optimize prompt (Service 2)
@@ -289,7 +289,7 @@ async def optimize_resume(request: ResumeOptimizeRequest):
     except ContentModerationError as e:
         raise HTTPException(
             status_code=CONTENT_MODERATION_OUTPUT_BLOCKED.code,
-            detail=CONTENT_MODERATION_OUTPUT_BLOCKED.detail
+            detail=e.message
         ) from e
     except LLMServiceUnavailableError as e:
         raise HTTPException(
