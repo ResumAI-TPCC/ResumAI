@@ -22,7 +22,6 @@ from app.schemas.resume_schema import (
     OptimizeResponseData,
 )
 from app.services.resume_service import get_resume_content, upload_resume_to_gcs
-from app.services.file_service import generate_and_encode_resume
 from app.services.pdf_service import markdown_to_pdf
 from app.services.prompt.builder import get_prompt_builder
 from app.services.llm.llm_service import get_llm_service
