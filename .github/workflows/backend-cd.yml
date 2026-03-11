@@ -1,0 +1,68 @@
+name: Backend CD (Deploy to Cloud Run)
+
+on:
+  workflow_run:
+    workflows:
+      - "Backend CI (Test and Lint)"
+    types:
+      - completed
+    branches:
+      - develop
+
+permissions:
+  contents: 'read'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success'}}
+    
+    defaults:
+      run:
+        working-directory: ./backend
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: 'Google auth'
+      uses: 'google-github-actions/auth@v2'
+      with:
+        credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+    - name: 'Set up Cloud SDK'
+      uses: 'google-github-actions/setup-gcloud@v2'
+
+    - name: 'Configure Docker'
+      run: |
+        gcloud auth configure-docker --quiet
+
+    - name: 'Build and Push Container'
+      run: |
+        docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/backend-test:${{ github.sha }} -f Dockerfile .
+        docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/backend-test:${{ github.sha }}
+
+    - name: 'Deploy to Cloud Run'
+      env:
+        ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
+        LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+        GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME }}
+        GCS_OBJECT_PREFIX: ${{ secrets.GCS_OBJECT_PREFIX }}
+      run: |
+        gcloud run deploy test-service \
+          --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/backend-test:${{ github.sha }} \
+          --region asia-southeast1 \
+          --platform managed \
+          --port 8000 \
+          --allow-unauthenticated \
+          --update-env-vars "LLM_PROVIDER=$LLM_PROVIDER" \
+          --update-env-vars "GEMINI_API_KEY=$GEMINI_API_KEY" \
+          --update-env-vars "GEMINI_MODEL=$GEMINI_MODEL" \
+          --update-env-vars "GCP_PROJECT_ID=$GCP_PROJECT_ID" \
+          --update-env-vars "GCS_BUCKET_NAME=$GCS_BUCKET_NAME" \
+          --update-env-vars "GCS_OBJECT_PREFIX=$GCS_OBJECT_PREFIX" \
+          --update-env-vars "ALLOWED_ORIGINS=$ALLOWED_ORIGINS" \
+          --update-env-vars "APP_VERSION=QA"
