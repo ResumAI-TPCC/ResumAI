@@ -16,6 +16,10 @@ function AnalysisOutput({
   const [analysisData, setAnalysisData] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [error, setError] = useState(null)
+  const shouldUseMatch =
+    Boolean(jobDescription && jobDescription.trim()) ||
+    Boolean(companyName && companyName.trim()) ||
+    Boolean(jobTitle && jobTitle.trim())
 
   const handleAnalyze = async () => {
     if (isAnalyzing) return
@@ -33,7 +37,7 @@ function AnalysisOutput({
 
     try {
       let result;
-      if (jobDescription && jobDescription.trim()) {
+      if (shouldUseMatch) {
         // Call match API with job description
         result = await matchResumeWithJob(
           sessionId,
@@ -41,14 +45,14 @@ function AnalysisOutput({
           jobTitle || '',
           companyName || ''
         )
-        
+
         const matchScore = result.data?.match_score || 68
-        
+
         // Notify parent component of match score
         if (onMatchScoreUpdate) {
           onMatchScoreUpdate(matchScore)
         }
-        
+
         // Set data for match analysis
         setAnalysisData({
           type: 'match',
@@ -87,7 +91,7 @@ function AnalysisOutput({
       } else {
         // Call analyze API without job description
         result = await analyzeResume(sessionId)
-        
+
         // Set data for general analysis
         setAnalysisData({
           type: 'analyze',
@@ -139,12 +143,12 @@ function AnalysisOutput({
               </svg>
             </div>
             <h2 className="text-lg font-semibold text-gray-800 mb-2">
-              {jobDescription && jobDescription.trim() ? 'Ready to Match Resume' : 'Ready to Analyze Resume'}
+              {shouldUseMatch ? 'Ready to Match Resume' : 'Ready to Analyze Resume'}
             </h2>
             <p className="text-gray-600 mb-6 text-sm">
               {!canAnalyze && 'Please upload your resume to get started'}
-              {canAnalyze && (!jobDescription || !jobDescription.trim()) && 'Use the Analyze button in the left panel'}
-              {canAnalyze && jobDescription && jobDescription.trim() && 'Use the Match Resume button in the left panel'}
+              {canAnalyze && !shouldUseMatch && 'Use the Analyze button in the left panel'}
+              {canAnalyze && shouldUseMatch && 'Use the Match Resume button in the left panel'}
             </p>
             {error && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -215,11 +219,10 @@ function AnalysisOutput({
                   {analysisData.suggestions.map((suggestion, index) => (
                     <div key={index} className="border border-gray-200 rounded-lg p-4">
                       <div className="flex items-start gap-3">
-                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${
-                          suggestion.priority === 'high' ? 'bg-red-100 text-red-700' :
-                          suggestion.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-blue-100 text-blue-700'
-                        }`}>
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${suggestion.priority === 'high' ? 'bg-red-100 text-red-700' :
+                            suggestion.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-blue-100 text-blue-700'
+                          }`}>
                           {suggestion.priority === 'high' ? 'H' : suggestion.priority === 'medium' ? 'M' : 'L'}
                         </div>
                         <div className="flex-1">
