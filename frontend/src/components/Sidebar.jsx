@@ -1,31 +1,35 @@
 import PropTypes from 'prop-types'
 import FileUpload from './FileUpload'
 
-function Sidebar({ 
-  sessionId, 
-  companyName, 
-  jobTitle, 
-  jobDescription, 
+function Sidebar({
+  companyName,
+  jobTitle,
+  jobDescription,
   selectedFile,
   uploadedFile,
   isUploading,
+  isAnalyzing,
+  isAnalyzeLoading,
   uploadError,
+  canAnalyze,
   onCompanyNameChange,
   onJobTitleChange,
   onJobDescriptionChange,
   onFileSelect,
   onRemoveFile,
   onUpload,
-  onClearSession 
+  onAnalyze,
+  onClearSession
 }) {
-  // sessionId reserved for future use
-  void sessionId
-
   const handleClearJD = () => {
     onJobDescriptionChange('')
   }
 
   const displayFile = uploadedFile || selectedFile
+  const shouldUseMatch =
+    Boolean(jobDescription && jobDescription.trim()) ||
+    Boolean(companyName && companyName.trim()) ||
+    Boolean(jobTitle && jobTitle.trim())
 
   return (
     <aside className="w-96 bg-white border-r border-gray-200 h-screen flex flex-col">
@@ -58,7 +62,7 @@ function Sidebar({
               type="text"
               value={companyName || ''}
               onChange={(e) => onCompanyNameChange(e.target.value)}
-              placeholder="Enter company name"
+              placeholder="(Optional) Enter company name"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
             />
           </div>
@@ -73,7 +77,7 @@ function Sidebar({
               type="text"
               value={jobTitle || ''}
               onChange={(e) => onJobTitleChange(e.target.value)}
-              placeholder="Enter job title"
+              placeholder="(Optional) Enter job title"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
             />
           </div>
@@ -81,13 +85,13 @@ function Sidebar({
           {/* Job Description Textarea */}
           <div>
             <label htmlFor="job-description" className="block text-xs font-medium text-gray-700 mb-1.5">
-              Job Description (JD) - Optional
+              Job Description (JD)
             </label>
             <textarea
               id="job-description"
               value={jobDescription || ''}
               onChange={(e) => onJobDescriptionChange(e.target.value)}
-              placeholder="Paste job description here..."
+              placeholder="(Optional) Paste job description here..."
               rows={4}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none"
             />
@@ -112,7 +116,7 @@ function Sidebar({
               isUploaded={!!uploadedFile}
               onRemoveFile={onRemoveFile}
             />
-            
+
             {/* Upload Button - Only show when file is selected but not uploaded yet */}
             {selectedFile && !uploadedFile && (
               <button
@@ -147,6 +151,26 @@ function Sidebar({
             )}
           </div>
 
+          <div>
+            <button
+              onClick={onAnalyze}
+              disabled={!canAnalyze || isAnalyzing}
+              className="w-full px-4 py-2.5 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isAnalyzeLoading ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>{shouldUseMatch ? 'Matching Resume...' : 'Analyzing Resume...'}</span>
+                </>
+              ) : (
+                <span>{shouldUseMatch ? 'Match Resume' : 'Analyze Resume'}</span>
+              )}
+            </button>
+          </div>
+
           {/* Clear Session Button */}
           <div className="pt-2">
             <button
@@ -159,6 +183,21 @@ function Sidebar({
               Refreshing the page will clear all data
             </p>
           </div>
+
+          {/* Feedback Link */}
+          <div className="pt-2">
+            <a
+              href="https://docs.google.com/forms/d/e/1FAIpQLSevfYCrmB_-yniCWf_cbTustF0vQ6K76kvYWdGLpvRqoEbl6Q/viewform?usp=dialog"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full px-4 py-2 border border-blue-400 text-blue-600 font-medium rounded-md hover:bg-blue-50 transition-colors text-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Give us feedback
+            </a>
+          </div>
         </div>
       </div>
     </aside>
@@ -166,7 +205,6 @@ function Sidebar({
 }
 
 Sidebar.propTypes = {
-  sessionId: PropTypes.string,
   companyName: PropTypes.string,
   jobTitle: PropTypes.string,
   jobDescription: PropTypes.string,
@@ -179,13 +217,17 @@ Sidebar.propTypes = {
     size: PropTypes.number,
   }),
   isUploading: PropTypes.bool,
+  isAnalyzing: PropTypes.bool,
+  isAnalyzeLoading: PropTypes.bool,
   uploadError: PropTypes.string,
+  canAnalyze: PropTypes.bool,
   onCompanyNameChange: PropTypes.func.isRequired,
   onJobTitleChange: PropTypes.func.isRequired,
   onJobDescriptionChange: PropTypes.func.isRequired,
   onFileSelect: PropTypes.func.isRequired,
   onRemoveFile: PropTypes.func.isRequired,
   onUpload: PropTypes.func.isRequired,
+  onAnalyze: PropTypes.func.isRequired,
   onClearSession: PropTypes.func.isRequired,
 }
 

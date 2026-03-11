@@ -22,7 +22,7 @@ from app.schemas.resume_schema import (
     OptimizeResponseData,
 )
 from app.services.resume_service import get_resume_content, upload_resume_to_gcs
-from app.services.file_service import generate_and_encode_resume
+from app.services.pdf_service import markdown_to_pdf
 from app.services.prompt.builder import get_prompt_builder
 from app.services.llm.llm_service import get_llm_service
 from app.services.llm.exceptions import (
@@ -30,8 +30,12 @@ from app.services.llm.exceptions import (
     LLMResponseError,
     LLMException,
 )
+from app.services.validators.content_moderator import ContentModerationError
+from app.services.validators.content_moderator import get_content_moderator
 from app.core.error_templates import (
     RESUME_EMPTY_CONTENT,
+    CONTENT_MODERATION_INPUT_BLOCKED,
+    CONTENT_MODERATION_OUTPUT_BLOCKED,
     LLM_SERVICE_UNAVAILABLE,
     LLM_INVALID_RESPONSE,
     LLM_GENERIC_ERROR,
@@ -65,6 +69,15 @@ async def analyze_resume(request: ResumeAnalyzeRequest):
                 detail=RESUME_EMPTY_CONTENT.detail
             )
 
+        # 1.5 Content moderation - check input (RA-62)
+        moderator = get_content_moderator()
+        is_safe, reason = moderator.check_input(resume_content)
+        if not is_safe:
+            raise HTTPException(
+                status_code=CONTENT_MODERATION_INPUT_BLOCKED.code,
+                detail=reason
+            )
+
         # 2. Build prompt (Service 2)
         builder = get_prompt_builder()
         prompt = builder.build_analyze_prompt(resume_content)
@@ -94,6 +107,11 @@ async def analyze_resume(request: ResumeAnalyzeRequest):
     except HTTPException:
         # Re-raise HTTP exceptions (from resume service, validation, etc.)
         raise
+    except ContentModerationError as e:
+        raise HTTPException(
+            status_code=CONTENT_MODERATION_OUTPUT_BLOCKED.code,
+            detail=e.message
+        ) from e
     except LLMServiceUnavailableError as e:
         raise HTTPException(
             status_code=LLM_SERVICE_UNAVAILABLE.code,
@@ -132,9 +150,44 @@ async def match_resume(request: ResumeMatchRequest):
                 detail=RESUME_EMPTY_CONTENT.detail
             )
 
+        has_job_description = bool(request.job_description and request.job_description.strip())
+        has_job_title = bool(request.job_title and request.job_title.strip())
+        has_company_name = bool(request.company_name and request.company_name.strip())
+
+        # New match trigger logic:
+        # Use match when any one of JD / Job Title / Company Name is present.
+        if has_job_description:
+            match_context = request.job_description.strip()
+        elif has_job_title or has_company_name:
+            match_context = (
+                "Target role context:\n"
+                f"Company: {(request.company_name or '').strip() or 'N/A'}\n"
+                f"Job Title: {(request.job_title or '').strip() or 'N/A'}\n"
+                "Use this context to evaluate resume-job fit."
+            )
+        else:
+            raise ValueError(
+                "Please provide at least one of Job Description, Job Title, or Company Name for matching."
+            )
+
+        # 1.5 Content moderation - check inputs (RA-62)
+        moderator = get_content_moderator()
+        is_safe, reason = moderator.check_input(resume_content)
+        if not is_safe:
+            raise HTTPException(
+                status_code=CONTENT_MODERATION_INPUT_BLOCKED.code,
+                detail=reason
+            )
+        is_safe, reason = moderator.check_input(match_context)
+        if not is_safe:
+            raise HTTPException(
+                status_code=CONTENT_MODERATION_INPUT_BLOCKED.code,
+                detail=reason
+            )
+
         # 2. Build match prompt (Service 2)
         builder = get_prompt_builder()
-        prompt = builder.build_match_prompt(resume_content, request.job_description)
+        prompt = builder.build_match_prompt(resume_content, match_context)
 
         # 3. Call LLM and parse result (Service 3)
         llm = get_llm_service()
@@ -168,6 +221,17 @@ async def match_resume(request: ResumeMatchRequest):
     except HTTPException:
         # Re-raise HTTP exceptions
         raise
+    except ValueError as e:
+        # JD quality validation errors from PromptBuilder
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        ) from e
+    except ContentModerationError as e:
+        raise HTTPException(
+            status_code=CONTENT_MODERATION_OUTPUT_BLOCKED.code,
+            detail=e.message
+        ) from e
     except LLMServiceUnavailableError as e:
         raise HTTPException(
             status_code=LLM_SERVICE_UNAVAILABLE.code,
@@ -206,6 +270,22 @@ async def optimize_resume(request: ResumeOptimizeRequest):
                 detail=RESUME_EMPTY_CONTENT.detail
             )
 
+        # 1.5 Content moderation - check inputs (RA-62)
+        moderator = get_content_moderator()
+        is_safe, reason = moderator.check_input(resume_content)
+        if not is_safe:
+            raise HTTPException(
+                status_code=CONTENT_MODERATION_INPUT_BLOCKED.code,
+                detail=reason
+            )
+        if request.job_description:
+            is_safe, reason = moderator.check_input(request.job_description)
+            if not is_safe:
+                raise HTTPException(
+                    status_code=CONTENT_MODERATION_INPUT_BLOCKED.code,
+                    detail=reason
+                )
+
         # 2. Build optimize prompt (Service 2)
         builder = get_prompt_builder()
         prompt = builder.build_optimize_prompt(
@@ -218,10 +298,10 @@ async def optimize_resume(request: ResumeOptimizeRequest):
         llm = get_llm_service()
         result = await llm.optimize_resume(prompt)
 
-        # 4. Generate and encode file for download
-        # Note: Using markdown format for MVP. PDF generation is available
-        # in app.services.pdf_service and reserved for future use.
-        encoded_content = generate_and_encode_resume(result.optimized_content)
+        # 4. Convert optimized content to PDF and encode as base64
+        import base64
+        pdf_bytes = markdown_to_pdf(result.optimized_content)
+        encoded_content = base64.b64encode(pdf_bytes).decode()
 
         return ResumeOptimizeResponse(
             code=200,
@@ -232,6 +312,11 @@ async def optimize_resume(request: ResumeOptimizeRequest):
     except HTTPException:
         # Re-raise HTTP exceptions
         raise
+    except ContentModerationError as e:
+        raise HTTPException(
+            status_code=CONTENT_MODERATION_OUTPUT_BLOCKED.code,
+            detail=e.message
+        ) from e
     except LLMServiceUnavailableError as e:
         raise HTTPException(
             status_code=LLM_SERVICE_UNAVAILABLE.code,

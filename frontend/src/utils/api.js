@@ -95,23 +95,28 @@ export async function analyzeResume(sessionId) {
 
     // Handle different HTTP status codes
     if (response.status === 400) {
-      const errorData = await response.json().catch(() => ({ message: 'Invalid request' }));
-      throw new Error(errorData.message || 'Invalid request parameters');
+      const errorData = await response.json().catch(() => ({ detail: 'Invalid request' }));
+      throw new Error(errorData.detail || errorData.message || 'Invalid request parameters');
     }
 
     if (response.status === 404) {
-      const errorData = await response.json().catch(() => ({ message: 'Resume not found' }));
-      throw new Error(errorData.message || 'Resume not found. Please upload your resume again.');
+      const errorData = await response.json().catch(() => ({ detail: 'Resume not found' }));
+      throw new Error(errorData.detail || errorData.message || 'Resume not found. Please upload your resume again.');
+    }
+
+    // Handle 422 Unprocessable Entity - file format incompatible for analysis
+    if (response.status === 422) {
+      throw new Error('The file format is incompatible for analysis. Please use PDF or DOCX.');
     }
 
     if (response.status === 500) {
-      const errorData = await response.json().catch(() => ({ message: 'Server error' }));
-      throw new Error(errorData.message || 'Server error occurred. Please try again later.');
+      const errorData = await response.json().catch(() => ({ detail: 'Server error' }));
+      throw new Error(errorData.detail || errorData.message || 'Server error occurred. Please try again later.');
     }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: 'Analysis failed' }));
-      throw new Error(errorData.message || `Analysis failed: ${response.status}`);
+      const errorData = await response.json().catch(() => ({ detail: 'Analysis failed' }));
+      throw new Error(errorData.detail || errorData.message || `Analysis failed: ${response.status}`);
     }
 
     const result = await response.json();
@@ -123,11 +128,14 @@ export async function analyzeResume(sessionId) {
 
     return result;
   } catch (error) {
-    // Re-throw validation errors
+    // Re-throw known errors (validation, moderation, server errors)
     if (error.message.includes('Session ID is required') ||
       error.message.includes('Resume not found') ||
       error.message.includes('Invalid request') ||
-      error.message.includes('Server error')) {
+      error.message.includes('Server error') ||
+      error.message.includes('file format is incompatible') ||
+      error.message.includes('rejected') ||
+      error.message.includes('moderation')) {
       throw error;
     }
 
@@ -165,8 +173,8 @@ export async function matchResumeWithJob(sessionId, jobDescription, jobTitle = '
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Match failed' }));
-    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+    const error = await response.json().catch(() => ({ detail: 'Match failed' }));
+    throw new Error(error.detail || error.message || `HTTP error! status: ${response.status}`);
   }
 
   return await response.json();
@@ -193,8 +201,8 @@ export async function optimizeResume(sessionId, jobDescription = '', template = 
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Optimization failed' }));
-    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+    const error = await response.json().catch(() => ({ detail: 'Optimization failed' }));
+    throw new Error(error.detail || error.message || `HTTP error! status: ${response.status}`);
   }
 
   return await response.json();
