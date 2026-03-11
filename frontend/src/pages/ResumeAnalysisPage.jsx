@@ -32,13 +32,28 @@ function ResumeAnalysisPage() {
 
   // Load session data on mount
   useEffect(() => {
-    const session = loadSession()
-    if (session) {
-      setSessionId(session.session_id || null)
-      setCompanyName(session.companyName || '')
-      setJobTitle(session.jobTitle || '')
-      setJobDescription(session.jobDescription || '')
-      // Note: uploadedFile cannot be restored from localStorage, user needs to re-upload
+    if (!sessionStorage.getItem('tab_initialized')) {
+      clearStorageSession()
+      sessionStorage.setItem('tab_initialized', 'true')
+    } else {
+      const session = loadSession()
+      if (session) {
+        // Check if session has expired
+        if (session.expire_at) {
+          const expireDate = new Date(session.expire_at)
+          if (expireDate < new Date()) {
+            console.log('Session expired, clearing...')
+            clearStorageSession()
+            return
+          }
+        }
+
+        setSessionId(session.session_id || null)
+        setCompanyName(session.companyName || '')
+        setJobTitle(session.jobTitle || '')
+        setJobDescription(session.jobDescription || '')
+        // Note: uploadedFile cannot be restored from localStorage, user needs to re-upload
+      }
     }
   }, [])
 
@@ -130,6 +145,9 @@ function ResumeAnalysisPage() {
       setAnalyzeLoadingSource(null)
       setMatchScore(null)
       setAnalyzeSignal(0)
+
+      const fileInput = document.querySelector('input[type="file"]');
+      if (fileInput) fileInput.value = '';
     }
   }
 
