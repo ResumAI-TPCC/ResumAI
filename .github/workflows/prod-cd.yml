@@ -33,20 +33,20 @@ jobs:
             exit 1;
           fi
 
-    create-release:
-      name: Create GitHub Release
-      needs: validate-branch
-      runs-on: ubuntu-latest
-      steps:
-        - name: Create Release
-          uses: actions/create-release@v1
-          with:
-            tag_name: ${{ github.event.inputs.version }}
-            release_name: ${{ github.event.inputs.version }}
-            body: 'Automated release from prod-cd workflow'
-            draft: false
-            prerelease: false
-            token: ${{ secrets.GITHUB_TOKEN }}
+  create-release:
+    name: Create GitHub Release
+    needs: validate-branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Release
+        uses: actions/create-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          release_name: ${{ github.event.inputs.version }}
+          body: 'Automated release from prod-cd workflow'
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   deploy-backend:
     name: Deploy Backend to Cloud Run (prod)
