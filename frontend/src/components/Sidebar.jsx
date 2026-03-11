@@ -1,10 +1,10 @@
 import PropTypes from 'prop-types'
 import FileUpload from './FileUpload'
 
-function Sidebar({ 
-  companyName, 
-  jobTitle, 
-  jobDescription, 
+function Sidebar({
+  companyName,
+  jobTitle,
+  jobDescription,
   selectedFile,
   uploadedFile,
   isUploading,
@@ -19,13 +19,17 @@ function Sidebar({
   onRemoveFile,
   onUpload,
   onAnalyze,
-  onClearSession 
+  onClearSession
 }) {
   const handleClearJD = () => {
     onJobDescriptionChange('')
   }
 
   const displayFile = uploadedFile || selectedFile
+  const shouldUseMatch =
+    Boolean(jobDescription && jobDescription.trim()) ||
+    Boolean(companyName && companyName.trim()) ||
+    Boolean(jobTitle && jobTitle.trim())
 
   return (
     <aside className="w-96 bg-white border-r border-gray-200 h-screen flex flex-col">
@@ -112,7 +116,7 @@ function Sidebar({
               isUploaded={!!uploadedFile}
               onRemoveFile={onRemoveFile}
             />
-            
+
             {/* Upload Button - Only show when file is selected but not uploaded yet */}
             {selectedFile && !uploadedFile && (
               <button
@@ -159,10 +163,10 @@ function Sidebar({
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span>{jobDescription && jobDescription.trim() ? 'Matching Resume...' : 'Analyzing Resume...'}</span>
+                  <span>{shouldUseMatch ? 'Matching Resume...' : 'Analyzing Resume...'}</span>
                 </>
               ) : (
-                <span>{jobDescription && jobDescription.trim() ? 'Match Resume' : 'Analyze Resume'}</span>
+                <span>{shouldUseMatch ? 'Match Resume' : 'Analyze Resume'}</span>
               )}
             </button>
           </div>
