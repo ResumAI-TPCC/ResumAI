@@ -280,7 +280,9 @@ class GeminiProvider(BaseLLMProvider):
         # Note: Prompt construction is handled by upstream service
         prompt = resume_content  # Upstream should pass the full constructed prompt
 
-        response = await self.send_prompt(prompt)
+        # RA-63: Use low temperature for match scoring to ensure
+        # consistent, reproducible scores for the same JD + resume.
+        response = await self.send_prompt(prompt, temperature=0.2)
         content = self._extract_content(response)
 
         # Parse the response to extract score and suggestions

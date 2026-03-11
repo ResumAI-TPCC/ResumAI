@@ -177,11 +177,11 @@ function ResumeAnalysisPage() {
       }
       const byteArray = new Uint8Array(byteNumbers)
 
-      const blob = new Blob([byteArray], { type: 'text/markdown;charset=utf-8' })
+      const blob = new Blob([byteArray], { type: 'application/pdf' })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = 'optimized_resume.md'
+      link.download = 'optimized_resume.pdf'
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -211,6 +211,8 @@ function ResumeAnalysisPage() {
 
   const triggerAnalyze = (source) => {
     if (!canAnalyze || isAnalyzing) return
+    // RA-59: Clear stale match score immediately so the right panel also shows loading state
+    setMatchScore(null)
     setAnalyzeLoadingSource(source)
     setAnalyzeSignal((value) => value + 1)
   }

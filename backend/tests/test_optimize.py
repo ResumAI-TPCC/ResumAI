@@ -71,12 +71,9 @@ def test_optimize_resume_without_jd(mock_get_content, mock_get_llm, client):
     assert data["status"] == "ok"
     assert "encoded_file" in data["data"]
 
-    # Verify base64 decoding works
+    # Verify base64 decoding produces valid PDF
     decoded = base64.b64decode(data["data"]["encoded_file"])
-    content = decoded.decode("utf-8")
-
-    assert "John Doe" in content
-    assert "without JD" in content
+    assert decoded[:5] == b"%PDF-", "Response should be a valid PDF file"
 
 
 @patch("app.api.routes.resumes.get_llm_service")
@@ -104,12 +101,9 @@ def test_optimize_resume_with_jd(mock_get_content, mock_get_llm, client):
 
     assert "encoded_file" in data["data"]
 
-    # Verify content indicates JD optimization
+    # Verify response is a valid PDF
     decoded = base64.b64decode(data["data"]["encoded_file"])
-    content = decoded.decode("utf-8")
-
-    assert "with JD" in content
-    assert "John Doe" in content
+    assert decoded[:5] == b"%PDF-", "Response should be a valid PDF file"
 
 
 def test_optimize_resume_missing_session_id(client):

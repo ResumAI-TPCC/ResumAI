@@ -28,6 +28,8 @@ function AnalysisOutput({
     setIsAnalyzing(true)
     onAnalyzeStatusChange?.(true)
     setError(null)
+    // RA-59: Clear existing results immediately so the user sees the loading state
+    setAnalysisData(null)
 
     try {
       let result;
@@ -117,8 +119,19 @@ function AnalysisOutput({
           </h1>
         </div>
 
-        {/* Empty State - Show when no analysis yet */}
-        {!analysisData && (
+        {/* Loading State - RA-59: Show spinner while analysis is in progress */}
+        {isAnalyzing && (
+          <div className="bg-white rounded-lg shadow p-8 text-center">
+            <div className="mb-5">
+              <div className="w-16 h-16 mx-auto border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" role="status" aria-label="Analyzing" />
+            </div>
+            <h2 className="text-lg font-semibold text-gray-800 mb-2">Analyzing...</h2>
+            <p className="text-gray-600 text-sm">Please wait while we analyze your resume</p>
+          </div>
+        )}
+
+        {/* Empty State - Show when no analysis yet and not loading */}
+        {!analysisData && !isAnalyzing && (
           <div className="bg-white rounded-lg shadow p-8 text-center">
             <div className="mb-4">
               <svg className="w-16 h-16 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" role="img" aria-label="Resume icon">

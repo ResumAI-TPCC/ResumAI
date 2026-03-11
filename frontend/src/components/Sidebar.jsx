@@ -179,6 +179,21 @@ function Sidebar({
               Refreshing the page will clear all data
             </p>
           </div>
+
+          {/* Feedback Link */}
+          <div className="pt-2">
+            <a
+              href="https://docs.google.com/forms/d/e/1FAIpQLSevfYCrmB_-yniCWf_cbTustF0vQ6K76kvYWdGLpvRqoEbl6Q/viewform?usp=dialog"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full px-4 py-2 border border-blue-400 text-blue-600 font-medium rounded-md hover:bg-blue-50 transition-colors text-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Give us feedback
+            </a>
+          </div>
         </div>
       </div>
     </aside>
