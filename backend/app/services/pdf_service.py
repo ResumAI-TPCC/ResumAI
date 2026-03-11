@@ -2,159 +2,217 @@
 PDF Service - Convert Markdown content to PDF
 
 Converts LLM-generated optimized resume (Markdown) into a downloadable PDF file.
-Uses markdown → HTML → PDF pipeline with professional resume styling.
+Uses fpdf2 for PDF generation with professional resume styling.
 """
 
 from __future__ import annotations
 
-import io
 import logging
+import re
 
-import markdown
-from xhtml2pdf import pisa
+from fpdf import FPDF
 
 logger = logging.getLogger(__name__)
 
-# Professional resume CSS styling
-RESUME_CSS = """
-@page {
-    size: A4;
-    margin: 2cm 2.5cm;
-}
 
-body {
-    font-family: Helvetica, Arial, sans-serif;
-    font-size: 11pt;
-    line-height: 1.5;
-    color: #222222;
-}
+class ResumePDF(FPDF):
+    """Custom PDF class with resume styling."""
 
-h1 {
-    font-size: 22pt;
-    color: #1a1a2e;
-    margin-bottom: 4px;
-    padding-bottom: 6px;
-    border-bottom: 2px solid #1a1a2e;
-    text-align: center;
-}
+    def __init__(self):
+        super().__init__()
+        self.add_page()
+        self.set_auto_page_break(auto=True, margin=15)
+        self.set_margins(15, 15, 15)
 
-h2 {
-    font-size: 14pt;
-    color: #1a1a2e;
-    margin-top: 16px;
-    margin-bottom: 6px;
-    padding-bottom: 3px;
-    border-bottom: 1px solid #cccccc;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
+    def header(self):
+        pass
 
-h3 {
-    font-size: 12pt;
-    color: #333333;
-    margin-top: 10px;
-    margin-bottom: 4px;
-}
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Helvetica", "I", 8)
+        self.set_text_color(128, 128, 128)
+        self.cell(0, 10, f"Page {self.page_no()}", align="C")
 
-p {
-    margin-top: 2px;
-    margin-bottom: 6px;
-    text-align: justify;
-}
 
-ul {
-    margin-top: 2px;
-    margin-bottom: 6px;
-    padding-left: 20px;
-}
+def _preprocess_content(content: str) -> str:
+    """Remove LLM intro text, markdown code-block markers, and page markers."""
+    lines = content.split("\n")
+    result = []
+    started = False
 
-li {
-    margin-bottom: 3px;
-}
+    for line in lines:
+        stripped = line.strip()
 
-strong {
-    color: #1a1a2e;
-}
+        # Skip markdown code block markers
+        if stripped.startswith("```") or stripped.endswith("```"):
+            continue
+        if "markdown" in stripped.lower() and len(stripped) < 15:
+            continue
+        if stripped.startswith("`") and len(stripped) < 15:
+            continue
 
-em {
-    color: #555555;
-}
+        # Skip LLM intro lines before the real resume content starts
+        if not started:
+            if stripped.startswith("---") or stripped.startswith("#") or stripped.startswith("**"):
+                started = True
+            elif any(kw in stripped.lower() for kw in ["here's", "here is", "rewritten", "optimized version"]):
+                continue
+            else:
+                started = True
 
-a {
-    color: #2563eb;
-    text-decoration: none;
-}
-"""
+        if not started:
+            continue
+
+        # Skip page markers
+        if re.match(r"^Page \d+$", stripped):
+            continue
+        if re.match(r"^--\s*\d+\s*of\s*\d+\s*--$", stripped):
+            continue
+
+        result.append(line)
+
+    return "\n".join(result)
+
+
+def _clean_markdown(text: str) -> str:
+    """Remove markdown formatting and replace non-latin-1 characters."""
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    text = re.sub(r"__(.+?)__", r"\1", text)
+    text = re.sub(r"\*(.+?)\*", r"\1", text)
+    text = re.sub(r"_(.+?)_", r"\1", text)
+    text = re.sub(r"\[(.+?)\]\(.+?\)", r"\1", text)
+    text = re.sub(r"`(.+?)`", r"\1", text)
+    # Helvetica only supports latin-1; replace unsupported chars
+    text = text.encode("latin-1", errors="replace").decode("latin-1")
+    return text
 
 
 def markdown_to_pdf(markdown_content: str) -> bytes:
     """
     Convert Markdown text to a professionally styled PDF byte stream.
-    
-    This function implements a three-stage pipeline:
-    1. Convert Markdown to HTML using python-markdown
-    2. Apply professional resume CSS styling
-    3. Generate PDF using xhtml2pdf (pisa)
-    
-    The resulting PDF is formatted for A4 paper with professional typography,
-    section headers, and consistent spacing suitable for resume presentation.
 
-    Args:
-        markdown_content: The optimized resume in Markdown format
-        
-    Returns:
-        bytes: PDF file content ready for download or storage
-        
-    Raises:
-        ValueError: If markdown_content is empty or invalid
-        ValueError: If conversion fails.
-    """
-    # Step 1: Markdown → HTML
-    html_body = markdown.markdown(
-        markdown_content,
-        extensions=["tables", "fenced_code", "nl2br"],
-    )
-
-    # Step 2: Wrap in full HTML document with styling
-    html_document = f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8"/>
-    <style>{RESUME_CSS}</style>
-</head>
-<body>
-{html_body}
-</body>
-</html>"""
-
-    # Step 3: HTML → PDF
-    pdf_buffer = io.BytesIO()
-    pisa_status = pisa.CreatePDF(
-        src=html_document,
-        dest=pdf_buffer,
-        encoding="utf-8",
-    )
-
-    if pisa_status.err:
-        logger.error("PDF conversion failed with %d errors", pisa_status.err)
-        raise ValueError("Failed to convert resume to PDF")
-
-    pdf_bytes = pdf_buffer.getvalue()
-    logger.info("PDF generated successfully (%d bytes)", len(pdf_bytes))
-    return pdf_bytes
-
-
-def markdown_to_html(markdown_content: str) -> str:
-    """
-    Convert Markdown text to an HTML string for preview.
+    Uses fpdf2 to parse Markdown headings, bullet points, and body text
+    into an A4 PDF with professional resume typography.
 
     Args:
         markdown_content: The optimized resume in Markdown format.
 
     Returns:
-        HTML string.
+        PDF content as bytes.
     """
-    return markdown.markdown(
-        markdown_content,
-        extensions=["tables", "fenced_code", "nl2br"],
-    )
+    markdown_content = _preprocess_content(markdown_content)
+
+    pdf = ResumePDF()
+
+    lines = markdown_content.split("\n")
+    is_first_name = True
+
+    for line in lines:
+        line = line.strip()
+
+        if not line:
+            pdf.ln(1)
+            continue
+
+        # Skip horizontal rules
+        if re.match(r"^-{3,}$", line):
+            continue
+
+        # H1 - Name/Title
+        if line.startswith("# "):
+            text = _clean_markdown(line[2:].strip())
+            pdf.set_font("Helvetica", "B", 18)
+            pdf.set_text_color(26, 26, 46)
+            pdf.cell(0, 10, text, align="C", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(2)
+
+        # H2 - Section headers
+        elif line.startswith("## "):
+            text = _clean_markdown(line[3:].strip())
+            pdf.ln(3)
+            pdf.set_font("Helvetica", "B", 12)
+            pdf.set_text_color(26, 26, 46)
+            pdf.cell(0, 7, text.upper(), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_draw_color(160, 160, 160)
+            pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
+            pdf.ln(2)
+
+        # H3 - Sub-sections
+        elif line.startswith("### "):
+            text = _clean_markdown(line[4:].strip())
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.set_text_color(51, 51, 51)
+            pdf.cell(0, 6, text, new_x="LMARGIN", new_y="NEXT")
+            pdf.set_draw_color(200, 200, 200)
+            pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
+            pdf.ln(1)
+
+        # Standalone bold header like **Professional Summary**
+        elif line.startswith("**") and line.endswith("**") and len(line) < 50:
+            text = _clean_markdown(line[2:-2].strip())
+            if is_first_name:
+                pdf.set_font("Helvetica", "B", 18)
+                pdf.set_text_color(26, 26, 46)
+                pdf.cell(0, 10, text, align="C", new_x="LMARGIN", new_y="NEXT")
+                pdf.ln(2)
+                is_first_name = False
+            else:
+                pdf.ln(3)
+                pdf.set_font("Helvetica", "B", 12)
+                pdf.set_text_color(26, 26, 46)
+                pdf.cell(0, 7, text.upper(), new_x="LMARGIN", new_y="NEXT")
+                pdf.set_draw_color(160, 160, 160)
+                pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
+                pdf.ln(2)
+
+        # Bullet points
+        elif line.startswith("* ") or line.startswith("- "):
+            text = _clean_markdown(line[2:].strip())
+            if text:
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_text_color(34, 34, 34)
+                bullet_indent = pdf.l_margin + 5
+                pdf.set_x(bullet_indent)
+                pdf.multi_cell(pdf.w - bullet_indent - pdf.r_margin, 4, f"\x95 {text}")
+
+        # First non-header line may be a name
+        elif is_first_name and not line.startswith("#") and not line.startswith("*"):
+            text = _clean_markdown(line)
+            if text and len(text) < 50:
+                pdf.set_font("Helvetica", "B", 18)
+                pdf.set_text_color(26, 26, 46)
+                pdf.cell(0, 10, text, align="C", new_x="LMARGIN", new_y="NEXT")
+                pdf.ln(2)
+                is_first_name = False
+            else:
+                is_first_name = False
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_text_color(34, 34, 34)
+                pdf.set_x(pdf.l_margin)
+                pdf.multi_cell(0, 4, text)
+
+        # Regular text
+        else:
+            text = _clean_markdown(line)
+            if text:
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_text_color(34, 34, 34)
+                pdf.set_x(pdf.l_margin)
+                pdf.multi_cell(0, 4, text)
+
+    pdf_bytes = pdf.output()
+    logger.info("PDF generated successfully (%d bytes)", len(pdf_bytes))
+    return bytes(pdf_bytes)
+
+
+def markdown_to_html(markdown_content: str) -> str:
+    """Convert Markdown text to an HTML string for preview."""
+    html = markdown_content
+    html = re.sub(r"^# (.+)$", r"<h1>\1</h1>", html, flags=re.MULTILINE)
+    html = re.sub(r"^## (.+)$", r"<h2>\1</h2>", html, flags=re.MULTILINE)
+    html = re.sub(r"^### (.+)$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
+    html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html)
+    html = re.sub(r"\*(.+?)\*", r"<em>\1</em>", html)
+    html = re.sub(r"^[\*\-] (.+)$", r"<li>\1</li>", html, flags=re.MULTILINE)
+    html = html.replace("\n", "<br>")
+    return html
