@@ -255,8 +255,6 @@ function ResumeAnalysisPage() {
       />
 
       <ResumePreview
-        key={sessionId ? `preview-${sessionId}` : 'preview-empty'}
-        sessionId={sessionId}
         uploadedFile={uploadedFile}
         matchScore={matchScore}
         isOptimizing={isOptimizing}
