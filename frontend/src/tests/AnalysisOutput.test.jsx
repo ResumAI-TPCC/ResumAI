@@ -196,7 +196,7 @@ describe('AnalysisOutput Component', () => {
   })
 
   describe('Suggestion Priority Display', () => {
-    test('displays high priority suggestions with H marker', async () => {
+    test('displays high priority badge with readable label', async () => {
       analyzeResume.mockResolvedValue({
         data: {
           suggestions: [{ category: 'content', priority: 'high', title: 'Critical Issue', description: 'Fix this' }],
@@ -207,11 +207,11 @@ describe('AnalysisOutput Component', () => {
       rerender(<AnalysisOutput sessionId="test-session-123" canAnalyze analyzeSignal={1} />)
 
       await waitFor(() => {
-        expect(screen.getByText('H')).toBeInTheDocument()
+        expect(screen.getByText('High Priority')).toBeInTheDocument()
       })
     })
 
-    test('displays medium priority suggestions with M marker', async () => {
+    test('displays medium priority badge with readable label', async () => {
       analyzeResume.mockResolvedValue({
         data: {
           suggestions: [{ category: 'format', priority: 'medium', title: 'Medium Issue', description: 'Consider this' }],
@@ -222,11 +222,11 @@ describe('AnalysisOutput Component', () => {
       rerender(<AnalysisOutput sessionId="test-session-123" canAnalyze analyzeSignal={1} />)
 
       await waitFor(() => {
-        expect(screen.getByText('M')).toBeInTheDocument()
+        expect(screen.getByText('Medium Priority')).toBeInTheDocument()
       })
     })
 
-    test('displays low priority suggestions with L marker', async () => {
+    test('displays low priority badge with readable label', async () => {
       analyzeResume.mockResolvedValue({
         data: {
           suggestions: [{ category: 'style', priority: 'low', title: 'Minor Issue', description: 'Optional' }],
@@ -237,7 +237,7 @@ describe('AnalysisOutput Component', () => {
       rerender(<AnalysisOutput sessionId="test-session-123" canAnalyze analyzeSignal={1} />)
 
       await waitFor(() => {
-        expect(screen.getByText('L')).toBeInTheDocument()
+        expect(screen.getByText('Low Priority')).toBeInTheDocument()
       })
     })
   })

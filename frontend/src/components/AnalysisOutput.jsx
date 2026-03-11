@@ -2,6 +2,53 @@ import { useEffect, useState } from 'react'
 import PropTypes from 'prop-types'
 import { matchResumeWithJob, analyzeResume } from '../utils/api'
 
+/**
+ * Priority configuration mapping
+ * Maps priority levels to display labels and styling
+ */
+const PRIORITY_CONFIG = {
+  high: {
+    label: 'High Priority',
+    bgColor: 'bg-red-100',
+    textColor: 'text-red-700',
+    borderColor: 'border-red-200'
+  },
+  medium: {
+    label: 'Medium Priority',
+    bgColor: 'bg-orange-100',
+    textColor: 'text-orange-700',
+    borderColor: 'border-orange-200'
+  },
+  low: {
+    label: 'Low Priority',
+    bgColor: 'bg-blue-100',
+    textColor: 'text-blue-700',
+    borderColor: 'border-blue-200'
+  }
+}
+
+/**
+ * PriorityBadge Component
+ * Displays priority level as a readable badge
+ */
+function PriorityBadge({ priority }) {
+  const config = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG.low
+  
+  return (
+    <span 
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.bgColor} ${config.textColor} border ${config.borderColor}`}
+      role="status"
+      aria-label={config.label}
+    >
+      {config.label}
+    </span>
+  )
+}
+
+PriorityBadge.propTypes = {
+  priority: PropTypes.oneOf(['high', 'medium', 'low']).isRequired
+}
+
 function AnalysisOutput({
   sessionId,
   canAnalyze,
@@ -219,16 +266,13 @@ function AnalysisOutput({
                   {analysisData.suggestions.map((suggestion, index) => (
                     <div key={index} className="border border-gray-200 rounded-lg p-4">
                       <div className="flex items-start gap-3">
-                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${suggestion.priority === 'high' ? 'bg-red-100 text-red-700' :
-                            suggestion.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-blue-100 text-blue-700'
-                          }`}>
-                          {suggestion.priority === 'high' ? 'H' : suggestion.priority === 'medium' ? 'M' : 'L'}
-                        </div>
                         <div className="flex-1">
-                          <h3 className="text-sm font-medium text-gray-800 mb-1">
-                            {suggestion.title || suggestion.category}
-                          </h3>
+                          <div className="flex items-center gap-2 mb-2">
+                            <PriorityBadge priority={suggestion.priority} />
+                            <h3 className="text-sm font-medium text-gray-800">
+                              {suggestion.title || suggestion.category}
+                            </h3>
+                          </div>
                           <p className="text-sm text-gray-600 mb-2">
                             {suggestion.description}
                           </p>
