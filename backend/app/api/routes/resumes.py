@@ -150,6 +150,26 @@ async def match_resume(request: ResumeMatchRequest):
                 detail=RESUME_EMPTY_CONTENT.detail
             )
 
+        has_job_description = bool(request.job_description and request.job_description.strip())
+        has_job_title = bool(request.job_title and request.job_title.strip())
+        has_company_name = bool(request.company_name and request.company_name.strip())
+
+        # New match trigger logic:
+        # Use match when any one of JD / Job Title / Company Name is present.
+        if has_job_description:
+            match_context = request.job_description.strip()
+        elif has_job_title or has_company_name:
+            match_context = (
+                "Target role context:\n"
+                f"Company: {(request.company_name or '').strip() or 'N/A'}\n"
+                f"Job Title: {(request.job_title or '').strip() or 'N/A'}\n"
+                "Use this context to evaluate resume-job fit."
+            )
+        else:
+            raise ValueError(
+                "Please provide at least one of Job Description, Job Title, or Company Name for matching."
+            )
+
         # 1.5 Content moderation - check inputs (RA-62)
         moderator = get_content_moderator()
         is_safe, reason = moderator.check_input(resume_content)
@@ -158,7 +178,7 @@ async def match_resume(request: ResumeMatchRequest):
                 status_code=CONTENT_MODERATION_INPUT_BLOCKED.code,
                 detail=reason
             )
-        is_safe, reason = moderator.check_input(request.job_description)
+        is_safe, reason = moderator.check_input(match_context)
         if not is_safe:
             raise HTTPException(
                 status_code=CONTENT_MODERATION_INPUT_BLOCKED.code,
@@ -167,7 +187,7 @@ async def match_resume(request: ResumeMatchRequest):
 
         # 2. Build match prompt (Service 2)
         builder = get_prompt_builder()
-        prompt = builder.build_match_prompt(resume_content, request.job_description)
+        prompt = builder.build_match_prompt(resume_content, match_context)
 
         # 3. Call LLM and parse result (Service 3)
         llm = get_llm_service()
