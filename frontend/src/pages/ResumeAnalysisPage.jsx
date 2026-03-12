@@ -3,7 +3,7 @@ import Sidebar from '../components/Sidebar'
 import AnalysisOutput from '../components/AnalysisOutput'
 import ResumePreview from '../components/ResumePreview'
 import { uploadResume, optimizeResume } from '../utils/api'
-import { saveSession, loadSession, clearSession as clearStorageSession } from '../utils/storage'
+import { saveSession, clearSession as clearStorageSession } from '../utils/storage'
 
 /**
  * ResumeAnalysisPage Component
