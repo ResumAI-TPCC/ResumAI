@@ -32,30 +32,18 @@ function ResumeAnalysisPage() {
 
   // Load session data on mount
   useEffect(() => {
-    if (!sessionStorage.getItem('tab_initialized')) {
-      clearStorageSession()
-      sessionStorage.setItem('tab_initialized', 'true')
-    } else {
-      const session = loadSession()
-      if (session) {
-        // Check if session has expired
-        if (session.expire_at) {
-          const expireDate = new Date(session.expire_at)
-          if (expireDate < new Date()) {
-            console.log('Session expired, clearing...')
-            clearStorageSession()
-            return
-          }
-        }
+    clearStorageSession(); 
+    setSessionId(null);
+    setCompanyName('');
+    setJobTitle('');
+    setJobDescription('');
+    setSelectedFile(null);
+    setUploadedFile(null);
+    setUploadError(null);
+    setOptimizedData(null);
 
-        setSessionId(session.session_id || null)
-        setCompanyName(session.companyName || '')
-        setJobTitle(session.jobTitle || '')
-        setJobDescription(session.jobDescription || '')
-        // Note: uploadedFile cannot be restored from localStorage, user needs to re-upload
-      }
-    }
-  }, [])
+    console.log('Page Init: Storage and States are fully reset.');
+  }, []);
 
   const handleFileSelect = (file) => {
     setUploadError(null)
