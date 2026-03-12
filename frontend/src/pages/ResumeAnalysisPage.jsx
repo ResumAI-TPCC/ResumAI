@@ -3,7 +3,7 @@ import Sidebar from '../components/Sidebar'
 import AnalysisOutput from '../components/AnalysisOutput'
 import ResumePreview from '../components/ResumePreview'
 import { uploadResume, optimizeResume } from '../utils/api'
-import { saveSession, loadSession, clearSession as clearStorageSession } from '../utils/storage'
+import { saveSession, clearSession as clearStorageSession } from '../utils/storage'
 
 /**
  * ResumeAnalysisPage Component
@@ -32,15 +32,18 @@ function ResumeAnalysisPage() {
 
   // Load session data on mount
   useEffect(() => {
-    const session = loadSession()
-    if (session) {
-      setSessionId(session.session_id || null)
-      setCompanyName(session.companyName || '')
-      setJobTitle(session.jobTitle || '')
-      setJobDescription(session.jobDescription || '')
-      // Note: uploadedFile cannot be restored from localStorage, user needs to re-upload
-    }
-  }, [])
+    clearStorageSession(); 
+    setSessionId(null);
+    setCompanyName('');
+    setJobTitle('');
+    setJobDescription('');
+    setSelectedFile(null);
+    setUploadedFile(null);
+    setUploadError(null);
+    setOptimizedData(null);
+
+    console.log('Page Init: Storage and States are fully reset.');
+  }, []);
 
   const handleFileSelect = (file) => {
     setUploadError(null)
@@ -130,6 +133,9 @@ function ResumeAnalysisPage() {
       setAnalyzeLoadingSource(null)
       setMatchScore(null)
       setAnalyzeSignal(0)
+
+      const fileInput = document.querySelector('input[type="file"]');
+      if (fileInput) fileInput.value = '';
     }
   }
 
