@@ -2,13 +2,15 @@
   "hosting": [
     {
       "target": "platform_site",
-      "public": "dist", 
-      "ignore": [
-        "firebase.json",
-        "**/.*",
-        "**/node_modules/**"
-      ],
+      "public": "dist",
       "rewrites": [
+        {
+          "source": "/api/**",
+          "run": {
+            "serviceId": "test-service", 
+            "region": "asia-southeast1"
+          }
+        },
         {
           "source": "**",
           "destination": "/index.html"
@@ -18,12 +20,14 @@
     {
       "target": "app_site",
       "public": "dist",
-      "ignore": [
-        "firebase.json",
-        "**/.*",
-        "**/node_modules/**"
-      ],
       "rewrites": [
+        {
+          "source": "/api/**",
+          "run": {
+            "serviceId": "prod-service",
+            "region": "asia-southeast1"
+          }
+        },
         {
           "source": "**",
           "destination": "/index.html"
