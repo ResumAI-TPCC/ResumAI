@@ -57,7 +57,7 @@ jobs:
           --region asia-southeast1 \
           --platform managed \
           --port 8000 \
-          --allow-unauthenticated \
+          --no-allow-unauthenticated \
           --update-env-vars "LLM_PROVIDER=$LLM_PROVIDER" \
           --update-env-vars "GEMINI_API_KEY=$GEMINI_API_KEY" \
           --update-env-vars "GEMINI_MODEL=$GEMINI_MODEL" \
