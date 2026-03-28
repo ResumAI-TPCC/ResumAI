@@ -19,7 +19,9 @@ function Sidebar({
   onRemoveFile,
   onUpload,
   onAnalyze,
-  onClearSession
+  onClearSession,
+  isOpen,
+  onClose
 }) {
   const handleClearJD = () => {
     onJobDescriptionChange('')
@@ -32,7 +34,10 @@ function Sidebar({
     Boolean(jobTitle && jobTitle.trim())
 
   return (
-    <aside className="w-96 bg-white border-r border-gray-200 h-screen flex flex-col">
+    <aside
+      className={`fixed inset-y-0 left-0 z-40 w-80 bg-white border-r border-gray-200 flex flex-col transform transition-transform duration-200 ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 md:flex md:w-96 md:h-screen`}
+      aria-hidden={isOpen ? 'false' : 'true'}
+    >
       <div className="flex-1 overflow-y-auto">
         <div className="p-5 space-y-4">
           {/* Header with Logo */}
@@ -50,6 +55,15 @@ function Sidebar({
                 Intelligent Resume Optimizer
               </p>
             </div>
+            <button
+              onClick={onClose}
+              className="md:hidden ml-auto p-2 rounded bg-gray-100 hover:bg-gray-200"
+              aria-label="Close sidebar"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
           {/* Company Name Input */}
@@ -221,6 +235,8 @@ Sidebar.propTypes = {
   isAnalyzeLoading: PropTypes.bool,
   uploadError: PropTypes.string,
   canAnalyze: PropTypes.bool,
+  isOpen: PropTypes.bool,
+  onClose: PropTypes.func,
   onCompanyNameChange: PropTypes.func.isRequired,
   onJobTitleChange: PropTypes.func.isRequired,
   onJobDescriptionChange: PropTypes.func.isRequired,

@@ -28,6 +28,8 @@ function ResumeAnalysisPage() {
   const [analyzeLoadingSource, setAnalyzeLoadingSource] = useState(null)
   const [matchScore, setMatchScore] = useState(null)
   const [analyzeSignal, setAnalyzeSignal] = useState(0)
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true)
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(false)
 
 
   // Load session data on mount
@@ -224,7 +226,38 @@ function ResumeAnalysisPage() {
   }
 
   return (
-    <div className="h-screen bg-gray-50 flex overflow-hidden">
+    <div className={`h-screen bg-gray-50 flex ${leftSidebarOpen || rightSidebarOpen ? 'overflow-hidden' : 'overflow-auto'} md:overflow-hidden`}>
+      {/* Mobile left menu button (underneath the drawer when opened) */}
+      <button
+        className="md:hidden fixed top-4 left-4 z-10 p-2 bg-white rounded-md shadow"
+        onClick={() => setLeftSidebarOpen(true)}
+        aria-label="Open left menu"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      {/* Mobile right menu button (underneath the drawer when opened) */}
+      <button
+        className="md:hidden fixed top-4 right-4 z-10 p-2 bg-white rounded-md shadow"
+        onClick={() => setRightSidebarOpen(true)}
+        aria-label="Open right menu"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      {/* Backdrop for left mobile drawer */}
+      {leftSidebarOpen && (
+        <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={() => setLeftSidebarOpen(false)} aria-hidden="true" />
+      )}
+
+      {/* Backdrop for right mobile drawer */}
+      {rightSidebarOpen && (
+        <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={() => setRightSidebarOpen(false)} aria-hidden="true" />
+      )}
       {/* Left sidebar */}
       <Sidebar
         companyName={companyName}
@@ -245,6 +278,8 @@ function ResumeAnalysisPage() {
         onUpload={handleUpload}
         onAnalyze={() => triggerAnalyze('sidebar')}
         onClearSession={handleClearSession}
+        isOpen={leftSidebarOpen}
+        onClose={() => setLeftSidebarOpen(false)}
       />
 
       {/* Center analysis area */}
@@ -271,6 +306,8 @@ function ResumeAnalysisPage() {
         onOptimize={handleOptimize}
         onDownload={handleDownloadResume}
         onReanalyze={() => triggerAnalyze('reanalyze')}
+        isOpen={rightSidebarOpen}
+        onClose={() => setRightSidebarOpen(false)}
       />
 
     </div>
