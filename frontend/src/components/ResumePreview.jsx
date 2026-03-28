@@ -21,6 +21,8 @@ function ResumePreview({
   onOptimize,
   onDownload,
   onReanalyze,
+  isOpen,
+  onClose,
 }) {
   const optimizedHtml = optimizedData?.optimized_html || ''
   const hasOptimizedFile = Boolean(optimizedData?.encoded_file)
@@ -37,12 +39,24 @@ function ResumePreview({
   const handleReanalyze = () => onReanalyze?.()
 
   return (
-    <aside className="w-80 bg-white border-l border-gray-200 h-screen flex flex-col">
-      <div className="p-4 border-b border-gray-200">
+    <aside
+      className={`fixed inset-y-0 right-0 z-40 w-80 bg-white border-l border-gray-200 flex flex-col transform transition-transform duration-200 ${isOpen ? 'translate-x-0' : 'translate-x-full'} md:relative md:translate-x-0 md:flex md:w-80 md:h-screen`}
+      aria-hidden={isOpen ? 'false' : 'true'}
+    >
+      <div className="p-4 border-b border-gray-200 flex items-center gap-3">
         <div>
           <h2 className="font-bold text-lg text-gray-800">Resume Preview</h2>
           <p className="text-xs text-gray-500">Document Preview</p>
         </div>
+        <button
+          onClick={onClose}
+          className="md:hidden ml-auto p-2 rounded bg-gray-100 hover:bg-gray-200"
+          aria-label="Close preview"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
@@ -225,6 +239,8 @@ ResumePreview.propTypes = {
   onOptimize: PropTypes.func,
   onDownload: PropTypes.func,
   onReanalyze: PropTypes.func,
+  isOpen: PropTypes.bool,
+  onClose: PropTypes.func,
 }
 
 export default ResumePreview
