@@ -2,7 +2,7 @@
 Resume Schemas - Strictly following Design Doc 4.2
 """
 
-from typing import Optional, List
+from typing import Any, Optional, List
 from pydantic import BaseModel, Field
 
 
@@ -148,3 +148,35 @@ class ResumeOptimizeResponse(BaseModel):
     code: int = 200
     status: str = "ok"
     data: OptimizeResponseData
+
+
+# --- Async Job Schemas ---
+
+class JobCreateResponse(BaseModel):
+    """Response schema for async job creation"""
+    code: int = 202
+    status: str = "accepted"
+    data: "JobCreateData"
+
+
+class JobCreateData(BaseModel):
+    """Job creation response data"""
+    job_id: str = Field(..., description="Unique job identifier for polling")
+
+
+class JobStatusResponse(BaseModel):
+    """Response schema for job status query"""
+    code: int = 200
+    status: str = "ok"
+    data: "JobStatusData"
+
+
+class JobStatusData(BaseModel):
+    """Job status response data"""
+    job_id: str
+    status: str = Field(..., description="queued|processing|completed|failed")
+    task_type: str = Field(..., description="analyze|match|optimize")
+    created_at: str
+    updated_at: str
+    result: Optional[Any] = Field(None, description="Task result (when completed)")
+    error: Optional[str] = Field(None, description="Error message (when failed)")

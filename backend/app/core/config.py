@@ -58,6 +58,15 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE_MB: int = 5
     SESSION_EXPIRY_HOURS: int = 24
 
+    # Celery / Redis settings
+    REDIS_URL: str = "redis://localhost:6379/0"
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+    JOB_RESULT_EXPIRY_HOURS: int = 24
+    
+    # Feature flags
+    USE_ASYNC_QUEUE: bool = False  # Set to True to enable async queue mode
+
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance"""
