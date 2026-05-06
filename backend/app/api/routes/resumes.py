@@ -1,9 +1,12 @@
 """
 Resume API Routes
+
+Supports both synchronous and asynchronous (async queue) processing.
 """
 
 from __future__ import annotations
 
+import uuid
 from fastapi import APIRouter, File, UploadFile, HTTPException, status
 
 from app.schemas.resume_schema import (
@@ -20,6 +23,8 @@ from app.schemas.resume_schema import (
     MatchBreakdown,
     MatchSuggestion,
     OptimizeResponseData,
+    JobCreateResponse,
+    JobCreateData,
 )
 from app.services.resume_service import get_resume_content, upload_resume_to_gcs
 from app.services.pdf_service import markdown_to_pdf
@@ -32,6 +37,8 @@ from app.services.llm.exceptions import (
 )
 from app.services.validators.content_moderator import ContentModerationError
 from app.services.validators.content_moderator import get_content_moderator
+from app.services.queue.job_store import get_job_store
+from app.services.queue.tasks import analyze_task, match_task, optimize_task
 from app.core.error_templates import (
     RESUME_EMPTY_CONTENT,
     CONTENT_MODERATION_INPUT_BLOCKED,
@@ -52,6 +59,118 @@ async def upload_resume(file: UploadFile = File(...)):
     """
     return await upload_resume_to_gcs(file)
 
+
+# ============================================================================
+# Async Job Endpoints (New)
+# ============================================================================
+
+@router.post("/analyze/async", response_model=JobCreateResponse, status_code=status.HTTP_202_ACCEPTED)
+async def analyze_resume_async(request: ResumeAnalyzeRequest):
+    """
+    Analyze resume quality using LLM (async).
+    
+    Creates a background job and returns job_id for polling.
+    Use GET /api/jobs/{job_id} to check status and retrieve result.
+    """
+    # Validate session exists
+    try:
+        await get_resume_content(request.session_id)
+    except HTTPException as e:
+        if e.status_code == 404:
+            raise HTTPException(status_code=404, detail="Resume not found") from e
+        raise
+    
+    # Create job
+    job_id = str(uuid.uuid4())
+    job_store = get_job_store()
+    job_store.create_job(job_id, task_type="analyze")
+    
+    # Queue task
+    analyze_task.delay(job_id, request.session_id)
+    
+    return JobCreateResponse(
+        code=202,
+        status="accepted",
+        data=JobCreateData(job_id=job_id)
+    )
+
+
+@router.post("/match/async", response_model=JobCreateResponse, status_code=status.HTTP_202_ACCEPTED)
+async def match_resume_async(request: ResumeMatchRequest):
+    """
+    Match resume with job description using LLM (async).
+    
+    Creates a background job and returns job_id for polling.
+    Use GET /api/jobs/{job_id} to check status and retrieve result.
+    """
+    # Validate session exists
+    try:
+        await get_resume_content(request.session_id)
+    except HTTPException as e:
+        if e.status_code == 404:
+            raise HTTPException(status_code=404, detail="Resume not found") from e
+        raise
+    
+    # Create job
+    job_id = str(uuid.uuid4())
+    job_store = get_job_store()
+    job_store.create_job(job_id, task_type="match")
+    
+    # Queue task
+    match_task.delay(
+        job_id,
+        request.session_id,
+        request.job_description,
+        request.job_title,
+        request.company_name,
+    )
+    
+    return JobCreateResponse(
+        code=202,
+        status="accepted",
+        data=JobCreateData(job_id=job_id)
+    )
+
+
+@router.post("/optimize/async", response_model=JobCreateResponse, status_code=status.HTTP_202_ACCEPTED)
+async def optimize_resume_async(request: ResumeOptimizeRequest):
+    """
+    Optimize resume content using LLM (async).
+    
+    Creates a background job and returns job_id for polling.
+    Use GET /api/jobs/{job_id} to check status and retrieve result.
+    """
+    # Validate session exists
+    try:
+        await get_resume_content(request.session_id)
+    except HTTPException as e:
+        if e.status_code == 404:
+            raise HTTPException(status_code=404, detail="Resume not found") from e
+        raise
+    
+    # Create job
+    job_id = str(uuid.uuid4())
+    job_store = get_job_store()
+    job_store.create_job(job_id, task_type="optimize")
+    
+    # Queue task
+    optimize_task.delay(
+        job_id,
+        request.session_id,
+        request.job_description,
+        request.template,
+    )
+    
+    return JobCreateResponse(
+        code=202,
+        status="accepted",
+        data=JobCreateData(job_id=job_id)
+    )
+
+
+# ============================================================================
+# Synchronous Endpoints (Existing - Kept for backward compatibility)
+# ============================================================================
 
 @router.post("/analyze", response_model=ResumeAnalyzeResponse)
 async def analyze_resume(request: ResumeAnalyzeRequest):
