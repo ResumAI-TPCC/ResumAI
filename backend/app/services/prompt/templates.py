@@ -61,7 +61,7 @@ MATCH_PROMPT_TEMPLATE = """You are a strict, experienced hiring manager conducti
 
 ## Job Description:
 {job_description}
-
+{retrieved_context}
 ## Scoring Rules (MUST follow strictly):
 1. Be STRICT and OBJECTIVE. Do NOT inflate scores. A genuine mismatch should score below 30.
 2. If the Job Description is vague, irrelevant, nonsensical (e.g., random numbers, gibberish, unrelated text, or non-job-related content), ALL category scores MUST be below 20 and the overall match_score MUST be below 20.
@@ -120,7 +120,7 @@ OPTIMIZE_NO_JD_PROMPT_TEMPLATE = """You are a professional resume writer. Rewrit
 
 ## Resume Content:
 {resume_content}
-
+{retrieved_context}
 ## Style/Template:
 {template}
 
@@ -147,7 +147,7 @@ OPTIMIZE_WITH_JD_PROMPT_TEMPLATE = """You are a professional resume writer. Rewr
 
 ## Target Job Description:
 {job_description}
-
+{retrieved_context}
 ## Style/Template:
 {template}
 

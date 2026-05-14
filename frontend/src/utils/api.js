@@ -159,25 +159,36 @@ export async function analyzeResume(sessionId) {
  * @returns {Promise<Object>} Match score and suggestions
  */
 export async function matchResumeWithJob(sessionId, jobDescription, jobTitle = '', companyName = '') {
-  const response = await fetch(`${API_BASE_URL}/resumes/match`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      session_id: sessionId,
-      job_description: jobDescription,
-      job_title: jobTitle,
-      company_name: companyName,
-    }),
-  });
+  try {
+    const response = await fetch(`${API_BASE_URL}/resumes/match`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        session_id: sessionId,
+        job_description: jobDescription,
+        job_title: jobTitle,
+        company_name: companyName,
+      }),
+    });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Match failed' }));
-    throw new Error(error.detail || error.message || `HTTP error! status: ${response.status}`);
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      const detail = error.detail || '';
+      if (response.status === 400) throw new Error(detail || 'Invalid request. Please check your inputs.');
+      if (response.status === 404) throw new Error('Resume not found. Please upload your resume again.');
+      if (response.status === 503) throw new Error('AI service is temporarily unavailable. Please try again in a moment.');
+      throw new Error(detail || 'Match analysis failed. Please try again.');
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new Error('Network error. Please check your internet connection and try again.');
+    }
+    throw error;
   }
-
-  return await response.json();
 }
 
 /**
@@ -188,22 +199,33 @@ export async function matchResumeWithJob(sessionId, jobDescription, jobTitle = '
  * @returns {Promise<Object>} Encoded file data
  */
 export async function optimizeResume(sessionId, jobDescription = '', template = 'modern') {
-  const response = await fetch(`${API_BASE_URL}/resumes/optimize`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      session_id: sessionId,
-      job_description: jobDescription,
-      template,
-    }),
-  });
+  try {
+    const response = await fetch(`${API_BASE_URL}/resumes/optimize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        session_id: sessionId,
+        job_description: jobDescription,
+        template,
+      }),
+    });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Optimization failed' }));
-    throw new Error(error.detail || error.message || `HTTP error! status: ${response.status}`);
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      const detail = error.detail || '';
+      if (response.status === 400) throw new Error(detail || 'Invalid request. Please check your inputs.');
+      if (response.status === 404) throw new Error('Resume not found. Please upload your resume again.');
+      if (response.status === 503) throw new Error('AI service is temporarily unavailable. Please try again in a moment.');
+      throw new Error(detail || 'Resume optimization failed. Please try again.');
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new Error('Network error. Please check your internet connection and try again.');
+    }
+    throw error;
   }
-
-  return await response.json();
 }

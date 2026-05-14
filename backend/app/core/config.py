@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
     # File upload settings
-    MAX_FILE_SIZE_MB: int = 5
+    MAX_FILE_SIZE_MB: int = 10
     SESSION_EXPIRY_HOURS: int = 24
 
 @lru_cache

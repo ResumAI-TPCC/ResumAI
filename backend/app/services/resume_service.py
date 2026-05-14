@@ -36,7 +36,7 @@ from app.services.parsers.document_parser import (
     parse_doc_to_text,
     parse_txt_to_text,
 )
-from app.services.validators.session_validator import validate_session_id
+from app.services.validators.session_validator import validate_session_id, validate_session_expiry
 from app.services.validators.file_validator import (
     validate_filename,
     validate_pdf_content,
@@ -162,8 +162,8 @@ async def get_resume_content(session_id: str) -> str:
     # 3. Take the first file in the session directory
     target_blob = blobs[0]
     
-    # Note: Session expiry validation currently commented out in original code
-    # validate_session_expiry(target_blob)
+    # Validate session has not expired (RA-Sprint2: tech debt fix)
+    validate_session_expiry(target_blob)
     
     # 4. Download file content
     filename = target_blob.name

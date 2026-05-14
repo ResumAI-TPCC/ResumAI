@@ -187,7 +187,8 @@ async def match_resume(request: ResumeMatchRequest):
 
         # 2. Build match prompt (Service 2)
         builder = get_prompt_builder()
-        prompt = builder.build_match_prompt(resume_content, match_context)
+        rag_context = await rag_retrieve(resume_content)
+        prompt = builder.build_match_prompt(resume_content, match_context, retrieved_context=rag_context)
 
         # 3. Call LLM and parse result (Service 3)
         llm = get_llm_service()
@@ -288,10 +289,12 @@ async def optimize_resume(request: ResumeOptimizeRequest):
 
         # 2. Build optimize prompt (Service 2)
         builder = get_prompt_builder()
+        rag_context = await rag_retrieve(resume_content)
         prompt = builder.build_optimize_prompt(
             resume_content, 
             request.job_description, 
-            request.template
+            request.template,
+            retrieved_context=rag_context,
         )
 
         # 3. Call LLM (Service 3)

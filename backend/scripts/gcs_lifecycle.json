@@ -1,0 +1,15 @@
+{
+  "lifecycle": {
+    "rule": [
+      {
+        "action": {
+          "type": "Delete"
+        },
+        "condition": {
+          "age": 1,
+          "comment": "Auto-delete uploaded resume files after 24 hours to protect user privacy"
+        }
+      }
+    ]
+  }
+}

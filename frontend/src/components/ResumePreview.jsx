@@ -1,4 +1,5 @@
 import PropTypes from 'prop-types'
+import DOMPurify from 'dompurify'
 
 /**
  * ResumePreview Component
@@ -116,7 +117,7 @@ function ResumePreview({
             `}</style>
             <div
               className="resume-preview text-sm text-gray-700 leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: optimizedHtml }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(optimizedHtml) }}
             />
           </>
         ) : (

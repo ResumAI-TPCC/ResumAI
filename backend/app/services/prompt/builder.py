@@ -70,7 +70,12 @@ class PromptBuilder:
                 "not just numbers or symbols."
             )
 
-    def build_match_prompt(self, resume_content: str, job_description: str) -> str:
+    def build_match_prompt(
+        self,
+        resume_content: str,
+        job_description: str,
+        retrieved_context: Optional[list[str]] = None,
+    ) -> str:
         """Build a prompt for matching resume with JD."""
         if not resume_content or not resume_content.strip():
             raise ValueError("resume_content cannot be empty")
@@ -80,13 +85,31 @@ class PromptBuilder:
         # Validate JD quality
         self._validate_job_description(job_description)
 
+        rag_section = ""
+        if retrieved_context:
+            chunks = "\n\n".join(
+                f"- {chunk.strip()}" for chunk in retrieved_context if chunk.strip()
+            )
+            rag_section = (
+                "\n## Industry Best Practices (use to inform your evaluation):\n"
+                + chunks
+                + "\n"
+            )
+
         return MATCH_PROMPT_TEMPLATE.format(
             safety_instruction=SAFETY_INSTRUCTION,
             resume_content=resume_content.strip(),
-            job_description=job_description.strip()
+            job_description=job_description.strip(),
+            retrieved_context=rag_section,
         )
 
-    def build_optimize_prompt(self, resume_content: str, job_description: Optional[str] = None, template: str = "modern") -> str:
+    def build_optimize_prompt(
+        self,
+        resume_content: str,
+        job_description: Optional[str] = None,
+        template: str = "modern",
+        retrieved_context: Optional[list[str]] = None,
+    ) -> str:
         """
         Build a prompt for resume optimization.
 
@@ -96,6 +119,17 @@ class PromptBuilder:
         if not resume_content or not resume_content.strip():
             raise ValueError("resume_content cannot be empty")
 
+        rag_section = ""
+        if retrieved_context:
+            chunks = "\n\n".join(
+                f"- {chunk.strip()}" for chunk in retrieved_context if chunk.strip()
+            )
+            rag_section = (
+                "\n## Industry Best Practices (apply these when rewriting):\n"
+                + chunks
+                + "\n"
+            )
+
         if job_description and job_description.strip():
             # RA-46: Optimize with JD
             return OPTIMIZE_WITH_JD_PROMPT_TEMPLATE.format(
@@ -103,6 +137,7 @@ class PromptBuilder:
                 resume_content=resume_content.strip(),
                 job_description=job_description.strip(),
                 template=template,
+                retrieved_context=rag_section,
             )
         else:
             # RA-45: Optimize without JD
@@ -110,6 +145,7 @@ class PromptBuilder:
                 safety_instruction=SAFETY_INSTRUCTION,
                 resume_content=resume_content.strip(),
                 template=template,
+                retrieved_context=rag_section,
             )
 
 
