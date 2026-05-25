@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
 import AnalysisOutput from '../components/AnalysisOutput'
 import ResumePreview from '../components/ResumePreview'
+import MockInterviewShell from '../components/interview/MockInterviewShell'
+import { useMockInterview } from '../hooks/useMockInterview'
 import { uploadResume, optimizeResume } from '../utils/api'
 import { saveSession, clearSession as clearStorageSession } from '../utils/storage'
 
@@ -30,6 +32,8 @@ function ResumeAnalysisPage() {
   const [analyzeSignal, setAnalyzeSignal] = useState(0)
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true)
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false)
+  const [pageMode, setPageMode] = useState('analysis')
+  const interview = useMockInterview()
 
 
   // Load session data on mount
@@ -43,6 +47,7 @@ function ResumeAnalysisPage() {
     setUploadedFile(null);
     setUploadError(null);
     setOptimizedData(null);
+    setPageMode('analysis');
 
     console.log('Page Init: Storage and States are fully reset.');
   }, []);
@@ -58,6 +63,8 @@ function ResumeAnalysisPage() {
     setAnalyzeLoadingSource(null)
     setMatchScore(null)
     setAnalyzeSignal(0)
+    setPageMode('analysis')
+    interview.resetInterview()
   }
 
   const handleUpload = async () => {
@@ -103,6 +110,8 @@ function ResumeAnalysisPage() {
     setAnalyzeLoadingSource(null)
     setMatchScore(null)
     setAnalyzeSignal(0)
+    setPageMode('analysis')
+    interview.resetInterview()
   }
 
 
@@ -110,14 +119,20 @@ function ResumeAnalysisPage() {
   // localStorage is only written on upload success or explicit save actions
   const handleCompanyNameChange = (value) => {
     setCompanyName(value)
+    setPageMode('analysis')
+    interview.resetInterview()
   }
 
   const handleJobTitleChange = (value) => {
     setJobTitle(value)
+    setPageMode('analysis')
+    interview.resetInterview()
   }
 
   const handleJobDescriptionChange = (value) => {
     setJobDescription(value)
+    setPageMode('analysis')
+    interview.resetInterview()
   }
 
   const handleClearSession = () => {
@@ -135,6 +150,8 @@ function ResumeAnalysisPage() {
       setAnalyzeLoadingSource(null)
       setMatchScore(null)
       setAnalyzeSignal(0)
+      setPageMode('analysis')
+      interview.resetInterview()
 
       const fileInput = document.querySelector('input[type="file"]');
       if (fileInput) fileInput.value = '';
@@ -223,6 +240,65 @@ function ResumeAnalysisPage() {
     setMatchScore(null)
     setAnalyzeLoadingSource(source)
     setAnalyzeSignal((value) => value + 1)
+    setPageMode('analysis')
+    interview.resetInterview()
+  }
+
+  const canStartMockInterview = Boolean(
+    canAnalyze &&
+    matchScore !== null &&
+    matchScore !== undefined
+  )
+
+  const handleBackToMatch = () => {
+    setPageMode('analysis')
+  }
+
+  const handleStartMockInterview = async () => {
+    if (!canStartMockInterview) {
+      return
+    }
+
+    if (interview.hasActiveInterview && !interview.error && !interview.isCompleted) {
+      setPageMode('mockInterview')
+      return
+    }
+
+    setPageMode('mockInterview')
+
+    try {
+      await interview.startInterviewSession({
+        session_id: sessionId,
+        job_description: jobDescription || '',
+        job_title: jobTitle || '',
+        company_name: companyName || '',
+        question_count: 5,
+        match_score: matchScore,
+        resume_file_name: uploadedFile?.name || '',
+      })
+    } catch (error) {
+      console.error('Mock interview start error:', error)
+    }
+  }
+
+  if (pageMode === 'mockInterview') {
+    return (
+      <MockInterviewShell
+        uploadedFile={uploadedFile}
+        companyName={companyName}
+        jobTitle={jobTitle}
+        jobDescription={jobDescription}
+        matchScore={matchScore}
+        interview={interview}
+        leftSidebarOpen={leftSidebarOpen}
+        rightSidebarOpen={rightSidebarOpen}
+        onOpenLeftSidebar={() => setLeftSidebarOpen(true)}
+        onCloseLeftSidebar={() => setLeftSidebarOpen(false)}
+        onOpenRightSidebar={() => setRightSidebarOpen(true)}
+        onCloseRightSidebar={() => setRightSidebarOpen(false)}
+        onBackToMatch={handleBackToMatch}
+      />
+    )
   }
 
   return (
@@ -301,11 +377,14 @@ function ResumeAnalysisPage() {
         isOptimizing={isOptimizing}
         isAnalyzing={isAnalyzing}
         isReanalyzing={isAnalyzing && analyzeLoadingSource === 'reanalyze'}
+        isStartingMockInterview={interview.isStarting}
         actionsEnabled={canAnalyze}
+        canStartMockInterview={canStartMockInterview}
         optimizedData={optimizedData}
         onOptimize={handleOptimize}
         onDownload={handleDownloadResume}
         onReanalyze={() => triggerAnalyze('reanalyze')}
+        onStartMockInterview={handleStartMockInterview}
         isOpen={rightSidebarOpen}
         onClose={() => setRightSidebarOpen(false)}
       />
