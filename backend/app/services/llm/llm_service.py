@@ -10,7 +10,6 @@ into the PDF renderer.
 import logging
 import re
 from functools import lru_cache
-from typing import Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
@@ -19,7 +18,6 @@ from langchain_core.exceptions import OutputParserException
 from app.core.config import settings
 from .schemas import (
     AnalyzeResult,
-    MatchBreakdown,
     MatchResult,
     OptimizeResult,
 )

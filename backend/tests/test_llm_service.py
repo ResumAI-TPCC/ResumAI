@@ -14,7 +14,6 @@ with_structured_output() which delegates parsing to Gemini Function Calling.
 
 import pytest
 from typing import Optional
-from unittest.mock import patch
 
 from app.services.llm import (
     BaseLLMProvider,
