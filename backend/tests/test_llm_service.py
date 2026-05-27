@@ -1,11 +1,15 @@
 """
-Unit Tests for RA-38: LLM Service - Send Prompt to LLM and Handle Response
+Unit Tests for LLM Service
 
 Tests the LLM service layer including:
 - Base provider interface
-- Provider factory
 - Mock provider implementation for testing
-- Response handling
+- Response data classes
+
+Note: TestProviderFactory and TestLLMResponseParsing have been removed because
+the factory registry pattern is no longer the primary code path (LLMService now
+holds LangChain chains directly), and JSON parsing logic has been replaced by
+with_structured_output() which delegates parsing to Gemini Function Calling.
 """
 
 import pytest
@@ -16,10 +20,7 @@ from app.services.llm import (
     BaseLLMProvider,
     LLMResponse,
     MatchScoreResult,
-    get_llm_provider,
-    register_provider,
 )
-from app.services.llm.factory import clear_provider_cache, _provider_registry
 
 
 class MockLLMProvider(BaseLLMProvider):
@@ -148,70 +149,6 @@ class TestBaseLLMProvider:
         assert provider.provider_name == "mock"
 
 
-class TestProviderFactory:
-    """Test suite for LLM Provider factory."""
-
-    def setup_method(self):
-        """Reset provider registry and cache before each test."""
-        clear_provider_cache()
-        _provider_registry.clear()
-
-    def test_register_provider(self):
-        """Test registering a provider."""
-        register_provider("mock", MockLLMProvider)
-
-        assert "mock" in _provider_registry
-        assert _provider_registry["mock"] == MockLLMProvider
-
-    def test_get_provider_returns_instance(self):
-        """Test getting registered provider."""
-        register_provider("mock", MockLLMProvider)
-
-        with patch("app.services.llm.factory.settings") as mock_settings:
-            mock_settings.LLM_PROVIDER = "mock"
-            provider = get_llm_provider()
-
-            assert isinstance(provider, MockLLMProvider)
-
-    def test_get_provider_singleton(self):
-        """Test that get_llm_provider returns singleton."""
-        register_provider("mock", MockLLMProvider)
-
-        with patch("app.services.llm.factory.settings") as mock_settings:
-            mock_settings.LLM_PROVIDER = "mock"
-            provider1 = get_llm_provider()
-            provider2 = get_llm_provider()
-
-            assert provider1 is provider2
-
-    def test_get_provider_no_registry_raises(self):
-        """Test that get_llm_provider raises when no provider registered."""
-        with pytest.raises(ValueError, match="No LLM Provider registered"):
-            get_llm_provider()
-
-    def test_get_provider_unsupported_raises(self):
-        """Test that get_llm_provider raises for unsupported provider."""
-        register_provider("mock", MockLLMProvider)
-
-        with patch("app.services.llm.factory.settings") as mock_settings:
-            mock_settings.LLM_PROVIDER = "unsupported"
-            with pytest.raises(ValueError, match="Unsupported LLM Provider"):
-                get_llm_provider()
-
-    def test_clear_provider_cache(self):
-        """Test clearing provider cache."""
-        register_provider("mock", MockLLMProvider)
-
-        with patch("app.services.llm.factory.settings") as mock_settings:
-            mock_settings.LLM_PROVIDER = "mock"
-            provider1 = get_llm_provider()
-            clear_provider_cache()
-            provider2 = get_llm_provider()
-
-            # After clearing, should get new instance
-            assert provider1 is not provider2
-
-
 class TestMockProviderFunctionality:
     """Test suite for MockLLMProvider functionality."""
 
@@ -244,30 +181,9 @@ class TestMockProviderFunctionality:
 
         assert isinstance(response, LLMResponse)
 
-        # Verify response is valid JSON with expected structure
         data = json.loads(response.content)
         assert "suggestions" in data
         assert isinstance(data["suggestions"], list)
-
-    @pytest.mark.asyncio
-    async def test_analyze_suggestion_structure(self, provider):
-        """Test analyze returns suggestions with correct structure."""
-        import json
-
-        response = await provider.analyze(
-            resume_content="Test Resume",
-            job_description="Test JD",
-        )
-
-        data = json.loads(response.content)
-        suggestion = data["suggestions"][0]
-
-        # Verify suggestion has all required fields
-        assert "category" in suggestion
-        assert "priority" in suggestion
-        assert "title" in suggestion
-        assert "description" in suggestion
-        assert "example" in suggestion
 
     @pytest.mark.asyncio
     async def test_match_returns_score_result(self, provider):
@@ -297,76 +213,6 @@ class TestMockProviderFunctionality:
         assert provider._call_count == 3
 
 
-class TestLLMResponseParsing:
-    """Test suite for LLM response parsing utilities."""
-
-    def test_parse_json_suggestions(self):
-        """Test parsing JSON suggestions from LLM response."""
-        import json
-
-        response_content = '''
-        {
-            "suggestions": [
-                {
-                    "category": "content",
-                    "priority": "high",
-                    "title": "Add quantifiable metrics",
-                    "description": "Your achievements lack specific numbers",
-                    "example": "Increased sales by 25%"
-                },
-                {
-                    "category": "skills",
-                    "priority": "medium",
-                    "title": "Add relevant keywords",
-                    "description": "Include industry-specific terms",
-                    "example": "Add 'Agile', 'Scrum' methodologies"
-                }
-            ]
-        }
-        '''
-
-        data = json.loads(response_content)
-
-        assert len(data["suggestions"]) == 2
-        assert data["suggestions"][0]["category"] == "content"
-        assert data["suggestions"][1]["priority"] == "medium"
-
-    def test_parse_malformed_json_raises(self):
-        """Test that malformed JSON raises exception."""
-        import json
-
-        malformed_json = '{"suggestions": [{"broken": }]}'
-
-        with pytest.raises(json.JSONDecodeError):
-            json.loads(malformed_json)
-
-    def test_extract_json_from_markdown(self):
-        """Test extracting JSON from markdown code block."""
-        import json
-        import re
-
-        response_with_markdown = '''
-        Here is my analysis:
-
-        ```json
-        {
-            "suggestions": [
-                {"category": "format", "priority": "low", "title": "Fix formatting"}
-            ]
-        }
-        ```
-        '''
-
-        # Extract JSON from markdown code block
-        pattern = r"```(?:json)?\s*([\s\S]*?)\s*```"
-        match = re.search(pattern, response_with_markdown)
-
-        if match:
-            json_str = match.group(1)
-            data = json.loads(json_str)
-            assert "suggestions" in data
-
-
 class TestErrorHandling:
     """Test suite for error handling in LLM service."""
 
@@ -375,7 +221,6 @@ class TestErrorHandling:
         """Test handling of empty resume content."""
         provider = MockLLMProvider()
 
-        # Should still work with empty content (validation is in prompt builder)
         response = await provider.analyze(
             resume_content="",
             job_description="Test JD",
