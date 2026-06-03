@@ -6,8 +6,63 @@
  */
 
 import { ENV } from '../config/env.js'
+import { firebaseAuth } from '../services/firebase.js'
 
 const API_BASE_URL = ENV.API_BASE_URL;
+
+async function getAuthToken() {
+  if (ENV.DEV_AUTH_TOKEN && !firebaseAuth?.currentUser) {
+    return ENV.DEV_AUTH_TOKEN
+  }
+
+  const currentUser = firebaseAuth?.currentUser
+
+  if (!currentUser) return null
+
+  try {
+    return await currentUser.getIdToken()
+  } catch (error) {
+    console.error('Failed to get auth token:', error)
+    return null
+  }
+}
+
+async function buildJsonHeaders() {
+  const token = await getAuthToken()
+  const headers = {
+    'Content-Type': 'application/json',
+  }
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
+  return headers
+}
+
+async function parseErrorResponse(response, fallbackMessage) {
+  const error = await response.json().catch(() => ({ detail: fallbackMessage }))
+  return error.detail || error.message || fallbackMessage
+}
+
+/**
+ * Get the backend-recognized current user.
+ * @returns {Promise<Object>} Current user response
+ */
+export async function getCurrentUser() {
+  const headers = await buildJsonHeaders()
+  const response = await fetch(`${API_BASE_URL}/me`, {
+    method: 'GET',
+    headers,
+  })
+
+  if (!response.ok) {
+    const message = await parseErrorResponse(response, 'Unable to verify backend session')
+    throw new Error(message)
+  }
+
+  return await response.json()
+}
 
 /**
  * Upload resume file to backend with progress tracking
@@ -23,6 +78,7 @@ const API_BASE_URL = ENV.API_BASE_URL;
 export async function uploadResume(file, onProgress = null) {
   const formData = new FormData();
   formData.append('file', file);
+  const token = await getAuthToken()
 
   // Use XMLHttpRequest for progress tracking
   return new Promise((resolve, reject) => {
@@ -68,6 +124,9 @@ export async function uploadResume(file, onProgress = null) {
 
     // Send request to /api/resumes/ (trailing slash required by FastAPI router)
     xhr.open('POST', `${API_BASE_URL}/resumes/`);
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    }
     xhr.send(formData);
   });
 }
@@ -85,11 +144,10 @@ export async function analyzeResume(sessionId) {
   }
 
   try {
+    const headers = await buildJsonHeaders()
     const response = await fetch(`${API_BASE_URL}/resumes/analyze`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({ session_id: sessionId.trim() }),
     });
 
@@ -115,8 +173,8 @@ export async function analyzeResume(sessionId) {
     }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: 'Analysis failed' }));
-      throw new Error(errorData.detail || errorData.message || `Analysis failed: ${response.status}`);
+      const message = await parseErrorResponse(response, `Analysis failed: ${response.status}`);
+      throw new Error(message);
     }
 
     const result = await response.json();
@@ -159,11 +217,10 @@ export async function analyzeResume(sessionId) {
  * @returns {Promise<Object>} Match score and suggestions
  */
 export async function matchResumeWithJob(sessionId, jobDescription, jobTitle = '', companyName = '') {
+  const headers = await buildJsonHeaders()
   const response = await fetch(`${API_BASE_URL}/resumes/match`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       session_id: sessionId,
       job_description: jobDescription,
@@ -173,8 +230,8 @@ export async function matchResumeWithJob(sessionId, jobDescription, jobTitle = '
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Match failed' }));
-    throw new Error(error.detail || error.message || `HTTP error! status: ${response.status}`);
+    const message = await parseErrorResponse(response, `HTTP error! status: ${response.status}`);
+    throw new Error(message);
   }
 
   return await response.json();
@@ -188,11 +245,10 @@ export async function matchResumeWithJob(sessionId, jobDescription, jobTitle = '
  * @returns {Promise<Object>} Encoded file data
  */
 export async function optimizeResume(sessionId, jobDescription = '', template = 'modern') {
+  const headers = await buildJsonHeaders()
   const response = await fetch(`${API_BASE_URL}/resumes/optimize`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       session_id: sessionId,
       job_description: jobDescription,
@@ -201,8 +257,8 @@ export async function optimizeResume(sessionId, jobDescription = '', template = 
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Optimization failed' }));
-    throw new Error(error.detail || error.message || `HTTP error! status: ${response.status}`);
+    const message = await parseErrorResponse(response, `HTTP error! status: ${response.status}`);
+    throw new Error(message);
   }
 
   return await response.json();

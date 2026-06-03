@@ -8,10 +8,13 @@ from .resume_schema import (
     ResumeData,
     WorkExperience,
 )
+from .auth_schema import CurrentUserClaims, MeResponse
 
 __all__ = [
     "ResumeData",
     "ContactInfo",
     "Education",
     "WorkExperience",
+    "CurrentUserClaims",
+    "MeResponse",
 ]

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import PropTypes from 'prop-types'
 import { matchResumeWithJob, analyzeResume } from '../utils/api'
 
@@ -63,12 +63,13 @@ function AnalysisOutput({
   const [analysisData, setAnalysisData] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [error, setError] = useState(null)
+  const lastHandledSignalRef = useRef(0)
   const shouldUseMatch =
     Boolean(jobDescription && jobDescription.trim()) ||
     Boolean(companyName && companyName.trim()) ||
     Boolean(jobTitle && jobTitle.trim())
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = useCallback(async () => {
     if (isAnalyzing) return
 
     if (!sessionId) {
@@ -152,13 +153,25 @@ function AnalysisOutput({
       setIsAnalyzing(false)
       onAnalyzeStatusChange?.(false)
     }
-  }
+  }, [
+    companyName,
+    isAnalyzing,
+    jobDescription,
+    jobTitle,
+    onAnalyzeStatusChange,
+    onMatchScoreUpdate,
+    sessionId,
+    shouldUseMatch,
+  ])
 
   useEffect(() => {
-    if (analyzeSignal > 0) {
-      handleAnalyze()
+    if (analyzeSignal <= 0 || analyzeSignal === lastHandledSignalRef.current) {
+      return
     }
-  }, [analyzeSignal])
+
+    lastHandledSignalRef.current = analyzeSignal
+    handleAnalyze()
+  }, [analyzeSignal, handleAnalyze])
 
   return (
     <main className="flex-1 p-6 bg-gray-50 overflow-y-auto">

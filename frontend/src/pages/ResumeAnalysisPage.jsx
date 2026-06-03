@@ -226,10 +226,10 @@ function ResumeAnalysisPage() {
   }
 
   return (
-    <div className={`h-screen bg-gray-50 flex ${leftSidebarOpen || rightSidebarOpen ? 'overflow-hidden' : 'overflow-auto'} md:overflow-hidden`}>
+    <div className={`h-full bg-gray-50 flex ${leftSidebarOpen || rightSidebarOpen ? 'overflow-hidden' : 'overflow-auto'} md:overflow-hidden`}>
       {/* Mobile left menu button (underneath the drawer when opened) */}
       <button
-        className="md:hidden fixed top-4 left-4 z-10 p-2 bg-white rounded-md shadow"
+        className="md:hidden fixed top-20 left-4 z-10 p-2 bg-white rounded-md shadow"
         onClick={() => setLeftSidebarOpen(true)}
         aria-label="Open left menu"
       >
@@ -240,7 +240,7 @@ function ResumeAnalysisPage() {
 
       {/* Mobile right menu button (underneath the drawer when opened) */}
       <button
-        className="md:hidden fixed top-4 right-4 z-10 p-2 bg-white rounded-md shadow"
+        className="md:hidden fixed top-20 right-4 z-10 p-2 bg-white rounded-md shadow"
         onClick={() => setRightSidebarOpen(true)}
         aria-label="Open right menu"
       >

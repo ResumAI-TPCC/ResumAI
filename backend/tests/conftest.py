@@ -18,7 +18,20 @@ sys.path.insert(0, str(backend_dir))
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.core.auth import get_current_user_claims  # noqa: E402
 from app.main import create_app  # noqa: E402
+from app.schemas.auth_schema import CurrentUserClaims  # noqa: E402
+
+
+def fake_current_user() -> CurrentUserClaims:
+    """Return a stable authenticated user for route tests."""
+    return CurrentUserClaims(
+        firebase_uid="test-firebase-uid",
+        email="tester@example.com",
+        display_name="Test User",
+        email_verified=True,
+        claims={"uid": "test-firebase-uid"},
+    )
 
 
 @pytest.fixture
@@ -36,4 +49,5 @@ def mock_gcs():
 def client(mock_gcs):
     """Create test client for all tests to reuse"""
     app = create_app()
+    app.dependency_overrides[get_current_user_claims] = fake_current_user
     return TestClient(app)

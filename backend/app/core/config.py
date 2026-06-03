@@ -12,9 +12,11 @@ from dotenv import load_dotenv
 # Get the path to .env file (backend/.env)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 ENV_FILE = BASE_DIR / ".env"
+LOCAL_ENV_FILE = BASE_DIR / ".env.local"
 
 # Load .env file explicitly into environment variables
 load_dotenv(ENV_FILE, override=False)
+load_dotenv(LOCAL_ENV_FILE, override=True)
 
 
 class Settings(BaseSettings):
@@ -50,6 +52,17 @@ class Settings(BaseSettings):
     GCP_SA_KEY: str = ""
     GCP_PRIVATE_KEY: str = ""
     GCP_PRIVATE_KEY_ID: str = ""
+
+    # Firebase Auth settings
+    FIREBASE_PROJECT_ID: str = ""
+    FIREBASE_SERVICE_ACCOUNT_KEY: str = ""
+    FIREBASE_CREDENTIALS_PATH: str = ""
+
+    # Local development auth bypass. Only active when DEBUG=true.
+    DEV_AUTH_TOKEN: str = ""
+    DEV_AUTH_EMAIL: str = ""
+    DEV_AUTH_DISPLAY_NAME: str = "Local Test User"
+    DEV_AUTH_UID: str = "local-test-user"
 
     # Security settings
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"

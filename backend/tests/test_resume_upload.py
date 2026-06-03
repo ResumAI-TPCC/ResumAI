@@ -6,8 +6,11 @@ import io
 import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
+
+from app.core.auth import get_current_user_claims
 from app.main import create_app
 from app.core.config import settings
+from app.schemas.auth_schema import CurrentUserClaims
 
 
 @pytest.fixture
@@ -113,8 +116,19 @@ class FakeClient:
         return self.bucket_obj
 
 
+def fake_current_user() -> CurrentUserClaims:
+    return CurrentUserClaims(
+        firebase_uid="test-firebase-uid",
+        email="tester@example.com",
+        display_name="Test User",
+        email_verified=True,
+        claims={"uid": "test-firebase-uid"},
+    )
+
+
 def test_resume_upload_success_pdf():
     app = create_app()
+    app.dependency_overrides[get_current_user_claims] = fake_current_user
     client = TestClient(app)
 
     fake_client = FakeClient()
@@ -143,6 +157,7 @@ def test_resume_upload_success_pdf():
 
 def test_resume_upload_success_docx():
     app = create_app()
+    app.dependency_overrides[get_current_user_claims] = fake_current_user
     client = TestClient(app)
 
     fake_client = FakeClient()
@@ -162,6 +177,7 @@ def test_resume_upload_success_docx():
 
 def test_upload_resume_unsupported_format(monkeypatch):
     app = create_app()
+    app.dependency_overrides[get_current_user_claims] = fake_current_user
     client = TestClient(app)
     
     files = {"file": ("test.exe", b"fake exe content", "application/x-msdownload")}
@@ -173,6 +189,7 @@ def test_upload_resume_unsupported_format(monkeypatch):
 
 def test_upload_resume_file_too_large(monkeypatch):
     app = create_app()
+    app.dependency_overrides[get_current_user_claims] = fake_current_user
     client = TestClient(app)
     
     # Create a file larger than 10MB
