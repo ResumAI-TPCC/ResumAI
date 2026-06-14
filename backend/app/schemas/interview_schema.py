@@ -19,6 +19,14 @@ class InterviewQuestion(BaseModel):
     )
     label: str = Field(..., description="Human-readable question type label")
     question: str = Field(..., description="Interview question text")
+    resume_evidence: Optional[str] = Field(
+        default=None,
+        description="Concrete resume detail used to personalize the question",
+    )
+    jd_evidence: Optional[str] = Field(
+        default=None,
+        description="Concrete JD or company detail used to personalize the question",
+    )
     focus_areas: List[str] = Field(
         default_factory=list,
         description="What the interviewer is evaluating",

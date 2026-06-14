@@ -1,12 +1,12 @@
 import {
   DEFAULT_QUESTION_COUNT,
   FEEDBACK_COPY,
-  QUESTION_BLUEPRINTS,
-  QUESTION_TYPE_META,
   REPORT_ACTION_LIBRARY,
 } from '../mocks/interviewFixtures'
+import { ENV } from '../config/env.js'
 
 const interviewStore = new Map()
+const API_BASE_URL = ENV.API_BASE_URL
 
 const STOP_WORDS = new Set([
   'about', 'after', 'again', 'also', 'among', 'and', 'been', 'being', 'both',
@@ -21,11 +21,59 @@ const delay = (ms) => new Promise((resolve) => {
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
-const createId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-
 const unique = (values) => [...new Set(values.filter(Boolean))]
 
-const titleCase = (value) => value.charAt(0).toUpperCase() + value.slice(1)
+const humanizeType = (value = 'question') => value
+  .split('_')
+  .filter(Boolean)
+  .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+  .join(' ')
+
+async function readJson(response) {
+  try {
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+function getApiErrorMessage(errorData, fallback) {
+  if (!errorData) return fallback
+  if (typeof errorData.detail === 'string') return errorData.detail
+  if (typeof errorData.message === 'string') return errorData.message
+
+  if (Array.isArray(errorData.detail)) {
+    const details = errorData.detail
+      .map((item) => item?.msg || item?.message)
+      .filter(Boolean)
+
+    if (details.length > 0) {
+      return details.join(' ')
+    }
+  }
+
+  return fallback
+}
+
+function normalizeBackendQuestion(question, index) {
+  const type = question?.type || 'question'
+  const prompt = String(question?.prompt || question?.question || '').trim()
+
+  if (!prompt) {
+    throw new Error('The interview service returned a question without text.')
+  }
+
+  return {
+    id: question?.id || `q${index + 1}`,
+    type,
+    label: question?.label || humanizeType(type),
+    prompt,
+    question: question?.question || prompt,
+    focus_areas: Array.isArray(question?.focus_areas) ? question.focus_areas : [],
+    resume_evidence: question?.resume_evidence || '',
+    jd_evidence: question?.jd_evidence || '',
+  }
+}
 
 function extractKeywords(jobDescription = '') {
   const matches = jobDescription.toLowerCase().match(/[a-z][a-z0-9+.#-]{2,}/g) || []
@@ -54,27 +102,6 @@ function extractAnswerSignals(answer = '', context = {}) {
     hasReflection: /\b(learned|realized|improved|would|next time|after that)\b/i.test(normalized),
     hasStructure: /\b(situation|task|action|result|challenge|goal|impact|outcome)\b/i.test(normalized),
     keywordMatches,
-  }
-}
-
-function buildQuestionPrompt(type, context, keywords) {
-  const role = context.job_title?.trim() || 'this role'
-  const company = context.company_name?.trim() || 'this company'
-  const keySkill = keywords[0] || 'the core skills in the job description'
-  const secondSkill = keywords[1] || 'cross-functional collaboration'
-
-  switch (type) {
-    case 'self_intro':
-      return `Please introduce yourself and explain why you are interested in the ${role} opportunity at ${company}.`
-    case 'resume_based':
-      return `From your resume, which experience best proves you can succeed in a ${role} position, and why?`
-    case 'project_followup':
-      return `Tell me about one project from your resume. What was your specific contribution, what trade-offs did you make, and what result came from your work?`
-    case 'jd_skill_match':
-      return `The JD highlights ${keySkill} and ${secondSkill}. Walk me through a real example where you used those capabilities in practice.`
-    case 'behavioral':
-    default:
-      return `Tell me about a time you had to solve a difficult problem with teammates while still delivering results. What did you do, and what happened in the end?`
   }
 }
 
@@ -159,18 +186,6 @@ function buildFeedback(question, answer, context) {
   }
 }
 
-function buildQuestions(context, questionCount) {
-  const keywords = extractKeywords(context.job_description)
-
-  return QUESTION_BLUEPRINTS.slice(0, questionCount).map((blueprint, index) => ({
-    id: `q${index + 1}`,
-    type: blueprint.type,
-    label: QUESTION_TYPE_META[blueprint.type]?.label || titleCase(blueprint.type),
-    prompt: buildQuestionPrompt(blueprint.type, context, keywords),
-    focus_areas: blueprint.focusAreas,
-  }))
-}
-
 function buildReport(session) {
   const feedbackItems = session.questions
     .map((question) => session.feedbackByQuestion[question.id])
@@ -202,8 +217,43 @@ function buildReport(session) {
 
 export async function startInterview(payload) {
   const questionCount = payload.question_count || DEFAULT_QUESTION_COUNT
-  const interviewId = createId('mock')
-  const questions = buildQuestions(payload, questionCount)
+  const requestBody = {
+    session_id: payload.session_id,
+    job_description: payload.job_description || '',
+    job_title: payload.job_title || '',
+    company_name: payload.company_name || '',
+    question_count: questionCount,
+  }
+
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}/interviews/start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    })
+  } catch {
+    throw new Error('Unable to reach the interview service. Please make sure the backend is running.')
+  }
+
+  const result = await readJson(response)
+  if (!response.ok) {
+    throw new Error(
+      getApiErrorMessage(result, `Failed to start mock interview: ${response.status}`)
+    )
+  }
+
+  const data = result?.data || result
+  const interviewId = data?.interview_id
+  const questions = Array.isArray(data?.questions)
+    ? data.questions.map(normalizeBackendQuestion)
+    : []
+
+  if (!interviewId || questions.length === 0) {
+    throw new Error('Invalid mock interview response from server.')
+  }
 
   interviewStore.set(interviewId, {
     interviewId,
@@ -212,9 +262,6 @@ export async function startInterview(payload) {
     answersByQuestion: {},
     feedbackByQuestion: {},
   })
-
-  await delay(700)
-
   return {
     interview_id: interviewId,
     questions,

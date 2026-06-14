@@ -177,6 +177,18 @@ def _parse_questions(content: str, expected_count: int) -> list[InterviewQuestio
         if not question_text:
             raise LLMResponseError("Interview question text cannot be empty")
 
+        resume_evidence = str(
+            item.get("resume_evidence") or item.get("resumeEvidence") or ""
+        ).strip()
+        jd_evidence = str(
+            item.get("jd_evidence") or item.get("jdEvidence") or ""
+        ).strip()
+        if not resume_evidence or not jd_evidence:
+            raise LLMResponseError(
+                "Interview question response must include resume_evidence "
+                "and jd_evidence for every question"
+            )
+
         focus_areas = item.get("focus_areas") or item.get("focusAreas") or []
         if not isinstance(focus_areas, list):
             focus_areas = []
@@ -192,6 +204,8 @@ def _parse_questions(content: str, expected_count: int) -> list[InterviewQuestio
                 type=expected_type,
                 label=expected_label,
                 question=question_text,
+                resume_evidence=resume_evidence,
+                jd_evidence=jd_evidence,
                 focus_areas=normalized_focus_areas
                 or DEFAULT_FOCUS_AREAS[expected_type],
             )

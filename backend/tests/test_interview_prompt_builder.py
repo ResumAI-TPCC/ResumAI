@@ -27,6 +27,10 @@ def test_build_question_generation_prompt_contains_context():
     assert "jd_skill_match" in prompt
     assert "behavioral" in prompt
     assert '"questions"' in prompt
+    assert "resume_evidence" in prompt
+    assert "jd_evidence" in prompt
+    assert "Every question must be evidence-driven" in prompt
+    assert "The question text itself must naturally mention" in prompt
 
 
 def test_build_question_generation_prompt_rejects_empty_resume():
