@@ -456,15 +456,15 @@ files = [
 ]
 
 [package.dependencies]
-google-api-core = ">=2.15.0,<3.0.0dev"
-google-auth = ">=2.26.1,<3.0dev"
-google-cloud-core = ">=2.3.0,<3.0dev"
-google-crc32c = ">=1.0,<2.0dev"
+google-api-core = ">=2.15.0,<3.0.0.dev0"
+google-auth = ">=2.26.1,<3.0.dev0"
+google-cloud-core = ">=2.3.0,<3.0.dev0"
+google-crc32c = ">=1.0,<2.0.dev0"
 google-resumable-media = ">=2.6.0"
-requests = ">=2.18.0,<3.0.0dev"
+requests = ">=2.18.0,<3.0.0.dev0"
 
 [package.extras]
-protobuf = ["protobuf (<5.0.0dev)"]
+protobuf = ["protobuf (<5.0.0.dev0)"]
 
 [[package]]
 name = "google-crc32c"
@@ -521,11 +521,11 @@ files = [
 ]
 
 [package.dependencies]
-google-auth = ">=2.14.1,<3.0.0dev"
-pydantic = ">=2.0.0,<3.0.0dev"
-requests = ">=2.28.1,<3.0.0dev"
-typing-extensions = ">=4.11.0,<5.0.0dev"
-websockets = ">=13.0,<15.0dev"
+google-auth = ">=2.14.1,<3.0.0.dev0"
+pydantic = ">=2.0.0,<3.0.0.dev0"
+requests = ">=2.28.1,<3.0.0.dev0"
+typing-extensions = ">=4.11.0,<5.0.0.dev0"
+websockets = ">=13.0,<15.0.dev0"
 
 [[package]]
 name = "google-resumable-media"
@@ -1284,14 +1284,14 @@ image = ["Pillow (>=8.0.0)"]
 
 [[package]]
 name = "pytest"
-version = "9.0.2"
+version = "9.0.3"
 description = "pytest: simple powerful testing with Python"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "pytest-9.0.2-py3-none-any.whl", hash = "sha256:711ffd45bf766d5264d487b917733b453d917afd2b0ad65223959f59089f875b"},
-    {file = "pytest-9.0.2.tar.gz", hash = "sha256:75186651a92bd89611d1d9fc20f0b4345fd827c41ccd5c299a868a05d70edf11"},
+    {file = "pytest-9.0.3-py3-none-any.whl", hash = "sha256:2c5efc453d45394fdd706ade797c0a81091eccd1d6e4bccfcd476e2b8e0ab5d9"},
+    {file = "pytest-9.0.3.tar.gz", hash = "sha256:b86ada508af81d19edeb213c681b1d48246c1a91d304c6c81a427674c17eb91c"},
 ]
 
 [package.dependencies]
@@ -1960,4 +1960,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10"
-content-hash = "feda9b018ec176796852b14621dc87974613aa04ddfca80a869f8fb73856ad4a"
+content-hash = "d4aa7a4d54b0a66e24e0d777f0f885308b406c87d61b2fec217a3640ae7a1f77"
