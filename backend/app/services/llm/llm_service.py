@@ -1,18 +1,22 @@
 """
 LLM Service - Middle layer between API endpoints and LangChain chains
 
-Uses LCEL (LangChain Expression Language) with with_structured_output() for
-analyze and match operations, eliminating manual JSON parsing. The optimize
-operation retains free-text output because its result is Markdown fed directly
-into the PDF renderer.
+Uses LCEL (LangChain Expression Language) with ChatPromptTemplate and
+with_structured_output() for analyze and match operations:
+
+    chain = ChatPromptTemplate | llm.with_structured_output(PydanticModel)
+
+This eliminates manual JSON parsing and plain-string prompt assembly.
+The optimize operation uses a ChatPromptTemplate chained with a plain LLM
+because its result is Markdown fed directly into the PDF renderer.
 """
 
 import logging
 import re
 from functools import lru_cache
+from typing import Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage
 from langchain_core.exceptions import OutputParserException
 
 from app.core.config import settings
@@ -32,6 +36,12 @@ from app.services.validators.content_moderator import (
     get_content_moderator,
     ContentModerationError,
 )
+from app.services.prompt.templates import (
+    ANALYZE_PROMPT,
+    MATCH_PROMPT,
+    OPTIMIZE_NO_JD_PROMPT,
+    OPTIMIZE_WITH_JD_PROMPT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +49,10 @@ _WEIGHTED_SKILLS     = 0.35
 _WEIGHTED_EXPERIENCE = 0.25
 _WEIGHTED_EDUCATION  = 0.15
 _WEIGHTED_KEYWORDS   = 0.25
+
+# Minimum requirements for a meaningful job description
+_MIN_JD_LENGTH = 20
+_MIN_JD_ALPHA_RATIO = 0.3
 
 
 def _map_exception(exc: Exception) -> LLMException:
@@ -53,16 +67,45 @@ def _map_exception(exc: Exception) -> LLMException:
     return LLMException(str(exc))
 
 
+def _validate_job_description(job_description: str) -> None:
+    """
+    Validate that a job description contains meaningful content.
+
+    Raises ValueError if the JD is too short or consists mostly of
+    non-alphabetic characters (numbers / symbols) rather than real text.
+    """
+    jd = job_description.strip()
+    if len(jd) < _MIN_JD_LENGTH:
+        logger.warning(f"JD rejected: too short ({len(jd)} chars, min {_MIN_JD_LENGTH})")
+        raise ValueError(
+            f"Job description is too short (minimum {_MIN_JD_LENGTH} characters). "
+            "Please provide a meaningful job description for accurate matching."
+        )
+    alpha_ratio = sum(c.isalpha() for c in jd) / len(jd)
+    if alpha_ratio < _MIN_JD_ALPHA_RATIO:
+        logger.warning(
+            f"JD rejected: low alpha ratio ({alpha_ratio:.2f}, min {_MIN_JD_ALPHA_RATIO})"
+        )
+        raise ValueError(
+            "Job description does not contain enough meaningful text. "
+            "Please provide a real job description with actual words, "
+            "not just numbers or symbols."
+        )
+
+
 class LLMService:
     """
     LLM Service — orchestrates LangChain chains for the three resume operations.
 
-    analyze / match: use with_structured_output(PydanticModel) so Gemini returns
-    data via Function Calling, which LangChain deserialises directly into the
-    Pydantic schema — no regex or JSON parsing needed.
+    analyze / match:
+        chain = ChatPromptTemplate | llm.with_structured_output(PydanticModel)
+        Gemini returns data via Function Calling; LangChain deserialises directly
+        into the Pydantic schema — no regex or JSON parsing needed.
 
-    optimize: uses plain ainvoke and returns free-form Markdown text, which is
-    cleaned and fed into the PDF renderer.
+    optimize:
+        chain = ChatPromptTemplate | llm
+        Returns free-form Markdown text, which is cleaned and fed into the PDF
+        renderer.  Two variants: with and without a target job description.
     """
 
     def __init__(self):
@@ -70,7 +113,8 @@ class LLMService:
             logger.warning("GEMINI_API_KEY is not set. LLM features will not work.")
             self._analyze_chain = None
             self._match_chain = None
-            self._optimize_llm = None
+            self._optimize_no_jd_chain = None
+            self._optimize_with_jd_chain = None
             return
 
         base_llm = ChatGoogleGenerativeAI(
@@ -88,27 +132,35 @@ class LLMService:
             max_output_tokens=settings.GEMINI_MAX_TOKENS,
         )
 
-        # with_structured_output must be called on the base LLM before with_retry,
-        # because RunnableRetry does not expose with_structured_output.
-        self._analyze_chain = base_llm.with_structured_output(AnalyzeResult).with_retry(
-            stop_after_attempt=settings.GEMINI_MAX_RETRIES
-        )
-        self._match_chain = match_llm.with_structured_output(MatchResult).with_retry(
-            stop_after_attempt=settings.GEMINI_MAX_RETRIES
-        )
-        self._optimize_llm = base_llm.with_retry(stop_after_attempt=settings.GEMINI_MAX_RETRIES)
+        # with_structured_output must be called on the base LLM before composing
+        # the chain, because RunnableRetry does not expose with_structured_output.
+        self._analyze_chain = (
+            ANALYZE_PROMPT | base_llm.with_structured_output(AnalyzeResult)
+        ).with_retry(stop_after_attempt=settings.GEMINI_MAX_RETRIES)
+
+        self._match_chain = (
+            MATCH_PROMPT | match_llm.with_structured_output(MatchResult)
+        ).with_retry(stop_after_attempt=settings.GEMINI_MAX_RETRIES)
+
+        self._optimize_no_jd_chain = (
+            OPTIMIZE_NO_JD_PROMPT | base_llm
+        ).with_retry(stop_after_attempt=settings.GEMINI_MAX_RETRIES)
+
+        self._optimize_with_jd_chain = (
+            OPTIMIZE_WITH_JD_PROMPT | base_llm
+        ).with_retry(stop_after_attempt=settings.GEMINI_MAX_RETRIES)
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    async def analyze_resume(self, prompt: str) -> AnalyzeResult:
+    async def analyze_resume(self, resume_content: str) -> AnalyzeResult:
         """Analyze resume and return structured suggestions via Function Calling."""
         if not self._analyze_chain:
             raise LLMServiceUnavailableError("GEMINI_API_KEY not configured")
         try:
             result: AnalyzeResult = await self._analyze_chain.ainvoke(
-                [HumanMessage(content=prompt)]
+                {"resume_content": resume_content.strip()}
             )
         except OutputParserException as exc:
             logger.error(f"Structured output parsing failed (analyze): {exc}")
@@ -128,13 +180,21 @@ class LLMService:
 
         return result
 
-    async def match_resume(self, prompt: str) -> MatchResult:
+    async def match_resume(
+        self, resume_content: str, job_description: str
+    ) -> MatchResult:
         """Match resume with JD and return score with suggestions via Function Calling."""
         if not self._match_chain:
             raise LLMServiceUnavailableError("GEMINI_API_KEY not configured")
+
+        _validate_job_description(job_description)
+
         try:
             result: MatchResult = await self._match_chain.ainvoke(
-                [HumanMessage(content=prompt)]
+                {
+                    "resume_content": resume_content.strip(),
+                    "job_description": job_description.strip(),
+                }
             )
         except OutputParserException as exc:
             logger.error(f"Structured output parsing failed (match): {exc}")
@@ -170,12 +230,34 @@ class LLMService:
 
         return result
 
-    async def optimize_resume(self, prompt: str) -> OptimizeResult:
+    async def optimize_resume(
+        self,
+        resume_content: str,
+        job_description: Optional[str] = None,
+        template: str = "modern",
+    ) -> OptimizeResult:
         """Optimize resume and return improved Markdown content (free-text output)."""
-        if not self._optimize_llm:
+        has_jd = bool(job_description and job_description.strip())
+
+        if has_jd:
+            chain = self._optimize_with_jd_chain
+            inputs = {
+                "resume_content": resume_content.strip(),
+                "job_description": job_description.strip(),
+                "template": template,
+            }
+        else:
+            chain = self._optimize_no_jd_chain
+            inputs = {
+                "resume_content": resume_content.strip(),
+                "template": template,
+            }
+
+        if not chain:
             raise LLMServiceUnavailableError("GEMINI_API_KEY not configured")
+
         try:
-            response = await self._optimize_llm.ainvoke([HumanMessage(content=prompt)])
+            response = await chain.ainvoke(inputs)
             content: str = response.content
         except Exception as exc:
             logger.error(f"LLM optimize error: {exc}")

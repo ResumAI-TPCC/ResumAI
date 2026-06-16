@@ -1,17 +1,14 @@
 """
 Prompt Builder Service
-Constructs prompts for LLM based on resume content and JD.
+
+Provides job-description validation used before calling the match chain.
+Prompt construction itself is handled by the ChatPromptTemplate objects in
+templates.py, which are composed directly into LangChain LCEL chains inside
+LLMService.
 """
 
 import logging
 from typing import Optional
-from .templates import (
-    ANALYZE_PROMPT_TEMPLATE,
-    MATCH_PROMPT_TEMPLATE,
-    OPTIMIZE_NO_JD_PROMPT_TEMPLATE,
-    OPTIMIZE_WITH_JD_PROMPT_TEMPLATE,
-    SAFETY_INSTRUCTION,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -22,21 +19,15 @@ MIN_JD_ALPHA_RATIO = 0.3
 
 class PromptBuilder:
     """
-    Builder class for constructing LLM prompts.
+    Validates inputs before they reach the LLM chains.
+
+    Prompt assembly is now owned by LLMService via ChatPromptTemplate;
+    this class retains only input-quality validation so callers have a
+    stable import path.
     """
 
-    def build_analyze_prompt(self, resume_content: str) -> str:
-        """Build a prompt for resume analysis."""
-        if not resume_content or not resume_content.strip():
-            raise ValueError("resume_content cannot be empty")
-
-        return ANALYZE_PROMPT_TEMPLATE.format(
-            safety_instruction=SAFETY_INSTRUCTION,
-            resume_content=resume_content.strip()
-        )
-
     @staticmethod
-    def _validate_job_description(job_description: str) -> None:
+    def validate_job_description(job_description: str) -> None:
         """
         Validate that a job description contains meaningful content.
 
@@ -55,7 +46,7 @@ class PromptBuilder:
             logger.warning(f"JD rejected: too short ({len(jd)} chars, min {MIN_JD_LENGTH})")
             raise ValueError(
                 f"Job description is too short (minimum {MIN_JD_LENGTH} characters). "
-                f"Please provide a meaningful job description for accurate matching."
+                "Please provide a meaningful job description for accurate matching."
             )
 
         alpha_count = sum(c.isalpha() for c in jd)
@@ -68,48 +59,6 @@ class PromptBuilder:
                 "Job description does not contain enough meaningful text. "
                 "Please provide a real job description with actual words, "
                 "not just numbers or symbols."
-            )
-
-    def build_match_prompt(self, resume_content: str, job_description: str) -> str:
-        """Build a prompt for matching resume with JD."""
-        if not resume_content or not resume_content.strip():
-            raise ValueError("resume_content cannot be empty")
-        if not job_description or not job_description.strip():
-            raise ValueError("job_description cannot be empty")
-
-        # Validate JD quality
-        self._validate_job_description(job_description)
-
-        return MATCH_PROMPT_TEMPLATE.format(
-            safety_instruction=SAFETY_INSTRUCTION,
-            resume_content=resume_content.strip(),
-            job_description=job_description.strip()
-        )
-
-    def build_optimize_prompt(self, resume_content: str, job_description: Optional[str] = None, template: str = "modern") -> str:
-        """
-        Build a prompt for resume optimization.
-
-        RA-45: Without JD - general optimization for better quality.
-        RA-46: With JD - targeted optimization aligned with job description.
-        """
-        if not resume_content or not resume_content.strip():
-            raise ValueError("resume_content cannot be empty")
-
-        if job_description and job_description.strip():
-            # RA-46: Optimize with JD
-            return OPTIMIZE_WITH_JD_PROMPT_TEMPLATE.format(
-                safety_instruction=SAFETY_INSTRUCTION,
-                resume_content=resume_content.strip(),
-                job_description=job_description.strip(),
-                template=template,
-            )
-        else:
-            # RA-45: Optimize without JD
-            return OPTIMIZE_NO_JD_PROMPT_TEMPLATE.format(
-                safety_instruction=SAFETY_INSTRUCTION,
-                resume_content=resume_content.strip(),
-                template=template,
             )
 
 

@@ -23,7 +23,6 @@ from app.schemas.resume_schema import (
 )
 from app.services.resume_service import get_resume_content, upload_resume_to_gcs
 from app.services.pdf_service import markdown_to_pdf
-from app.services.prompt.builder import get_prompt_builder
 from app.services.llm.llm_service import get_llm_service
 from app.services.llm.exceptions import (
     LLMServiceUnavailableError,
@@ -78,13 +77,9 @@ async def analyze_resume(request: ResumeAnalyzeRequest):
                 detail=reason
             )
 
-        # 2. Build prompt (Service 2)
-        builder = get_prompt_builder()
-        prompt = builder.build_analyze_prompt(resume_content)
-
-        # 3. Call LLM and parse result (Service 3)
+        # 2. Call LLM — ChatPromptTemplate + with_structured_output chain
         llm = get_llm_service()
-        result = await llm.analyze_resume(prompt)
+        result = await llm.analyze_resume(resume_content)
 
         # 4. Map to API response schema
         suggestions = [
@@ -185,13 +180,10 @@ async def match_resume(request: ResumeMatchRequest):
                 detail=reason
             )
 
-        # 2. Build match prompt (Service 2)
-        builder = get_prompt_builder()
-        prompt = builder.build_match_prompt(resume_content, match_context)
-
-        # 3. Call LLM and parse result (Service 3)
+        # 2. Call LLM — ChatPromptTemplate + with_structured_output chain
+        # JD validation (length / alpha-ratio) is enforced inside match_resume.
         llm = get_llm_service()
-        result = await llm.match_resume(prompt)
+        result = await llm.match_resume(resume_content, match_context)
 
         # 4. Map to API response schema
         return ResumeMatchResponse(
@@ -286,17 +278,13 @@ async def optimize_resume(request: ResumeOptimizeRequest):
                     detail=reason
                 )
 
-        # 2. Build optimize prompt (Service 2)
-        builder = get_prompt_builder()
-        prompt = builder.build_optimize_prompt(
-            resume_content, 
-            request.job_description, 
-            request.template
-        )
-
-        # 3. Call LLM (Service 3)
+        # 2. Call LLM — ChatPromptTemplate chain (no-JD or with-JD variant)
         llm = get_llm_service()
-        result = await llm.optimize_resume(prompt)
+        result = await llm.optimize_resume(
+            resume_content,
+            request.job_description,
+            request.template,
+        )
 
         # 4. Convert optimized content to PDF and encode as base64
         import base64
