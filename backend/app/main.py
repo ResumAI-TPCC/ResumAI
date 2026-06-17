@@ -2,6 +2,15 @@
 ResumAI Backend Application Entry Point
 """
 
+import sys
+from pathlib import Path
+
+# Ensure repo root is in sys.path so `worker.*` can be imported
+# when uvicorn loads this module directly (e.g. in production / Docker).
+_repo_root = Path(__file__).resolve().parent.parent.parent  # ResumAI/
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,15 +18,24 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router as api_router
 from app.core.config import settings
+from app.services.jobs.store import InMemoryJobStore
+from app.services.jobs.manager import JobManager
+from worker.runners.local_runner import LocalBackgroundRunner
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifecycle management"""
-    # Startup
+    # Startup: initialise job infrastructure
+    store = InMemoryJobStore()
+    runner = LocalBackgroundRunner()
+    runner.set_store(store)
+    app.state.job_manager = JobManager(store=store, runner=runner)
+
     print(f"{settings.APP_NAME} v{settings.APP_VERSION} starting...")
     yield
     # Shutdown
+    runner.shutdown()
     print(f"{settings.APP_NAME} shutting down...")
 
 
