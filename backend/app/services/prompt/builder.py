@@ -25,14 +25,37 @@ class PromptBuilder:
     Builder class for constructing LLM prompts.
     """
 
-    def build_analyze_prompt(self, resume_content: str) -> str:
+    @staticmethod
+    def _format_retrieved_context(retrieved_context: Optional[list[str]]) -> str:
+        """Format retrieved RAG snippets for prompt injection."""
+        if not retrieved_context:
+            return ""
+
+        snippets = [chunk.strip() for chunk in retrieved_context if chunk.strip()]
+        if not snippets:
+            return ""
+
+        bullet_list = "\n".join(f"- {chunk}" for chunk in snippets)
+        return (
+            "\n## Industry Best Practices\n"
+            "Use the following retrieved resume guidance to ground your suggestions. "
+            "Do not quote it verbatim unless it directly improves the answer.\n"
+            f"{bullet_list}\n"
+        )
+
+    def build_analyze_prompt(
+        self,
+        resume_content: str,
+        retrieved_context: Optional[list[str]] = None,
+    ) -> str:
         """Build a prompt for resume analysis."""
         if not resume_content or not resume_content.strip():
             raise ValueError("resume_content cannot be empty")
 
         return ANALYZE_PROMPT_TEMPLATE.format(
             safety_instruction=SAFETY_INSTRUCTION,
-            resume_content=resume_content.strip()
+            resume_content=resume_content.strip(),
+            retrieved_context=self._format_retrieved_context(retrieved_context),
         )
 
     @staticmethod

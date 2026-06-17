@@ -18,6 +18,7 @@ ANALYZE_PROMPT_TEMPLATE = """You are a professional resume consultant. Analyze t
 
 ## Resume Content:
 {resume_content}
+{retrieved_context}
 
 ## Instructions:
 Analyze the resume thoroughly. Focus on:
