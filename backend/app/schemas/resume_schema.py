@@ -2,7 +2,7 @@
 Resume Schemas - Strictly following Design Doc 4.2
 """
 
-from typing import Optional, List
+from typing import Optional, List, Any
 from pydantic import BaseModel, Field
 
 
@@ -148,3 +148,37 @@ class ResumeOptimizeResponse(BaseModel):
     code: int = 200
     status: str = "ok"
     data: OptimizeResponseData
+
+
+# --- RA-82: Async Job Queue Schemas ---
+
+class JobSubmitData(BaseModel):
+    """Inner data returned immediately after a job is enqueued"""
+    job_id: str = Field(..., description="Unique job identifier (UUID4)")
+    job_type: str = Field(..., description="One of: analyze, match, optimize")
+    status: str = Field("pending", description="Always 'pending' on submit")
+    queue_depth: int = Field(..., description="Number of jobs currently waiting in queue")
+
+
+class JobSubmitResponse(BaseModel):
+    """Response schema for async job submission (202 Accepted)"""
+    code: int = 202
+    status: str = "ok"
+    data: JobSubmitData
+
+
+class JobStatusData(BaseModel):
+    """Inner data for job status polling response"""
+    job_id: str
+    job_type: str
+    status: str = Field(..., description="pending | processing | completed | failed")
+    result: Optional[Any] = Field(None, description="Result payload when completed; same shape as the original synchronous endpoint's data field")
+    error: Optional[str] = Field(None, description="Error message when failed")
+    queue_depth: int = Field(..., description="Number of jobs currently waiting in queue")
+
+
+class JobStatusResponse(BaseModel):
+    """Response schema for job status polling (GET /jobs/{job_id})"""
+    code: int = 200
+    status: str = "ok"
+    data: JobStatusData
