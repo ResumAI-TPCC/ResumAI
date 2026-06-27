@@ -151,5 +151,5 @@ def test_optimize_no_jd_prompt_template_empty_content_raises():
     import pytest
     from app.services.prompt.templates import OPTIMIZE_NO_JD_PROMPT
 
-    with pytest.raises(Exception):
+    with pytest.raises((KeyError, ValueError)):
         OPTIMIZE_NO_JD_PROMPT.format_messages(template="modern")
