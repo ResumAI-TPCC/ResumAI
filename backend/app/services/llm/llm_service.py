@@ -30,7 +30,6 @@ from .schemas import (
     MatchResult,
     OptimizeResult,
 )
-from .exceptions import LLMException
 from app.services.validators.content_moderator import (
     get_content_moderator,
     ContentModerationError,
