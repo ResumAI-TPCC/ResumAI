@@ -30,6 +30,7 @@ from .schemas import (
     MatchResult,
     OptimizeResult,
 )
+from .exceptions import LLMException
 from app.services.validators.content_moderator import (
     get_content_moderator,
     ContentModerationError,
@@ -57,7 +58,13 @@ class LLMService:
 
     async def analyze_resume(self, messages: List[BaseMessage]) -> AnalyzeResult:
         """Analyze resume and return structured suggestions."""
-        result: AnalyzeResult = await self.provider.analyze(messages)
+        try:
+            result: AnalyzeResult = await self.provider.analyze(messages)
+        except LLMException:
+            raise
+        except Exception as exc:
+            logger.error(f"Unexpected error in analyze_resume: {exc}")
+            raise LLMException(str(exc)) from exc
 
         moderator = get_content_moderator()
         check_text = " ".join(
@@ -72,7 +79,13 @@ class LLMService:
 
     async def match_resume(self, messages: List[BaseMessage]) -> MatchResult:
         """Match resume with JD and return score with suggestions."""
-        result: MatchResult = await self.provider.match(messages)
+        try:
+            result: MatchResult = await self.provider.match(messages)
+        except LLMException:
+            raise
+        except Exception as exc:
+            logger.error(f"Unexpected error in match_resume: {exc}")
+            raise LLMException(str(exc)) from exc
 
         # Business rule: overall score must be close to the weighted average of
         # breakdown scores. Deviations > 15 points indicate LLM inflation.
@@ -92,7 +105,7 @@ class LLMService:
 
         moderator = get_content_moderator()
         check_text = " ".join(
-            f"{s.title} {s.description}" for s in result.suggestions
+            f"{s.title} {s.description} {s.action or ''}" for s in result.suggestions
         )
         is_safe, reason = moderator.check_output(check_text)
         if not is_safe:
@@ -103,7 +116,13 @@ class LLMService:
 
     async def optimize_resume(self, messages: List[BaseMessage]) -> OptimizeResult:
         """Optimize resume and return cleaned Markdown content."""
-        response = await self.provider.optimize(messages)
+        try:
+            response = await self.provider.optimize(messages)
+        except LLMException:
+            raise
+        except Exception as exc:
+            logger.error(f"Unexpected error in optimize_resume: {exc}")
+            raise LLMException(str(exc)) from exc
 
         moderator = get_content_moderator()
         is_safe, reason = moderator.check_output(response.content)
