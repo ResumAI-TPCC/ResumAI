@@ -15,7 +15,6 @@ from app.services.prompt.templates import (
     MATCH_PROMPT,
     OPTIMIZE_NO_JD_PROMPT,
     OPTIMIZE_WITH_JD_PROMPT,
-    SAFETY_INSTRUCTION,
 )
 
 
