@@ -18,18 +18,42 @@ env:
   REGION: asia-southeast1
   SERVICE_NAME: test-service
   IMAGE_NAME: backend-test
-  WORKLOAD_IDENTITY_PROVIDER: projects/367288272676/locations/global/workloadIdentityPools/github-actions/providers/github
-  SERVICE_ACCOUNT: deploy-staging@resumai-platform.iam.gserviceaccount.com
+  DEPLOY_BRANCH: develop
+  WORKLOAD_IDENTITY_PROVIDER: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
+  DEPLOY_SERVICE_ACCOUNT: ${{ vars.DEPLOY_SERVICE_ACCOUNT }}
+  CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT: ${{ vars.CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT }}
   ALLOWED_ORIGINS: https://resumai-platform.web.app
   LLM_PROVIDER: gemini
   GEMINI_MODEL: gemini-3-flash-preview
   GCS_BUCKET_NAME: resumai-platform-resumes
   GCS_OBJECT_PREFIX: resumes
+  GEMINI_API_KEY_SECRET_VERSION: ${{ vars.GEMINI_API_KEY_SECRET_VERSION || 'latest' }}
 
 jobs:
-  deploy:
+  validate-workflow-run:
+    name: Validate workflow_run source
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success'}}
+    steps:
+      - name: Fail unless CI completed on deploy branch
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "Backend CI did not complete successfully. Conclusion: ${{ github.event.workflow_run.conclusion }}"
+            exit 1
+          fi
+
+          if [ "${{ github.event.workflow_run.event }}" != "push" ]; then
+            echo "Deployment only runs for push-triggered CI runs. Event: ${{ github.event.workflow_run.event }}"
+            exit 1
+          fi
+
+          if [ "${{ github.event.workflow_run.head_branch }}" != "${DEPLOY_BRANCH}" ]; then
+            echo "Deployment only runs from ${DEPLOY_BRANCH}. Head branch: ${{ github.event.workflow_run.head_branch }}"
+            exit 1
+          fi
+
+  deploy:
+    needs: validate-workflow-run
+    runs-on: ubuntu-latest
     
     defaults:
       run:
@@ -41,11 +65,17 @@ jobs:
       with:
         ref: ${{ github.event.workflow_run.head_sha }}
 
+    - name: Validate deployment configuration
+      run: |
+        test -n "${WORKLOAD_IDENTITY_PROVIDER}" || (echo "Missing repository variable WORKLOAD_IDENTITY_PROVIDER" && exit 1)
+        test -n "${DEPLOY_SERVICE_ACCOUNT}" || (echo "Missing repository variable DEPLOY_SERVICE_ACCOUNT" && exit 1)
+        test -n "${CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT}" || (echo "Missing repository variable CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT" && exit 1)
+
     - name: 'Google auth'
       uses: 'google-github-actions/auth@v2'
       with:
         workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ env.SERVICE_ACCOUNT }}
+        service_account: ${{ env.DEPLOY_SERVICE_ACCOUNT }}
 
     - name: 'Set up Cloud SDK'
       uses: 'google-github-actions/setup-gcloud@v2'
@@ -65,6 +95,7 @@ jobs:
           --image gcr.io/${PROJECT_ID}/${IMAGE_NAME}:${{ github.event.workflow_run.head_sha }} \
           --region ${REGION} \
           --platform managed \
+          --service-account ${CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT} \
           --port 8000 \
           --no-allow-unauthenticated \
           --update-env-vars "LLM_PROVIDER=$LLM_PROVIDER" \
@@ -74,4 +105,4 @@ jobs:
           --update-env-vars "GCS_OBJECT_PREFIX=$GCS_OBJECT_PREFIX" \
           --update-env-vars "ALLOWED_ORIGINS=$ALLOWED_ORIGINS" \
           --update-env-vars "APP_VERSION=QA" \
-          --update-secrets "GEMINI_API_KEY=gemini-api-key:1"
+          --update-secrets "GEMINI_API_KEY=gemini-api-key:${GEMINI_API_KEY_SECRET_VERSION}"
