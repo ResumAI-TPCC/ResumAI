@@ -24,7 +24,6 @@ from app.schemas.resume_schema import (
     JobSubmitResponse,
 )
 from app.services.resume_service import get_resume_content, upload_resume_to_gcs
-from app.services.validators.content_moderator import ContentModerationError
 from app.services.validators.content_moderator import get_content_moderator
 from app.services.jobs.job_manager import get_job_manager, QueueFullError
 from app.core.error_templates import (
