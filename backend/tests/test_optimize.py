@@ -1,10 +1,11 @@
 """
 Tests for Optimize Resume Endpoint (RA-45, RA-46, RA-47)
+
+Updated for RA-82: /optimize now enqueues an async job and returns 202 + job_id
+instead of blocking on LLM and returning the PDF directly.
 """
 
-import base64
 from unittest.mock import AsyncMock, MagicMock, patch
-from dataclasses import dataclass
 
 from app.core.config import settings
 
@@ -17,76 +18,43 @@ Software Engineer at Tech Corp (2020-2024)
 - Built web applications
 """
 
-MOCK_OPTIMIZED_WITHOUT_JD = """# John Doe
-**Email:** john@example.com
 
-## Professional Summary
-Experienced software engineer with 4+ years of expertise.
-
-## Work Experience
-### Software Engineer | Tech Corp | 2020-2024
-- Architected and developed 5 production web applications
-- Optimized without JD
-"""
-
-MOCK_OPTIMIZED_WITH_JD = """# John Doe
-**Email:** john@example.com
-
-## Professional Summary
-Results-driven software engineer aligned with Senior Engineer requirements.
-
-## Work Experience
-### Software Engineer | Tech Corp | 2020-2024
-- Led development of microservices architecture
-- Optimized with JD
-"""
-
-
-@dataclass
-class MockOptimizeResult:
-    optimized_content: str = ""
-
-
-@patch("app.api.routes.resumes.get_llm_service")
+@patch("app.api.routes.resumes.get_job_manager")
 @patch("app.api.routes.resumes.get_resume_content", new_callable=AsyncMock)
-def test_optimize_resume_without_jd(mock_get_content, mock_get_llm, client):
-    """RA-45: Test optimize without job description"""
+def test_optimize_resume_without_jd(mock_get_content, mock_get_manager, client):
+    """RA-45/RA-82: Test optimize without job description enqueues job and returns 202"""
     mock_get_content.return_value = MOCK_RESUME_TEXT
 
-    mock_service = MagicMock()
-    mock_service.optimize_resume = AsyncMock(
-        return_value=MockOptimizeResult(optimized_content=MOCK_OPTIMIZED_WITHOUT_JD)
-    )
-    mock_get_llm.return_value = mock_service
+    mock_manager = MagicMock()
+    mock_manager.enqueue.return_value = "test-job-id-123"
+    mock_manager.queue_depth = 0
+    mock_get_manager.return_value = mock_manager
 
     response = client.post(
         f"{settings.API_PREFIX}/resumes/optimize",
         json={"session_id": "test-session-123"},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     data = response.json()
 
-    assert data["code"] == 200
+    assert data["code"] == 202
     assert data["status"] == "ok"
-    assert "encoded_file" in data["data"]
-
-    # Verify base64 decoding produces valid PDF
-    decoded = base64.b64decode(data["data"]["encoded_file"])
-    assert decoded[:5] == b"%PDF-", "Response should be a valid PDF file"
+    assert data["data"]["job_id"] == "test-job-id-123"
+    assert data["data"]["job_type"] == "optimize"
+    assert data["data"]["status"] == "pending"
 
 
-@patch("app.api.routes.resumes.get_llm_service")
+@patch("app.api.routes.resumes.get_job_manager")
 @patch("app.api.routes.resumes.get_resume_content", new_callable=AsyncMock)
-def test_optimize_resume_with_jd(mock_get_content, mock_get_llm, client):
-    """RA-46: Test optimize with job description"""
+def test_optimize_resume_with_jd(mock_get_content, mock_get_manager, client):
+    """RA-46/RA-82: Test optimize with job description enqueues job and returns 202"""
     mock_get_content.return_value = MOCK_RESUME_TEXT
 
-    mock_service = MagicMock()
-    mock_service.optimize_resume = AsyncMock(
-        return_value=MockOptimizeResult(optimized_content=MOCK_OPTIMIZED_WITH_JD)
-    )
-    mock_get_llm.return_value = mock_service
+    mock_manager = MagicMock()
+    mock_manager.enqueue.return_value = "test-job-id-456"
+    mock_manager.queue_depth = 1
+    mock_get_manager.return_value = mock_manager
 
     response = client.post(
         f"{settings.API_PREFIX}/resumes/optimize",
@@ -96,14 +64,14 @@ def test_optimize_resume_with_jd(mock_get_content, mock_get_llm, client):
         },
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     data = response.json()
 
-    assert "encoded_file" in data["data"]
-
-    # Verify response is a valid PDF
-    decoded = base64.b64decode(data["data"]["encoded_file"])
-    assert decoded[:5] == b"%PDF-", "Response should be a valid PDF file"
+    assert data["code"] == 202
+    assert data["status"] == "ok"
+    assert data["data"]["job_id"] == "test-job-id-456"
+    assert data["data"]["job_type"] == "optimize"
+    assert data["data"]["queue_depth"] == 1
 
 
 def test_optimize_resume_missing_session_id(client):
@@ -134,6 +102,9 @@ def test_optimize_with_jd_prompt_template():
     """RA-46: OPTIMIZE_WITH_JD_PROMPT renders both resume content and JD."""
     from app.services.prompt.templates import OPTIMIZE_WITH_JD_PROMPT
 
+    builder = get_prompt_builder()
+    prompt = builder.build_optimize_prompt(
+        "Some resume content", "Senior Engineer at Google"
     messages = OPTIMIZE_WITH_JD_PROMPT.format_messages(
         resume_content="Some resume content",
         job_description="Senior Engineer at Google",
@@ -141,6 +112,9 @@ def test_optimize_with_jd_prompt_template():
     )
     human = messages[1].content
 
+    assert "Some resume content" in prompt
+    assert "Senior Engineer at Google" in prompt
+    assert "Target Job Description" in prompt
     assert "Some resume content" in human
     assert "Senior Engineer at Google" in human
     assert "Job Description" in human
