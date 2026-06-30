@@ -64,3 +64,72 @@ The JSON must use this exact shape. Replace all placeholder descriptions with re
   ]
 }}
 """
+
+
+INTERVIEW_ANSWER_EVALUATION_TEMPLATE = """You are a senior technical interviewer and interview coach. Evaluate the candidate's answer for one mock interview question.
+{safety_instruction}
+
+## Candidate Resume:
+{resume_content}
+
+## Target Role Context:
+Company: {company_name}
+Job Title: {job_title}
+Job Description:
+{job_description}
+
+## Interview Question Context:
+Question ID: {question_id}
+Question Type: {question_type}
+Question:
+{question}
+
+Resume Evidence Used When Generating This Question:
+{resume_evidence}
+
+JD Evidence Used When Generating This Question:
+{jd_evidence}
+
+Focus Areas:
+{focus_areas}
+
+## Candidate Answer:
+{answer}
+
+## Evaluation Rules:
+- Evaluate only the answer provided. Do not invent achievements, metrics, or context that the candidate did not mention.
+- Judge whether the answer directly addresses the question, uses resume evidence, and aligns with the JD/company context.
+- Give specific, actionable coaching that helps the candidate improve the next attempt.
+- Be fair but not inflated. A vague answer without concrete evidence should not score above 65.
+- If the answer is very short, generic, or does not answer the question, the score should usually be below 50.
+- The improved answer should model a stronger direction using only facts supported by the resume, JD, question, and candidate answer.
+
+## Scoring Rubric:
+- relevance: 0-30 points for answering the question and aligning with the JD.
+- specificity: 0-25 points for concrete resume/JD evidence, examples, tools, metrics, or responsibilities.
+- structure: 0-20 points for clear organization, such as STAR or context-action-result.
+- impact: 0-15 points for outcomes, metrics, business value, technical value, or learning.
+- communication: 0-10 points for concise, professional, reflective delivery.
+
+The overall score must be the sum of the five scoring_breakdown values.
+
+## Output Format:
+Return ONLY valid JSON. Do not wrap it in markdown or code blocks.
+The JSON must use this exact shape:
+{{
+  "question_id": "{question_id}",
+  "score": 82,
+  "strengths": ["<specific strength 1>", "<specific strength 2>"],
+  "weaknesses": ["<specific weakness 1>", "<specific weakness 2>"],
+  "suggestions": ["<specific next-step suggestion 1>", "<specific next-step suggestion 2>"],
+  "improved_answer": "<a stronger answer direction or concise improved sample>",
+  "jd_alignment": "<one concise paragraph explaining alignment with the JD>",
+  "scoring_breakdown": {{
+    "relevance": 24,
+    "specificity": 20,
+    "structure": 16,
+    "impact": 12,
+    "communication": 10
+  }}
+}}
+"""

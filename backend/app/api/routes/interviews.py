@@ -14,10 +14,12 @@ from app.core.error_templates import (
     LLM_SERVICE_UNAVAILABLE,
 )
 from app.schemas.interview_schema import (
+    EvaluateAnswerRequest,
+    EvaluateAnswerResponse,
     StartInterviewRequest,
     StartInterviewResponse,
 )
-from app.services.interview_service import start_interview
+from app.services.interview_service import evaluate_interview_answer, start_interview
 from app.services.llm.exceptions import (
     LLMException,
     LLMResponseError,
@@ -35,6 +37,42 @@ async def start_mock_interview(request: StartInterviewRequest):
     """
     try:
         return await start_interview(request)
+    except HTTPException:
+        raise
+    except ContentModerationError as exc:
+        raise HTTPException(
+            status_code=CONTENT_MODERATION_OUTPUT_BLOCKED.code,
+            detail=exc.message,
+        ) from exc
+    except LLMServiceUnavailableError as exc:
+        raise HTTPException(
+            status_code=LLM_SERVICE_UNAVAILABLE.code,
+            detail=LLM_SERVICE_UNAVAILABLE.detail,
+        ) from exc
+    except LLMResponseError as exc:
+        raise HTTPException(
+            status_code=LLM_INVALID_RESPONSE.code,
+            detail=LLM_INVALID_RESPONSE.detail,
+        ) from exc
+    except LLMException as exc:
+        raise HTTPException(
+            status_code=LLM_GENERIC_ERROR.code,
+            detail=LLM_GENERIC_ERROR.detail,
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=INTERNAL_SERVER_ERROR.code,
+            detail=INTERNAL_SERVER_ERROR.detail,
+        ) from exc
+
+
+@router.post("/answer", response_model=EvaluateAnswerResponse)
+async def evaluate_mock_interview_answer(request: EvaluateAnswerRequest):
+    """
+    Evaluate one mock interview answer and return structured feedback.
+    """
+    try:
+        return await evaluate_interview_answer(request)
     except HTTPException:
         raise
     except ContentModerationError as exc:

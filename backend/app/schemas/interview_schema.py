@@ -56,3 +56,76 @@ class StartInterviewResponse(BaseModel):
     code: int = 200
     status: str = "ok"
     data: StartInterviewData
+
+
+class ScoringBreakdown(BaseModel):
+    """Rubric scores for evaluating a single interview answer."""
+
+    relevance: int = Field(
+        ...,
+        ge=0,
+        le=30,
+        description="Relevance to the question and JD, max 30",
+    )
+    specificity: int = Field(
+        ...,
+        ge=0,
+        le=25,
+        description="Use of resume/JD evidence and concrete details, max 25",
+    )
+    structure: int = Field(
+        ...,
+        ge=0,
+        le=20,
+        description="Answer organization and clarity, max 20",
+    )
+    impact: int = Field(
+        ...,
+        ge=0,
+        le=15,
+        description="Outcomes, metrics, and business or technical impact, max 15",
+    )
+    communication: int = Field(
+        ...,
+        ge=0,
+        le=10,
+        description="Conciseness, professionalism, and reflection, max 10",
+    )
+
+
+class EvaluateAnswerRequest(BaseModel):
+    """Request body for evaluating one mock interview answer."""
+
+    interview_id: str
+    session_id: str
+    question_id: str
+    question_type: str
+    question: str
+    resume_evidence: Optional[str] = None
+    jd_evidence: Optional[str] = None
+    focus_areas: List[str] = Field(default_factory=list)
+    answer: str
+    job_description: str
+    job_title: Optional[str] = None
+    company_name: Optional[str] = None
+
+
+class EvaluateAnswerData(BaseModel):
+    """Structured feedback for one interview answer."""
+
+    question_id: str
+    score: int = Field(..., ge=0, le=100)
+    strengths: List[str]
+    weaknesses: List[str]
+    suggestions: List[str]
+    improved_answer: str
+    jd_alignment: str
+    scoring_breakdown: ScoringBreakdown
+
+
+class EvaluateAnswerResponse(BaseModel):
+    """Response for evaluating one mock interview answer."""
+
+    code: int = 200
+    status: str = "ok"
+    data: EvaluateAnswerData
