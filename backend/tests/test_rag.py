@@ -44,21 +44,16 @@ class TestGeminiEmbedder:
             with pytest.raises(ValueError, match="GEMINI_API_KEY"):
                 GeminiEmbedder(api_key="")
 
-    def test_embed_uses_configured_model(self):
-        response = MagicMock()
-        response.embeddings = [MagicMock(values=[0.1, 0.2, 0.3])]
+    def test_embed_delegates_to_embeddings_client(self):
         client = MagicMock()
-        client.models.embed_content.return_value = response
+        client.embed_query.return_value = [0.1, 0.2, 0.3]
 
         embedder = GeminiEmbedder.__new__(GeminiEmbedder)
         embedder.client = client
         embedder.model = "test-embedding-model"
 
         assert embedder.embed("resume text") == [0.1, 0.2, 0.3]
-        client.models.embed_content.assert_called_once_with(
-            model="test-embedding-model",
-            contents="resume text",
-        )
+        client.embed_query.assert_called_once_with("resume text")
 
     def test_embed_rejects_empty_text(self):
         embedder = GeminiEmbedder.__new__(GeminiEmbedder)

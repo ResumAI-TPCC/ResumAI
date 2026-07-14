@@ -1,10 +1,14 @@
 """
 Gemini embedding adapter used by the RAG retriever.
+
+Backed by langchain-google-genai's GoogleGenerativeAIEmbeddings so the RAG
+path shares the same provider stack as the rest of the LLM layer instead of
+depending on the standalone google-genai SDK directly.
 """
 
 from typing import Optional
 
-from google import genai
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 from app.core.config import settings
 
@@ -18,19 +22,18 @@ class GeminiEmbedder:
         if not self.api_key:
             raise ValueError("GEMINI_API_KEY is required for RAG embeddings")
 
-        self.client = genai.Client(api_key=self.api_key)
+        self.client = GoogleGenerativeAIEmbeddings(
+            model=self.model,
+            google_api_key=self.api_key,
+        )
 
     def embed(self, text: str) -> list[float]:
         """Embed a single non-empty string."""
         if not text or not text.strip():
             raise ValueError("Cannot embed empty text")
 
-        result = self.client.models.embed_content(
-            model=self.model,
-            contents=text.strip(),
-        )
-        return list(result.embeddings[0].values)
+        return self.client.embed_query(text.strip())
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """Embed multiple strings with deterministic ordering."""
-        return [self.embed(text) for text in texts]
+        """Embed multiple strings in one batch call with deterministic ordering."""
+        return self.client.embed_documents([text.strip() for text in texts])
