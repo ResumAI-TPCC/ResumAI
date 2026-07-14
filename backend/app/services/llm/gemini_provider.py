@@ -1,27 +1,32 @@
 """
-Google Gemini LLM Provider Implementation
-Sends prompts to Gemini API and handles responses using Google GenAI SDK
+Google Gemini LLM Provider — LangChain-based implementation.
 
-Note: Migrated from deprecated google-generativeai to google-genai package.
-See: https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+Replaces the direct google-genai SDK with langchain-google-genai so that:
+  - with_structured_output() drives schema enforcement via Function Calling
+    for analyze and match, eliminating all manual JSON parsing.
+  - with_retry() replaces the hand-written retry loop with exponential backoff.
+  - Messages assembled by PromptBuilder (List[BaseMessage]) are passed
+    directly to ainvoke(), keeping the provider interface clean.
+
+optimize uses plain ainvoke() because its result is free-text Markdown
+fed into the PDF renderer — no structured output is needed.
 """
 
-import asyncio
 import logging
-from typing import Optional
+from typing import List, Optional
 
-from google import genai
-from google.genai import types
-from google.api_core import exceptions as google_exceptions
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import BaseMessage
+from langchain_core.exceptions import OutputParserException
 
 from app.core.config import settings
 
-from .base import BaseLLMProvider, LLMResponse, MatchScoreResult
+from .base import BaseLLMProvider, LLMResponse
+from .schemas import AnalyzeResult, MatchResult
 from .exceptions import (
     LLMException,
     LLMAuthenticationError,
     LLMRateLimitError,
-    LLMTimeoutError,
     LLMResponseError,
     LLMServiceUnavailableError,
 )
@@ -29,291 +34,142 @@ from .exceptions import (
 logger = logging.getLogger(__name__)
 
 
+def _map_exception(exc: Exception) -> LLMException:
+    """Map a generic / LangChain exception to the appropriate LLMException."""
+    msg = str(exc).lower()
+    if "api key" in msg or "unauthenticated" in msg or "permission" in msg:
+        return LLMAuthenticationError()
+    if "quota" in msg or "rate" in msg or "resource exhausted" in msg:
+        return LLMRateLimitError()
+    if "unavailable" in msg or "service" in msg or "timeout" in msg or "deadline" in msg:
+        return LLMServiceUnavailableError()
+    return LLMException(str(exc))
+
+
 class GeminiProvider(BaseLLMProvider):
     """
-    Google Gemini LLM Provider
+    LangChain-backed Gemini provider.
 
-    Responsibilities:
-    - Receive prompts from upstream services
-    - Send requests to Gemini API using official Google GenAI SDK
-    - Handle errors (timeout, rate limiting, authentication failures, etc.)
-    - Parse responses and return structured results
+    Chain construction (in __init__):
+      _analyze_chain  = ChatGoogleGenerativeAI.with_structured_output(AnalyzeResult)
+                          .with_retry(...)
+      _match_chain    = ChatGoogleGenerativeAI(temp=0.2)
+                          .with_structured_output(MatchResult)
+                          .with_retry(...)
+      _optimize_llm   = ChatGoogleGenerativeAI.with_retry(...)
+
+    All three accept List[BaseMessage] via .ainvoke(messages).
     """
 
     def __init__(self, api_key: Optional[str] = None):
-        """Initialize Gemini provider with settings from config"""
-        self.api_key = api_key or settings.GEMINI_API_KEY
-        self.model_name = settings.GEMINI_MODEL
-        self.temperature = settings.GEMINI_TEMPERATURE
-        self.max_tokens = settings.GEMINI_MAX_TOKENS
-        self.timeout = settings.GEMINI_TIMEOUT
-        self.max_retries = settings.GEMINI_MAX_RETRIES
-        self.retry_delay = settings.GEMINI_RETRY_DELAY
+        resolved_key = api_key or settings.GEMINI_API_KEY
 
-        if not self.api_key:
+        if not resolved_key:
             logger.warning("GEMINI_API_KEY is not set. LLM features will not work.")
-            self.client = None
-            self.model = None
-        else:
-            # Initialize the client with API key
-            self.client = genai.Client(api_key=self.api_key)
-            
-            # Store generation config for model calls
-            self.generation_config = types.GenerateContentConfig(
-                temperature=self.temperature,
-                max_output_tokens=self.max_tokens,
-            )
-    
+            self._analyze_chain = None
+            self._match_chain = None
+            self._optimize_llm = None
+            return
+
+        base_llm = ChatGoogleGenerativeAI(
+            model=settings.GEMINI_MODEL,
+            google_api_key=resolved_key,
+            temperature=settings.GEMINI_TEMPERATURE,
+            max_output_tokens=settings.GEMINI_MAX_TOKENS,
+        )
+
+        # match scoring uses low temperature for consistent, reproducible scores
+        match_llm = ChatGoogleGenerativeAI(
+            model=settings.GEMINI_MODEL,
+            google_api_key=resolved_key,
+            temperature=0.2,
+            max_output_tokens=settings.GEMINI_MAX_TOKENS,
+        )
+
+        # with_structured_output must be called on the bare LLM before with_retry
+        # because RunnableRetry does not expose with_structured_output.
+        self._analyze_chain = base_llm.with_structured_output(AnalyzeResult).with_retry(
+            stop_after_attempt=settings.GEMINI_MAX_RETRIES
+        )
+        self._match_chain = match_llm.with_structured_output(MatchResult).with_retry(
+            stop_after_attempt=settings.GEMINI_MAX_RETRIES
+        )
+        self._optimize_llm = base_llm.with_retry(
+            stop_after_attempt=settings.GEMINI_MAX_RETRIES
+        )
+
     @property
     def provider_name(self) -> str:
-        """Return provider name"""
         return "gemini"
 
-    async def send_prompt(
-        self,
-        prompt: str,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-    ) -> types.GenerateContentResponse:
+    async def analyze(self, messages: List[BaseMessage]) -> AnalyzeResult:
         """
-        Send prompt to Gemini API and return response
+        Analyze resume via Function Calling and return structured suggestions.
 
         Args:
-            prompt: The prompt to send
-            model: Optional model override (not used, set at initialization)
-            temperature: Optional temperature override
-            max_tokens: Optional max_tokens override
+            messages: [SystemMessage, HumanMessage] from PromptBuilder.
 
         Returns:
-            GenerateContentResponse: API response object
-
-        Raises:
-            LLMAuthenticationError: Invalid API key
-            LLMRateLimitError: Rate limit exceeded
-            LLMTimeoutError: Request timeout
-            LLMResponseError: Failed to parse response
-            LLMServiceUnavailableError: Service unavailable
+            AnalyzeResult: Pydantic model populated by LangChain structured output.
         """
-        if not self.client:
+        if not self._analyze_chain:
             raise LLMAuthenticationError("Gemini API key not configured")
-        
-        # Build generation config with overrides
-        config = self.generation_config
-        if temperature is not None or max_tokens is not None:
-            config = types.GenerateContentConfig(
-                temperature=temperature if temperature is not None else self.temperature,
-                max_output_tokens=max_tokens if max_tokens is not None else self.max_tokens,
+        try:
+            result: AnalyzeResult = await self._analyze_chain.ainvoke(messages)
+            logger.debug(
+                f"analyze: received {len(result.suggestions)} suggestion(s)"
             )
+            return result
+        except OutputParserException as exc:
+            logger.error(f"Structured output parsing failed (analyze): {exc}")
+            raise LLMResponseError(str(exc))
+        except Exception as exc:
+            logger.error(f"Gemini analyze error: {exc}")
+            raise _map_exception(exc)
 
-        # Make request with retry logic
-        last_exception = None
-        for attempt in range(self.max_retries):
-            try:
-                # Use async generate_content
-                response = await self.client.aio.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt,
-                    config=config,
-                )
+    async def match(self, messages: List[BaseMessage]) -> MatchResult:
+        """
+        Match resume against JD via Function Calling and return structured score.
 
-                return response
+        Args:
+            messages: [SystemMessage, HumanMessage] from PromptBuilder.
 
-            except google_exceptions.ResourceExhausted as e:
-                # Rate limit exceeded
-                last_exception = LLMRateLimitError(str(e))
-                wait_time = self.retry_delay * (2**attempt)  # Exponential backoff
-                logger.warning(
-                    f"Rate limited, retrying in {wait_time}s "
-                    f"(attempt {attempt + 1}/{self.max_retries})"
-                )
-                await asyncio.sleep(wait_time)
-
-            except google_exceptions.DeadlineExceeded as e:
-                # Request timeout
-                last_exception = LLMTimeoutError(str(e))
-                logger.warning(
-                    f"Request timeout, retrying "
-                    f"(attempt {attempt + 1}/{self.max_retries})"
-                )
-
-            except (google_exceptions.Unauthenticated, google_exceptions.PermissionDenied) as e:
-                # Authentication errors should not be retried
-                logger.error(f"Authentication error: {e}")
-                raise LLMAuthenticationError(str(e))
-
-            except google_exceptions.InvalidArgument as e:
-                # Bad request, don't retry
-                logger.error(f"Invalid argument: {e}")
-                raise LLMResponseError(str(e))
-
-            except google_exceptions.ServiceUnavailable as e:
-                # Service unavailable, retry
-                last_exception = LLMServiceUnavailableError(str(e))
-                wait_time = self.retry_delay * (2**attempt)
-                logger.warning(
-                    f"Service unavailable, retrying in {wait_time}s "
-                    f"(attempt {attempt + 1}/{self.max_retries})"
-                )
-                await asyncio.sleep(wait_time)
-
-            except Exception as e:
-                # Unexpected error
-                logger.error(f"Unexpected error during Gemini API call: {e}")
-                raise LLMException(f"Unexpected error: {e}")
-
-        # All retries exhausted
-        raise last_exception or LLMException("All retry attempts failed")
-
-    def _extract_content(self, response: types.GenerateContentResponse) -> str:
-        """Extract text content from Gemini response"""
+        Returns:
+            MatchResult: Pydantic model with score, breakdown, suggestions.
+        """
+        if not self._match_chain:
+            raise LLMAuthenticationError("Gemini API key not configured")
         try:
-            content = response.text
-            
-            # Check if response was truncated due to token limit
-            if hasattr(response, 'candidates') and response.candidates:
-                candidate = response.candidates[0]
-                if hasattr(candidate, 'finish_reason'):
-                    finish_reason = str(candidate.finish_reason)
-                    if 'MAX_TOKENS' in finish_reason or 'LENGTH' in finish_reason:
-                        logger.warning(
-                            f"Response truncated due to token limit. "
-                            f"Finish reason: {finish_reason}. "
-                            f"Consider increasing GEMINI_MAX_TOKENS (current: {self.max_tokens})"
-                        )
-                    elif finish_reason not in ['STOP', 'FinishReason.STOP']:
-                        logger.warning(f"Unexpected finish reason: {finish_reason}")
-            
-            # Log content length for debugging
-            logger.debug(f"Extracted content length: {len(content)} characters")
-            
-            return content
-        except (AttributeError, ValueError) as e:
-            logger.error(f"Failed to extract content from response: {e}")
-            raise LLMResponseError(f"Invalid response format: {e}")
+            result: MatchResult = await self._match_chain.ainvoke(messages)
+            logger.debug(
+                f"match: score={result.match_score}, "
+                f"suggestions={len(result.suggestions)}"
+            )
+            return result
+        except OutputParserException as exc:
+            logger.error(f"Structured output parsing failed (match): {exc}")
+            raise LLMResponseError(str(exc))
+        except Exception as exc:
+            logger.error(f"Gemini match error: {exc}")
+            raise _map_exception(exc)
 
-    def _extract_usage(self, response: types.GenerateContentResponse) -> Optional[dict]:
-        """Extract usage information from Gemini response"""
+    async def optimize(self, messages: List[BaseMessage]) -> LLMResponse:
+        """
+        Optimize resume and return free-text Markdown content.
+
+        Args:
+            messages: [SystemMessage, HumanMessage] from PromptBuilder.
+
+        Returns:
+            LLMResponse: Raw Markdown string for downstream cleaning and PDF render.
+        """
+        if not self._optimize_llm:
+            raise LLMAuthenticationError("Gemini API key not configured")
         try:
-            if hasattr(response, "usage_metadata"):
-                return {
-                    "prompt_token_count": response.usage_metadata.prompt_token_count,
-                    "candidates_token_count": response.usage_metadata.candidates_token_count,
-                    "total_token_count": response.usage_metadata.total_token_count,
-                }
-        except Exception as e:
-            logger.warning(f"Could not extract usage metadata: {e}")
-        return None
-
-    # Implementation of abstract methods from BaseLLMProvider
-
-    async def optimize(
-        self,
-        resume_content: str,
-        job_description: str,
-        instructions: Optional[str] = None,
-    ) -> LLMResponse:
-        """
-        Perform resume rewriting and optimization
-
-        Args:
-            resume_content: Original resume content
-            job_description: Target job description
-            instructions: Optional user instructions for optimization
-
-        Returns:
-            LLMResponse: Optimized resume content
-        """
-        # Note: Prompt construction is handled by upstream service
-        # This method receives the complete prompt
-        prompt = resume_content  # Upstream should pass the full constructed prompt
-
-        response = await self.send_prompt(prompt)
-
-        return LLMResponse(
-            content=self._extract_content(response),
-            model=self.model_name,
-            usage=self._extract_usage(response),
-        )
-
-    async def analyze(
-        self,
-        resume_content: str,
-        job_description: str,
-    ) -> LLMResponse:
-        """
-        Analyze resume and generate improvement suggestions
-
-        Args:
-            resume_content: Resume content to analyze (or full prompt from upstream)
-            job_description: Target job description
-
-        Returns:
-            LLMResponse: Analysis and suggestions
-        """
-        # Note: Prompt construction is handled by upstream service
-        prompt = resume_content  # Upstream should pass the full constructed prompt
-
-        response = await self.send_prompt(prompt)
-
-        return LLMResponse(
-            content=self._extract_content(response),
-            model=self.model_name,
-            usage=self._extract_usage(response),
-        )
-
-    async def match(
-        self,
-        resume_content: str,
-        job_description: str,
-    ) -> MatchScoreResult:
-        """
-        Provide semantic comparison for match scoring
-
-        Args:
-            resume_content: Resume content (or full prompt from upstream)
-            job_description: Job description to match against
-
-        Returns:
-            MatchScoreResult: Score and detailed analysis
-        """
-        # Note: Prompt construction is handled by upstream service
-        prompt = resume_content  # Upstream should pass the full constructed prompt
-
-        # RA-63: Use low temperature for match scoring to ensure
-        # consistent, reproducible scores for the same JD + resume.
-        response = await self.send_prompt(prompt, temperature=0.2)
-        content = self._extract_content(response)
-
-        # Parse the response to extract score and suggestions
-        # This is a simplified implementation - actual parsing logic
-        # should be handled by upstream or a dedicated parser
-        return MatchScoreResult(
-            score=0.0,  # To be parsed from content
-            explanation=content,
-            suggestions=[],  # To be parsed from content
-        )
-
-
-# Convenience function for direct prompt sending
-async def send_to_gemini(
-    prompt: str,
-    model: Optional[str] = None,
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-) -> str:
-    """
-    Convenience function to send prompt to Gemini
-
-    Args:
-        prompt: The prompt to send
-        model: Optional model override
-        temperature: Optional temperature override
-        max_tokens: Optional max_tokens override
-
-    Returns:
-        str: LLM response content
-    """
-    provider = GeminiProvider()
-    response = await provider.send_prompt(prompt, model, temperature, max_tokens)
-    return provider._extract_content(response)
+            response = await self._optimize_llm.ainvoke(messages)
+            content: str = response.content
+            logger.debug(f"optimize: received {len(content)} chars")
+            return LLMResponse(content=content, model=settings.GEMINI_MODEL)
+        except Exception as exc:
+            logger.error(f"Gemini optimize error: {exc}")
+            raise _map_exception(exc)

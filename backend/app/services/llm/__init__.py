@@ -13,7 +13,7 @@ from .exceptions import (
     LLMResponseError,
     LLMServiceUnavailableError,
 )
-from .gemini_provider import GeminiProvider, send_to_gemini
+from .gemini_provider import GeminiProvider
 from .schemas import (
     Suggestion,
     AnalyzeResult,
@@ -44,7 +44,6 @@ __all__ = [
     "LLMServiceUnavailableError",
     # Providers
     "GeminiProvider",
-    "send_to_gemini",
     # Schemas
     "Suggestion",
     "AnalyzeResult",
