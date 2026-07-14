@@ -151,13 +151,14 @@ class TestRetriever:
 
 class TestPromptBuilderRagIntegration:
     def test_analyze_prompt_without_rag_context(self):
-        prompt = PromptBuilder().build_analyze_prompt("Jane Doe\nEngineer")
+        messages = PromptBuilder().build_analyze_prompt("Jane Doe\nEngineer")
+        prompt = "\n".join(message.content for message in messages)
 
         assert "Jane Doe" in prompt
         assert "Industry Best Practices" not in prompt
 
     def test_analyze_prompt_injects_rag_context(self):
-        prompt = PromptBuilder().build_analyze_prompt(
+        messages = PromptBuilder().build_analyze_prompt(
             "Jane Doe\nEngineer",
             retrieved_context=[
                 "Use strong action verbs.",
@@ -165,6 +166,7 @@ class TestPromptBuilderRagIntegration:
                 "Quantify outcomes with credible metrics.",
             ],
         )
+        prompt = "\n".join(message.content for message in messages)
 
         assert "Industry Best Practices" in prompt
         assert "- Use strong action verbs." in prompt
