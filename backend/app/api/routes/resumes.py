@@ -25,6 +25,7 @@ from app.services.resume_service import get_resume_content, upload_resume_to_gcs
 from app.services.pdf_service import markdown_to_pdf
 from app.services.prompt.builder import get_prompt_builder
 from app.services.llm.llm_service import get_llm_service
+from app.services.rag import retrieve as retrieve_rag_context
 from app.services.llm.exceptions import (
     LLMServiceUnavailableError,
     LLMResponseError,
@@ -78,9 +79,13 @@ async def analyze_resume(request: ResumeAnalyzeRequest):
                 detail=reason
             )
 
-        # 2. Build prompt (Service 2)
+        # 2. Build prompt with retrieved resume guidance (Service 2)
         builder = get_prompt_builder()
-        prompt = builder.build_analyze_prompt(resume_content)
+        retrieved_context = await retrieve_rag_context(resume_content)
+        prompt = builder.build_analyze_prompt(
+            resume_content,
+            retrieved_context=retrieved_context,
+        )
 
         # 3. Call LLM and parse result (Service 3)
         llm = get_llm_service()

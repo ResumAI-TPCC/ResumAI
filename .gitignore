@@ -147,6 +147,9 @@ venv.bak/
 # Secrets
 backend/.secrets/
 
+# Local RAG vector store
+backend/.chroma_db/
+
 # Spyder project settings
 .spyderproject
 .spyproject
