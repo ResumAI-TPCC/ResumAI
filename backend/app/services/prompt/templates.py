@@ -62,7 +62,7 @@ ANALYZE_PROMPT = ChatPromptTemplate.from_messages([
         "- description: a detailed explanation of why this matters\n"
         "- example: a specific \"Before vs After\" example\n",
     ),
-])
+]).partial(retrieved_context="")
 
 # ---------------------------------------------------------------------------
 # Match Resume
