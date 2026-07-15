@@ -89,10 +89,11 @@ def test_prompt_builder_optimize_without_jd():
     from app.services.prompt.builder import get_prompt_builder
 
     builder = get_prompt_builder()
-    prompt = builder.build_optimize_prompt("Some resume content")
+    messages = builder.build_optimize_prompt("Some resume content")
+    human_content = messages[1].content
 
-    assert "Some resume content" in prompt
-    assert "Target Job Description" not in prompt
+    assert "Some resume content" in human_content
+    assert "Target Job Description" not in human_content
 
 
 def test_prompt_builder_optimize_with_jd():
@@ -100,13 +101,14 @@ def test_prompt_builder_optimize_with_jd():
     from app.services.prompt.builder import get_prompt_builder
 
     builder = get_prompt_builder()
-    prompt = builder.build_optimize_prompt(
+    messages = builder.build_optimize_prompt(
         "Some resume content", "Senior Engineer at Google"
     )
+    human_content = messages[1].content
 
-    assert "Some resume content" in prompt
-    assert "Senior Engineer at Google" in prompt
-    assert "Target Job Description" in prompt
+    assert "Some resume content" in human_content
+    assert "Senior Engineer at Google" in human_content
+    assert "Target Job Description" in human_content
 
 
 def test_prompt_builder_optimize_empty_content():
