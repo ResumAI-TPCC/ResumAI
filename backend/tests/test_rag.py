@@ -17,7 +17,7 @@ from app.services.rag.knowledge_base import (
     build_knowledge_base,
     reset_knowledge_base,
 )
-from app.services.rag.retriever import _sync_retrieve, retrieve
+from app.services.rag.retriever import MAX_QUERY_CHARS, _sync_retrieve, retrieve
 
 
 def fake_embedding(text: str, dim: int = 8) -> list[float]:
@@ -133,6 +133,26 @@ class TestRetriever:
 
         assert len(results) == 3
         assert all(isinstance(result, str) for result in results)
+
+    def test_sync_retrieve_truncates_long_query(self, tmp_path):
+        collection = build_knowledge_base(
+            embedder=FakeEmbedder(),
+            persist_dir=tmp_path / ".chroma_db",
+        )
+
+        embedded_queries: list[str] = []
+
+        class RecordingEmbedder(FakeEmbedder):
+            def embed(self, text: str) -> list[float]:
+                embedded_queries.append(text)
+                return super().embed(text)
+
+        long_query = "x" * (MAX_QUERY_CHARS + 500)
+        with patch("app.services.rag.retriever.get_collection", return_value=collection):
+            _sync_retrieve(long_query, top_k=3, embedder=RecordingEmbedder())
+
+        assert len(embedded_queries) == 1
+        assert len(embedded_queries[0]) == MAX_QUERY_CHARS
 
     @pytest.mark.asyncio
     async def test_retrieve_returns_empty_for_blank_query(self):

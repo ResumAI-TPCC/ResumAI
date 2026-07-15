@@ -13,6 +13,11 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TOP_K = 3
 
+# gemini-embedding-001 caps the number of input tokens per request. Bound the
+# query well under that limit (~4 chars/token) so a long, multi-page resume
+# never overflows the embedding input and silently loses retrieval.
+MAX_QUERY_CHARS = 8000
+
 
 def _sync_retrieve(
     query: str,
@@ -31,9 +36,18 @@ def _sync_retrieve(
     if total_docs == 0:
         return []
 
+    embed_query = query.strip()
+    if len(embed_query) > MAX_QUERY_CHARS:
+        logger.info(
+            "RAG query truncated from %d to %d chars before embedding",
+            len(embed_query),
+            MAX_QUERY_CHARS,
+        )
+        embed_query = embed_query[:MAX_QUERY_CHARS]
+
     embedder = embedder or GeminiEmbedder()
     result = collection.query(
-        query_embeddings=[embedder.embed(query)],
+        query_embeddings=[embedder.embed(embed_query)],
         n_results=min(top_k, total_docs),
         include=["documents", "metadatas", "distances"],
     )
@@ -63,7 +77,16 @@ async def retrieve(
         return []
 
     try:
-        return await asyncio.to_thread(_sync_retrieve, query, top_k, embedder)
+        results = await asyncio.to_thread(_sync_retrieve, query, top_k, embedder)
     except Exception:
         logger.warning("RAG retrieval failed; continuing without context", exc_info=True)
         return []
+
+    if results:
+        logger.info("RAG retrieved %d snippet(s) for analysis", len(results))
+    else:
+        logger.warning(
+            "RAG returned no context; analysis will run without retrieved guidance"
+        )
+
+    return results
