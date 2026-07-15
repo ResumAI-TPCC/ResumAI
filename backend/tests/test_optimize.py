@@ -84,46 +84,36 @@ def test_optimize_resume_missing_session_id(client):
     assert response.status_code == 422
 
 
-def test_optimize_no_jd_prompt_template():
-    """RA-45: OPTIMIZE_NO_JD_PROMPT renders resume content without a JD section."""
-    from app.services.prompt.templates import OPTIMIZE_NO_JD_PROMPT
+def test_prompt_builder_optimize_without_jd():
+    """RA-45: Test prompt builder generates optimize prompt without JD"""
+    from app.services.prompt.builder import get_prompt_builder
 
-    messages = OPTIMIZE_NO_JD_PROMPT.format_messages(
-        resume_content="Some resume content",
-        template="modern",
-    )
-    human = messages[1].content
+    builder = get_prompt_builder()
+    prompt = builder.build_optimize_prompt("Some resume content")
 
-    assert "Some resume content" in human
-    assert "Target Job Description" not in human
+    assert "Some resume content" in prompt
+    assert "Target Job Description" not in prompt
 
 
-def test_optimize_with_jd_prompt_template():
-    """RA-46: OPTIMIZE_WITH_JD_PROMPT renders both resume content and JD."""
-    from app.services.prompt.templates import OPTIMIZE_WITH_JD_PROMPT
+def test_prompt_builder_optimize_with_jd():
+    """RA-46: Test prompt builder generates optimize prompt with JD"""
+    from app.services.prompt.builder import get_prompt_builder
 
     builder = get_prompt_builder()
     prompt = builder.build_optimize_prompt(
         "Some resume content", "Senior Engineer at Google"
-    messages = OPTIMIZE_WITH_JD_PROMPT.format_messages(
-        resume_content="Some resume content",
-        job_description="Senior Engineer at Google",
-        template="modern",
     )
-    human = messages[1].content
 
     assert "Some resume content" in prompt
     assert "Senior Engineer at Google" in prompt
     assert "Target Job Description" in prompt
-    assert "Some resume content" in human
-    assert "Senior Engineer at Google" in human
-    assert "Job Description" in human
 
 
-def test_optimize_no_jd_prompt_template_empty_content_raises():
-    """ChatPromptTemplate raises KeyError / ValueError on missing required variable."""
+def test_prompt_builder_optimize_empty_content():
+    """Test prompt builder rejects empty resume content"""
     import pytest
-    from app.services.prompt.templates import OPTIMIZE_NO_JD_PROMPT
+    from app.services.prompt.builder import get_prompt_builder
 
-    with pytest.raises((KeyError, ValueError)):
-        OPTIMIZE_NO_JD_PROMPT.format_messages(template="modern")
+    builder = get_prompt_builder()
+    with pytest.raises(ValueError, match="resume_content cannot be empty"):
+        builder.build_optimize_prompt("")
