@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router as api_router
 from app.core.config import settings
+from app.services.jobs.job_manager import get_job_manager
 
 
 @asynccontextmanager
@@ -16,8 +17,11 @@ async def lifespan(app: FastAPI):
     """Application lifecycle management"""
     # Startup
     print(f"{settings.APP_NAME} v{settings.APP_VERSION} starting...")
+    job_manager = get_job_manager()
+    await job_manager.start()  # RA-82: start background job worker
     yield
     # Shutdown
+    await job_manager.stop()   # RA-82: cancel background job worker
     print(f"{settings.APP_NAME} shutting down...")
 
 
