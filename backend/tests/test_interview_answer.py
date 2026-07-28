@@ -2,6 +2,7 @@
 Tests for mock interview answer evaluation API.
 """
 
+import json
 from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -57,9 +58,7 @@ class MockLLMResponse:
 
 def _mock_llm_service(content: str):
     service = MagicMock()
-    service.provider.analyze = AsyncMock(
-        return_value=MockLLMResponse(content=content)
-    )
+    service.generate_text = AsyncMock(return_value=MockLLMResponse(content=content))
     return service
 
 
@@ -101,7 +100,50 @@ def test_evaluate_interview_answer_success(mock_get_content, mock_get_llm, clien
     assert "FastAPI" in payload["data"]["improved_answer"]
     assert payload["data"]["scoring_breakdown"]["relevance"] == 24
     assert mock_get_content.await_count == 1
-    assert mock_get_llm.return_value.provider.analyze.await_count == 1
+    assert mock_get_llm.return_value.generate_text.await_count == 1
+    messages = mock_get_llm.return_value.generate_text.await_args.args[0]
+    assert len(messages) == 1
+    assert "Candidate Answer" in messages[0].content
+
+
+@patch("app.services.interview_service.get_llm_service")
+@patch("app.services.interview_service.get_resume_content", new_callable=AsyncMock)
+def test_evaluate_interview_answer_empty_feedback_lists_use_fallbacks(
+    mock_get_content,
+    mock_get_llm,
+    client,
+):
+    mock_get_content.return_value = MOCK_RESUME_TEXT
+    feedback = json.loads(MOCK_FEEDBACK_JSON)
+    feedback["strengths"] = []
+    feedback["weaknesses"] = []
+    feedback["suggestions"] = []
+    feedback["score"] = 5
+    feedback["scoring_breakdown"] = {
+        "relevance": 0,
+        "specificity": 0,
+        "structure": 0,
+        "impact": 0,
+        "communication": 5,
+    }
+    mock_get_llm.return_value = _mock_llm_service(json.dumps(feedback))
+
+    response = client.post(
+        f"{settings.API_PREFIX}/interviews/answer",
+        json=_answer_payload(
+            answer=(
+                "I enjoy watching movies on weekends and discussing them with "
+                "friends, but this does not address the interview question."
+            )
+        ),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["score"] == 5
+    assert payload["strengths"]
+    assert payload["weaknesses"]
+    assert payload["suggestions"]
 
 
 @patch("app.services.interview_service.get_resume_content", new_callable=AsyncMock)

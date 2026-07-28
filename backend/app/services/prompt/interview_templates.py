@@ -103,6 +103,8 @@ Focus Areas:
 - Be fair but not inflated. A vague answer without concrete evidence should not score above 65.
 - If the answer is very short, generic, or does not answer the question, the score should usually be below 50.
 - The improved answer should model a stronger direction using only facts supported by the resume, JD, question, and candidate answer.
+- strengths, weaknesses, and suggestions must each contain 1-4 non-empty strings.
+- For a poor or off-topic answer, include at least one modest strength about the response attempt or delivery; never return an empty array.
 
 ## Scoring Rubric:
 - relevance: 0-30 points for answering the question and aligning with the JD.

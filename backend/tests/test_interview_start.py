@@ -81,9 +81,7 @@ class MockLLMResponse:
 
 def _mock_llm_service(content: str):
     service = MagicMock()
-    service.provider.analyze = AsyncMock(
-        return_value=MockLLMResponse(content=content)
-    )
+    service.generate_text = AsyncMock(return_value=MockLLMResponse(content=content))
     return service
 
 
@@ -116,7 +114,10 @@ def test_start_interview_success(mock_get_content, mock_get_llm, client):
     assert payload["data"]["questions"][0]["resume_evidence"]
     assert payload["data"]["questions"][0]["jd_evidence"]
     assert mock_get_content.await_count == 1
-    assert mock_get_llm.return_value.provider.analyze.await_count == 1
+    assert mock_get_llm.return_value.generate_text.await_count == 1
+    messages = mock_get_llm.return_value.generate_text.await_args.args[0]
+    assert len(messages) == 1
+    assert "Candidate Resume" in messages[0].content
 
 
 @patch("app.services.interview_service.get_resume_content", new_callable=AsyncMock)

@@ -13,6 +13,7 @@ import uuid
 from typing import Any
 
 from fastapi import HTTPException
+from langchain_core.messages import HumanMessage
 
 from app.core.error_templates import (
     CONTENT_MODERATION_INPUT_BLOCKED,
@@ -97,7 +98,7 @@ async def start_interview(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     llm = get_llm_service()
-    response = await llm.provider.analyze(prompt, "")
+    response = await llm.generate_text([HumanMessage(content=prompt)])
 
     moderator = get_content_moderator()
     is_safe, reason = moderator.check_output(response.content)
@@ -169,7 +170,7 @@ async def evaluate_interview_answer(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     llm = get_llm_service()
-    response = await llm.provider.analyze(prompt, "")
+    response = await llm.generate_text([HumanMessage(content=prompt)])
 
     moderator = get_content_moderator()
     is_safe, reason = moderator.check_output(response.content)
@@ -388,6 +389,7 @@ def _normalize_text_list(
     field_name: str,
     min_items: int = 1,
     max_items: int = 4,
+    empty_fallback: str | None = None,
 ) -> list[str]:
     """Normalize and validate a short list of feedback text items."""
     if not isinstance(value, list):
@@ -399,6 +401,12 @@ def _normalize_text_list(
         if item is not None and str(item).strip()
     ][:max_items]
     if len(items) < min_items:
+        if not items and empty_fallback:
+            logger.warning(
+                "Interview feedback field %s was empty; using fallback",
+                field_name,
+            )
+            return [empty_fallback]
         raise LLMResponseError(f"Interview feedback field {field_name} cannot be empty")
 
     return items
@@ -476,12 +484,34 @@ def _parse_answer_feedback(content: str, question_id: str) -> EvaluateAnswerData
     return EvaluateAnswerData(
         question_id=question_id,
         score=score,
-        strengths=_normalize_text_list(data.get("strengths"), "strengths"),
-        weaknesses=_normalize_text_list(
-            data.get("weaknesses") or data.get("areas_for_improvement"),
-            "weaknesses",
+        strengths=_normalize_text_list(
+            data.get("strengths"),
+            "strengths",
+            empty_fallback=(
+                "The response provides an attempt that can be redirected toward "
+                "the interview question."
+            ),
         ),
-        suggestions=_normalize_text_list(data.get("suggestions"), "suggestions"),
+        weaknesses=_normalize_text_list(
+            (
+                data.get("weaknesses")
+                if "weaknesses" in data
+                else data.get("areas_for_improvement")
+            ),
+            "weaknesses",
+            empty_fallback=(
+                "The response does not yet provide enough relevant evidence to "
+                "demonstrate role alignment."
+            ),
+        ),
+        suggestions=_normalize_text_list(
+            data.get("suggestions"),
+            "suggestions",
+            empty_fallback=(
+                "Use one relevant resume example and connect it directly to the "
+                "question and JD requirement."
+            ),
+        ),
         improved_answer=improved_answer,
         jd_alignment=jd_alignment,
         scoring_breakdown=breakdown,

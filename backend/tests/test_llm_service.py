@@ -47,6 +47,14 @@ class MockLLMProvider(BaseLLMProvider):
             usage={"prompt_tokens": 100, "completion_tokens": 50},
         )
 
+    async def generate(self, messages) -> LLMResponse:
+        self._call_count += 1
+        self._last_prompt = messages
+        return LLMResponse(
+            content="Generated response",
+            model="mock-model-v1",
+        )
+
     async def analyze(
         self,
         resume_content: str,
@@ -140,6 +148,7 @@ class TestBaseLLMProvider:
         assert hasattr(provider, "optimize")
         assert hasattr(provider, "analyze")
         assert hasattr(provider, "match")
+        assert hasattr(provider, "generate")
         assert hasattr(provider, "provider_name")
 
     def test_mock_provider_name(self):
@@ -167,6 +176,14 @@ class TestMockProviderFunctionality:
         assert isinstance(response, LLMResponse)
         assert "Optimized" in response.content
         assert response.model == "mock-model-v1"
+
+    @pytest.mark.asyncio
+    async def test_generate_returns_response(self, provider):
+        """Test generic generation returns a raw LLM response."""
+        response = await provider.generate(["feature prompt"])
+
+        assert isinstance(response, LLMResponse)
+        assert response.content == "Generated response"
 
     @pytest.mark.asyncio
     async def test_analyze_returns_json_response(self, provider):
