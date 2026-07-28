@@ -1,16 +1,24 @@
 """
 LLM Provider Abstract Base Class
-Defines the interface that all LLM Providers must implement
+Defines the interface that all LLM Providers must implement.
+
+Provider methods now accept List[BaseMessage] (assembled by PromptBuilder
+via ChatPromptTemplate) and return typed Pydantic models instead of raw
+strings, eliminating manual JSON parsing in the service layer.
 """
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional
 
+from langchain_core.messages import BaseMessage
+
+from .schemas import AnalyzeResult, MatchResult
+
 
 @dataclass
 class LLMResponse:
-    """LLM response data class"""
+    """Raw LLM response — used for free-text operations (optimize)."""
 
     content: str
     model: str
@@ -19,81 +27,65 @@ class LLMResponse:
 
 @dataclass
 class MatchScoreResult:
-    """Match score result data class"""
+    """Legacy match result dataclass — kept for backward compatibility."""
 
-    score: float  # 0.0 - 1.0
+    score: float
     explanation: str
     suggestions: List[str]
 
 
 class BaseLLMProvider(ABC):
     """
-    LLM Provider Abstract Base Class
+    LLM Provider Abstract Base Class.
 
-    All LLM Provider implementations must inherit from this class and implement:
-    - optimize: Resume rewriting and optimization
-    - analyze: Analyze resume and generate suggestions
-    - match: Semantic comparison for match scoring
+    All implementations must accept List[BaseMessage] as input and return
+    typed results:
+      analyze  → AnalyzeResult  (via with_structured_output)
+      match    → MatchResult    (via with_structured_output)
+      optimize → LLMResponse    (free-text Markdown)
     """
 
     @abstractmethod
-    async def optimize(
-        self,
-        resume_content: str,
-        job_description: str,
-        instructions: Optional[str] = None,
-    ) -> LLMResponse:
+    async def analyze(self, messages: List[BaseMessage]) -> AnalyzeResult:
         """
-        Perform resume rewriting and optimization
+        Analyze resume and return structured improvement suggestions.
 
         Args:
-            resume_content: Original resume content
-            job_description: Target job description
-            instructions: Optional user instructions for optimization
+            messages: Formatted prompt messages from PromptBuilder.
 
         Returns:
-            LLMResponse: Optimized resume content
+            AnalyzeResult: Structured suggestions parsed via Function Calling.
         """
         pass
 
     @abstractmethod
-    async def analyze(
-        self,
-        resume_content: str,
-        job_description: str,
-    ) -> LLMResponse:
+    async def match(self, messages: List[BaseMessage]) -> MatchResult:
         """
-        Analyze resume and generate improvement suggestions
+        Match resume against JD and return structured score.
 
         Args:
-            resume_content: Resume content to analyze
-            job_description: Target job description
+            messages: Formatted prompt messages from PromptBuilder.
 
         Returns:
-            LLMResponse: Analysis and suggestions
+            MatchResult: Score, breakdown, and suggestions via Function Calling.
         """
         pass
 
     @abstractmethod
-    async def match(
-        self,
-        resume_content: str,
-        job_description: str,
-    ) -> MatchScoreResult:
+    async def optimize(self, messages: List[BaseMessage]) -> LLMResponse:
         """
-        Provide semantic comparison for match scoring
+        Optimize resume and return improved Markdown content.
 
         Args:
-            resume_content: Resume content
-            job_description: Job description to match against
+            messages: Formatted prompt messages from PromptBuilder.
 
         Returns:
-            MatchScoreResult: Score and detailed analysis
+            LLMResponse: Free-text Markdown for PDF rendering.
         """
         pass
 
     @property
     @abstractmethod
     def provider_name(self) -> str:
-        """Return provider name"""
+        """Return provider identifier string."""
         pass

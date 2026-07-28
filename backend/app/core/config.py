@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE_MB: int = 5
     SESSION_EXPIRY_HOURS: int = 24
 
+    # Job queue settings (RA-82)
+    MAX_QUEUE_SIZE: int = 20
+    RESULT_TTL_SECONDS: int = 1800  # 30 minutes
+
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance"""
