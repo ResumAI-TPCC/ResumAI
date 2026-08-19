@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import PropTypes from 'prop-types'
-import { matchResumeWithJob, analyzeResume } from '../utils/api'
+import { matchResumeWithJob, analyzeResume, ApiError, ErrorTypes } from '../utils/api'
+import LoadingState, { LoadingStateType } from './LoadingState'
 
 /**
  * Priority configuration mapping
@@ -28,6 +29,47 @@ const PRIORITY_CONFIG = {
 }
 
 /**
+ * Error type configuration for better user feedback
+ */
+const ERROR_CONFIG = {
+  [ErrorTypes.NETWORK_ERROR]: {
+    title: '网络错误',
+    suggestion: '请检查您的网络连接后重试',
+    retryable: true,
+  },
+  [ErrorTypes.TIMEOUT_ERROR]: {
+    title: '请求超时',
+    suggestion: '服务器响应时间过长，请稍后重试',
+    retryable: true,
+  },
+  [ErrorTypes.SERVER_ERROR]: {
+    title: '服务器错误',
+    suggestion: '服务器暂时不可用，请稍后重试',
+    retryable: true,
+  },
+  [ErrorTypes.CLIENT_ERROR]: {
+    title: '请求错误',
+    suggestion: '请检查您的输入后重试',
+    retryable: false,
+  },
+  [ErrorTypes.CANCELLED]: {
+    title: '已取消',
+    suggestion: '操作已取消',
+    retryable: false,
+  },
+  [ErrorTypes.VALIDATION_ERROR]: {
+    title: '验证错误',
+    suggestion: '请提供有效的输入',
+    retryable: false,
+  },
+  [ErrorTypes.UNKNOWN_ERROR]: {
+    title: '未知错误',
+    suggestion: '发生了意外错误，请重试',
+    retryable: true,
+  },
+}
+
+/**
  * PriorityBadge Component
  * Displays priority level as a readable badge
  */
@@ -49,6 +91,48 @@ PriorityBadge.propTypes = {
   priority: PropTypes.oneOf(['high', 'medium', 'low']).isRequired
 }
 
+/**
+ * ErrorDisplay Component
+ * Displays error message with suggestion and retry button
+ */
+function ErrorDisplay({ error, onRetry }) {
+  if (!error) return null
+
+  const errorType = error instanceof ApiError ? error.type : ErrorTypes.UNKNOWN_ERROR
+  const config = ERROR_CONFIG[errorType] || ERROR_CONFIG[ErrorTypes.UNKNOWN_ERROR]
+
+  return (
+    <div className="bg-white rounded-lg shadow p-6">
+      <div className="flex items-start gap-3">
+        <div className="flex-shrink-0">
+          <svg className="w-6 h-6 text-red-500" fill="currentColor" viewBox="0 0 20 20" role="img" aria-label="Error icon">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+          </svg>
+        </div>
+        <div className="flex-1">
+          <h3 className="text-base font-semibold text-gray-800 mb-1">{config.title}</h3>
+          <p className="text-sm text-gray-600 mb-2">{error.message}</p>
+          <p className="text-sm text-gray-500">{config.suggestion}</p>
+          
+          {config.retryable && onRetry && (
+            <button
+              onClick={onRetry}
+              className="mt-4 px-4 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              重试
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+ErrorDisplay.propTypes = {
+  error: PropTypes.instanceOf(Error),
+  onRetry: PropTypes.func,
+}
+
 function AnalysisOutput({
   sessionId,
   canAnalyze,
@@ -63,19 +147,54 @@ function AnalysisOutput({
   const [analysisData, setAnalysisData] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [error, setError] = useState(null)
+  
+  // Ref for AbortController to enable cancellation
+  const abortControllerRef = useRef(null)
+  
+  // Track if component is mounted
+  const isMountedRef = useRef(true)
+  
   const shouldUseMatch =
     Boolean(jobDescription && jobDescription.trim()) ||
     Boolean(companyName && companyName.trim()) ||
     Boolean(jobTitle && jobTitle.trim())
 
+  /**
+   * Cancel the current analysis request
+   */
+  const handleCancel = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    setIsAnalyzing(false)
+    onAnalyzeStatusChange?.(false)
+  }, [onAnalyzeStatusChange])
+
+  /**
+   * Cleanup on unmount
+   */
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+      // Cancel any pending request on unmount
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
+
   const handleAnalyze = async () => {
     if (isAnalyzing) return
 
     if (!sessionId) {
-      setError('Please upload a resume first')
+      setError(new ApiError('Please upload a resume first', ErrorTypes.VALIDATION_ERROR))
       return
     }
 
+    // Create new AbortController for this request
+    abortControllerRef.current = new AbortController()
+    
     setIsAnalyzing(true)
     onAnalyzeStatusChange?.(true)
     setError(null)
@@ -90,7 +209,8 @@ function AnalysisOutput({
           sessionId,
           jobDescription,
           jobTitle || '',
-          companyName || ''
+          companyName || '',
+          abortControllerRef.current
         )
 
         const matchScore = result.data?.match_score || 68
@@ -100,57 +220,73 @@ function AnalysisOutput({
           onMatchScoreUpdate(matchScore)
         }
 
-        // Set data for match analysis
-        setAnalysisData({
-          type: 'match',
-          matchScore,
-          matchBreakdown: result.data?.match_breakdown || {
-            skills_match: 85,
-            experience_match: 75,
-            education_match: 90,
-            keywords_match: 70
-          },
-          scoringPrinciples: [
-            {
-              title: 'Skill Match (35%)',
-              description: 'Assessment of how well your skills align with job requirements'
+        // Only update state if component is still mounted
+        if (isMountedRef.current) {
+          // Set data for match analysis
+          setAnalysisData({
+            type: 'match',
+            matchScore,
+            matchBreakdown: result.data?.match_breakdown || {
+              skills_match: 85,
+              experience_match: 75,
+              education_match: 90,
+              keywords_match: 70
             },
-            {
-              title: 'Experience Alignment (25%)',
-              description: 'Analysis of how your work experience relates to job requirements'
-            },
-            {
-              title: 'Education & Background (15%)',
-              description: 'How well your educational matches job requirements'
-            },
-            {
-              title: 'Achievement Impact (15%)',
-              description: 'Measurable results, metrics, and concrete value from achievements'
-            },
-            {
-              title: 'Keyword & Format (10%)',
-              description: 'Compliance with resume best practices and key skills from the JD'
-            }
-          ],
-          analysisReasoning: 'Based on the Job Description (JD) you provided, we provide detailed match analysis and optimization recommendations.',
-          suggestions: result.data?.suggestions || []
-        })
+            scoringPrinciples: [
+              {
+                title: 'Skill Match (35%)',
+                description: 'Assessment of how well your skills align with job requirements'
+              },
+              {
+                title: 'Experience Alignment (25%)',
+                description: 'Analysis of how your work experience relates to job requirements'
+              },
+              {
+                title: 'Education & Background (15%)',
+                description: 'How well your educational matches job requirements'
+              },
+              {
+                title: 'Achievement Impact (15%)',
+                description: 'Measurable results, metrics, and concrete value from achievements'
+              },
+              {
+                title: 'Keyword & Format (10%)',
+                description: 'Compliance with resume best practices and key skills from the JD'
+              }
+            ],
+            analysisReasoning: 'Based on the Job Description (JD) you provided, we provide detailed match analysis and optimization recommendations.',
+            suggestions: result.data?.suggestions || []
+          })
+        }
       } else {
         // Call analyze API without job description
-        result = await analyzeResume(sessionId)
+        result = await analyzeResume(sessionId, abortControllerRef.current)
 
-        // Set data for general analysis
-        setAnalysisData({
-          type: 'analyze',
-          suggestions: result.data?.suggestions || []
-        })
+        // Only update state if component is still mounted
+        if (isMountedRef.current) {
+          // Set data for general analysis
+          setAnalysisData({
+            type: 'analyze',
+            suggestions: result.data?.suggestions || []
+          })
+        }
       }
     } catch (err) {
       console.error('Analysis error:', err)
-      setError(err.message || 'Failed to analyze resume')
+      // Only update state if component is still mounted
+      if (isMountedRef.current) {
+        if (err instanceof ApiError) {
+          setError(err)
+        } else {
+          setError(new ApiError(err.message || 'Failed to analyze resume', ErrorTypes.UNKNOWN_ERROR, err))
+        }
+      }
     } finally {
-      setIsAnalyzing(false)
-      onAnalyzeStatusChange?.(false)
+      if (isMountedRef.current) {
+        setIsAnalyzing(false)
+        onAnalyzeStatusChange?.(false)
+        abortControllerRef.current = null
+      }
     }
   }
 
@@ -170,19 +306,23 @@ function AnalysisOutput({
           </h1>
         </div>
 
-        {/* Loading State - RA-59: Show spinner while analysis is in progress */}
-        {isAnalyzing && (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <div className="mb-5">
-              <div className="w-16 h-16 mx-auto border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" role="status" aria-label="Analyzing" />
-            </div>
-            <h2 className="text-lg font-semibold text-gray-800 mb-2">Analyzing...</h2>
-            <p className="text-gray-600 text-sm">Please wait while we analyze your resume</p>
-          </div>
+        {/* Loading State - Using LoadingState component */}
+        <LoadingState
+          stateType={shouldUseMatch ? LoadingStateType.MATCHING : LoadingStateType.ANALYZING}
+          isLoading={isAnalyzing}
+          onCancel={handleCancel}
+        />
+
+        {/* Error State */}
+        {error && !isAnalyzing && (
+          <ErrorDisplay 
+            error={error} 
+            onRetry={canAnalyze ? handleAnalyze : null}
+          />
         )}
 
-        {/* Empty State - Show when no analysis yet and not loading */}
-        {!analysisData && !isAnalyzing && (
+        {/* Empty State - Show when no analysis yet and not loading and no error */}
+        {!analysisData && !isAnalyzing && !error && (
           <div className="bg-white rounded-lg shadow p-8 text-center">
             <div className="mb-4">
               <svg className="w-16 h-16 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" role="img" aria-label="Resume icon">
@@ -197,11 +337,6 @@ function AnalysisOutput({
               {canAnalyze && !shouldUseMatch && 'Use the Analyze button in the left panel'}
               {canAnalyze && shouldUseMatch && 'Use the Match Resume button in the left panel'}
             </p>
-            {error && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-600 text-sm">{error}</p>
-              </div>
-            )}
           </div>
         )}
 
