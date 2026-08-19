@@ -3,21 +3,111 @@
  * 
  * RA-22: Upload Logic with progress tracking
  * Based on Design Doc: 4.2.1 Upload & Parse Resume
- *
- * RA-82: LLM endpoints (/analyze, /match, /optimize) now return a job_id
- * immediately (202 Accepted). Callers use pollJobResult() to wait for
- * completion. The three public functions (analyzeResume, matchResumeWithJob,
- * optimizeResume) encapsulate submit + poll internally so all existing
- * call-sites remain unchanged.
+ * 
+ * Enhanced with:
+ * - Timeout control (60 seconds)
+ * - AbortController support for cancellation
+ * - Better error classification
  */
 
 import { ENV } from '../config/env.js'
 
 const API_BASE_URL = ENV.API_BASE_URL;
+const DEFAULT_TIMEOUT = 60000; // 60 seconds
 
-// RA-82: Polling configuration
-const POLL_INTERVAL_MS = 2000;   // check every 2 seconds
-const POLL_TIMEOUT_MS  = 120000; // give up after 2 minutes
+/**
+ * Custom error class for API errors with classification
+ */
+export class ApiError extends Error {
+  constructor(message, type = 'UNKNOWN_ERROR', originalError = null) {
+    super(message);
+    this.name = 'ApiError';
+    this.type = type;
+    this.originalError = originalError;
+  }
+}
+
+/**
+ * Error types for classification
+ */
+export const ErrorTypes = {
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  TIMEOUT_ERROR: 'TIMEOUT_ERROR',
+  SERVER_ERROR: 'SERVER_ERROR',
+  CLIENT_ERROR: 'CLIENT_ERROR',
+  CANCELLED: 'CANCELLED',
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  UNKNOWN_ERROR: 'UNKNOWN_ERROR',
+};
+
+/**
+ * Create a timeout promise that rejects after specified milliseconds
+ * @param {number} ms - Timeout in milliseconds
+ * @param {AbortController} controller - AbortController to cancel the request
+ * @returns {Promise} - Promise that rejects on timeout
+ */
+function createTimeoutPromise(ms, controller) {
+  return new Promise((_, reject) => {
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new ApiError(
+        `Request timed out after ${ms / 1000} seconds`,
+        ErrorTypes.TIMEOUT_ERROR
+      ));
+    }, ms);
+
+    // Clear timeout if controller is aborted externally
+    controller.signal.addEventListener('abort', () => {
+      clearTimeout(timeoutId);
+    });
+  });
+}
+
+/**
+ * Wrap fetch with timeout and abort support
+ * @param {string} url - Request URL
+ * @param {Object} options - Fetch options
+ * @param {AbortController} controller - AbortController for cancellation
+ * @param {number} timeout - Timeout in milliseconds
+ * @returns {Promise<Response>} - Fetch response
+ */
+async function fetchWithTimeout(url, options, controller, timeout = DEFAULT_TIMEOUT) {
+  const fetchPromise = fetch(url, {
+    ...options,
+    signal: controller.signal,
+  });
+
+  return Promise.race([
+    fetchPromise,
+    createTimeoutPromise(timeout, controller),
+  ]);
+}
+
+/**
+ * Handle HTTP response and extract error information
+ * @param {Response} response - Fetch response object
+ * @returns {Promise<void>} - Throws error if response is not ok
+ */
+async function handleErrorResponse(response) {
+  let errorData;
+  try {
+    errorData = await response.json();
+  } catch {
+    errorData = { detail: `HTTP error: ${response.status}` };
+  }
+
+  const errorMessage = errorData.detail || errorData.message || `Request failed with status ${response.status}`;
+
+  if (response.status >= 500) {
+    throw new ApiError(errorMessage, ErrorTypes.SERVER_ERROR);
+  }
+  
+  if (response.status >= 400) {
+    throw new ApiError(errorMessage, ErrorTypes.CLIENT_ERROR);
+  }
+
+  throw new ApiError(errorMessage, ErrorTypes.UNKNOWN_ERROR);
+}
 
 /**
  * Upload resume file to backend with progress tracking
@@ -28,15 +118,27 @@ const POLL_TIMEOUT_MS  = 120000; // give up after 2 minutes
  * 
  * @param {File} file - The resume file to upload (PDF, DOCX, max 10MB)
  * @param {function} onProgress - Optional progress callback (0-100)
+ * @param {AbortController} externalController - Optional external AbortController
  * @returns {Promise<Object>} - Response with sid and metadata
  */
-export async function uploadResume(file, onProgress = null) {
+export async function uploadResume(file, onProgress = null, externalController = null) {
   const formData = new FormData();
   formData.append('file', file);
 
-  // Use XMLHttpRequest for progress tracking
+  // Use external controller if provided, otherwise create internal one
+  const controller = externalController || new AbortController();
+
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    
+    // Set up timeout
+    const timeoutId = setTimeout(() => {
+      xhr.abort();
+      reject(new ApiError(
+        `Upload timed out after ${DEFAULT_TIMEOUT / 1000} seconds`,
+        ErrorTypes.TIMEOUT_ERROR
+      ));
+    }, DEFAULT_TIMEOUT);
 
     // Track upload progress
     if (onProgress) {
@@ -50,31 +152,47 @@ export async function uploadResume(file, onProgress = null) {
 
     // Handle completion
     xhr.addEventListener('load', () => {
+      clearTimeout(timeoutId);
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const response = JSON.parse(xhr.responseText);
           resolve(response);
         } catch {
-          reject(new Error('Invalid response format'));
+          reject(new ApiError('Invalid response format', ErrorTypes.SERVER_ERROR));
         }
       } else {
         try {
           const errorData = JSON.parse(xhr.responseText);
-          reject(new Error(errorData.detail || `Upload failed: ${xhr.status}`));
+          reject(new ApiError(
+            errorData.detail || `Upload failed: ${xhr.status}`,
+            xhr.status >= 500 ? ErrorTypes.SERVER_ERROR : ErrorTypes.CLIENT_ERROR
+          ));
         } catch {
-          reject(new Error(`Upload failed: ${xhr.status}`));
+          reject(new ApiError(
+            `Upload failed: ${xhr.status}`,
+            ErrorTypes.SERVER_ERROR
+          ));
         }
       }
     });
 
     // Handle errors
     xhr.addEventListener('error', () => {
-      reject(new Error('Network error occurred'));
+      clearTimeout(timeoutId);
+      reject(new ApiError('Network error occurred', ErrorTypes.NETWORK_ERROR));
     });
 
     xhr.addEventListener('abort', () => {
-      reject(new Error('Upload cancelled'));
+      clearTimeout(timeoutId);
+      reject(new ApiError('Upload cancelled', ErrorTypes.CANCELLED));
     });
+
+    // Listen to external abort signal
+    if (externalController) {
+      externalController.signal.addEventListener('abort', () => {
+        xhr.abort();
+      });
+    }
 
     // Send request to /api/resumes/ (trailing slash required by FastAPI router)
     xhr.open('POST', `${API_BASE_URL}/resumes/`);
@@ -85,71 +203,87 @@ export async function uploadResume(file, onProgress = null) {
 /**
  * Analyze resume quality
  * @param {string} sessionId - Session ID
- * @returns {Promise<Object>} Analysis suggestions  (same shape as before RA-82)
- * @throws {Error} If sessionId is empty or API call fails
+ * @param {AbortController} controller - Optional AbortController for cancellation
+ * @returns {Promise<Object>} Analysis suggestions
+ * @throws {ApiError} If sessionId is empty or API call fails
  */
-export async function analyzeResume(sessionId) {
+export async function analyzeResume(sessionId, controller = null) {
   // Validate input
   if (!sessionId || typeof sessionId !== 'string' || sessionId.trim() === '') {
-    throw new Error('Session ID is required and cannot be empty');
+    throw new ApiError('Session ID is required and cannot be empty', ErrorTypes.VALIDATION_ERROR);
   }
 
-  try {
-    // RA-82: submit job, get job_id
-    const response = await fetch(`${API_BASE_URL}/resumes/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId.trim() }),
-    });
+  const internalController = controller || new AbortController();
 
+  try {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/resumes/analyze`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ session_id: sessionId.trim() }),
+      },
+      internalController
+    );
+
+    // Handle different HTTP status codes
     if (response.status === 400) {
       const errorData = await response.json().catch(() => ({ detail: 'Invalid request' }));
-      throw new Error(errorData.detail || errorData.message || 'Invalid request parameters');
+      throw new ApiError(
+        errorData.detail || errorData.message || 'Invalid request parameters',
+        ErrorTypes.CLIENT_ERROR
+      );
     }
+
     if (response.status === 404) {
       const errorData = await response.json().catch(() => ({ detail: 'Resume not found' }));
-      throw new Error(errorData.detail || errorData.message || 'Resume not found. Please upload your resume again.');
+      throw new ApiError(
+        errorData.detail || errorData.message || 'Resume not found. Please upload your resume again.',
+        ErrorTypes.CLIENT_ERROR
+      );
     }
+
+    // Handle 422 Unprocessable Entity - file format incompatible for analysis
     if (response.status === 422) {
-      throw new Error('The file format is incompatible for analysis. Please use PDF or DOCX.');
+      throw new ApiError(
+        'The file format is incompatible for analysis. Please use PDF or DOCX.',
+        ErrorTypes.CLIENT_ERROR
+      );
     }
-    if (response.status === 429) {
-      throw new Error('Server is busy. Please try again in a moment.');
-    }
-    if (response.status === 500) {
-      const errorData = await response.json().catch(() => ({ detail: 'Server error' }));
-      throw new Error(errorData.detail || errorData.message || 'Server error occurred. Please try again later.');
-    }
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: 'Analysis failed' }));
-      throw new Error(errorData.detail || errorData.message || `Analysis failed: ${response.status}`);
+      await handleErrorResponse(response);
     }
 
-    const submitResult = await response.json();
-    const jobId = submitResult?.data?.job_id;
-    if (!jobId) throw new Error('Invalid response format from server');
+    const result = await response.json();
 
-    // RA-82: poll until completed, then return in the original shape
-    // { status: 'ok', data: { suggestions: [...] } }
-    const jobResult = await pollJobResult(jobId);
-    return { status: 'ok', data: jobResult };
+    // Validate response structure
+    if (!result || typeof result !== 'object') {
+      throw new ApiError('Invalid response format from server', ErrorTypes.SERVER_ERROR);
+    }
 
+    return result;
   } catch (error) {
-    if (error.message.includes('Session ID is required') ||
-      error.message.includes('Resume not found') ||
-      error.message.includes('Invalid request') ||
-      error.message.includes('Server error') ||
-      error.message.includes('file format is incompatible') ||
-      error.message.includes('rejected') ||
-      error.message.includes('moderation') ||
-      error.message.includes('Server is busy')) {
+    // Re-throw ApiError instances
+    if (error instanceof ApiError) {
       throw error;
     }
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('Network error. Please check your internet connection.');
+
+    // Handle abort errors
+    if (error.name === 'AbortError') {
+      throw new ApiError('Request cancelled', ErrorTypes.CANCELLED);
     }
+
+    // Handle network errors
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new ApiError('Network error. Please check your internet connection.', ErrorTypes.NETWORK_ERROR);
+    }
+
+    // Handle other unexpected errors
     console.error('Unexpected error in analyzeResume:', error);
-    throw new Error('An unexpected error occurred. Please try again.');
+    throw new ApiError('An unexpected error occurred. Please try again.', ErrorTypes.UNKNOWN_ERROR, error);
   }
 }
 
@@ -159,37 +293,53 @@ export async function analyzeResume(sessionId) {
  * @param {string} jobDescription - Job description text
  * @param {string} jobTitle - Job title (optional)
  * @param {string} companyName - Company name (optional)
- * @returns {Promise<Object>} Match score and suggestions  (same shape as before RA-82)
+ * @param {AbortController} controller - Optional AbortController for cancellation
+ * @returns {Promise<Object>} Match score and suggestions
  */
-export async function matchResumeWithJob(sessionId, jobDescription, jobTitle = '', companyName = '') {
-  // RA-82: submit job
-  const response = await fetch(`${API_BASE_URL}/resumes/match`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      session_id: sessionId,
-      job_description: jobDescription,
-      job_title: jobTitle,
-      company_name: companyName,
-    }),
-  });
+export async function matchResumeWithJob(sessionId, jobDescription, jobTitle = '', companyName = '', controller = null) {
+  const internalController = controller || new AbortController();
 
-  if (response.status === 429) {
-    throw new Error('Server is busy. Please try again in a moment.');
+  try {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/resumes/match`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          job_description: jobDescription,
+          job_title: jobTitle,
+          company_name: companyName,
+        }),
+      },
+      internalController
+    );
+
+    if (!response.ok) {
+      await handleErrorResponse(response);
+    }
+
+    return await response.json();
+  } catch (error) {
+    // Re-throw ApiError instances
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    // Handle abort errors
+    if (error.name === 'AbortError') {
+      throw new ApiError('Request cancelled', ErrorTypes.CANCELLED);
+    }
+
+    // Handle network errors
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new ApiError('Network error. Please check your internet connection.', ErrorTypes.NETWORK_ERROR);
+    }
+
+    throw new ApiError('Match request failed. Please try again.', ErrorTypes.UNKNOWN_ERROR, error);
   }
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Match failed' }));
-    throw new Error(error.detail || error.message || `HTTP error! status: ${response.status}`);
-  }
-
-  const submitResult = await response.json();
-  const jobId = submitResult?.data?.job_id;
-  if (!jobId) throw new Error('Invalid response format from server');
-
-  // RA-82: poll, then wrap in original shape
-  // { status: 'ok', data: { match_score, match_breakdown, suggestions } }
-  const jobResult = await pollJobResult(jobId);
-  return { status: 'ok', data: jobResult };
 }
 
 /**
@@ -197,79 +347,50 @@ export async function matchResumeWithJob(sessionId, jobDescription, jobTitle = '
  * @param {string} sessionId - Session ID
  * @param {string} jobDescription - Job description (optional)
  * @param {string} template - Template name (optional)
- * @returns {Promise<Object>} Encoded file data  (same shape as before RA-82)
+ * @param {AbortController} controller - Optional AbortController for cancellation
+ * @returns {Promise<Object>} Encoded file data
  */
-export async function optimizeResume(sessionId, jobDescription = '', template = 'modern') {
-  // RA-82: submit job
-  const response = await fetch(`${API_BASE_URL}/resumes/optimize`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      session_id: sessionId,
-      job_description: jobDescription,
-      template,
-    }),
-  });
+export async function optimizeResume(sessionId, jobDescription = '', template = 'modern', controller = null) {
+  const internalController = controller || new AbortController();
 
-  if (response.status === 429) {
-    throw new Error('Server is busy. Please try again in a moment.');
+  try {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/resumes/optimize`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          job_description: jobDescription,
+          template,
+        }),
+      },
+      internalController
+    );
+
+    if (!response.ok) {
+      await handleErrorResponse(response);
+    }
+
+    return await response.json();
+  } catch (error) {
+    // Re-throw ApiError instances
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    // Handle abort errors
+    if (error.name === 'AbortError') {
+      throw new ApiError('Request cancelled', ErrorTypes.CANCELLED);
+    }
+
+    // Handle network errors
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new ApiError('Network error. Please check your internet connection.', ErrorTypes.NETWORK_ERROR);
+    }
+
+    throw new ApiError('Optimization request failed. Please try again.', ErrorTypes.UNKNOWN_ERROR, error);
   }
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Optimization failed' }));
-    throw new Error(error.detail || error.message || `HTTP error! status: ${response.status}`);
-  }
-
-  const submitResult = await response.json();
-  const jobId = submitResult?.data?.job_id;
-  if (!jobId) throw new Error('Invalid response format from server');
-
-  // RA-82: poll, then wrap in original shape
-  // { status: 'ok', data: { encoded_file: '...' } }
-  const jobResult = await pollJobResult(jobId);
-  return { status: 'ok', data: jobResult };
-}
-
-/**
- * Poll GET /jobs/{jobId} until the job reaches a terminal state.
- *
- * @param {string} jobId - The job_id returned by a submit endpoint
- * @returns {Promise<Object>} The `result` payload from the completed job
- * @throws {Error} On job failure, timeout, or network error
- */
-async function pollJobResult(jobId) {
-  const deadline = Date.now() + POLL_TIMEOUT_MS;
-
-  while (Date.now() < deadline) {
-    await sleep(POLL_INTERVAL_MS);
-
-    const res = await fetch(`${API_BASE_URL}/jobs/${jobId}`);
-
-    if (res.status === 404) {
-      throw new Error('Job not found or result has expired. Please try again.');
-    }
-    if (!res.ok) {
-      throw new Error(`Polling error: ${res.status}`);
-    }
-
-    const body = await res.json();
-    const { status, result, error } = body?.data ?? {};
-
-    if (status === 'completed') {
-      return result;
-    }
-    if (status === 'failed') {
-      throw new Error(error || 'Job processing failed. Please try again.');
-    }
-    // status === 'pending' or 'processing' — keep polling
-  }
-
-  throw new Error('Request timed out. The server is taking too long. Please try again.');
-}
-
-/**
- * @param {number} ms
- * @returns {Promise<void>}
- */
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
