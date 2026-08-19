@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import PropTypes from 'prop-types'
+import LoadingState, { LoadingStateType } from './LoadingState'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ACCEPTED_TYPES = [
@@ -7,10 +8,44 @@ const ACCEPTED_TYPES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 ]
 
-function FileUpload({ onFileSelect, uploadedFile = null, isUploaded = false, onRemoveFile }) {
+/**
+ * FileUpload Component
+ * 
+ * Enhanced with:
+ * - Upload progress tracking
+ * - Cancel upload functionality
+ * - LoadingState integration
+ * - Better error handling
+ */
+function FileUpload({ 
+  onFileSelect, 
+  uploadedFile = null, 
+  isUploaded = false, 
+  onRemoveFile,
+  isUploading = false,
+  uploadProgress = null,
+  uploadError = null,
+  onCancelUpload = null,
+}) {
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState(null)
   const fileInputRef = useRef(null)
+  
+  // Track if component is mounted
+  const isMountedRef = useRef(true)
+  
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+  
+  // Clear local error when external error changes
+  useEffect(() => {
+    if (uploadError) {
+      setError(null)
+    }
+  }, [uploadError])
 
   const validateFile = useCallback((file) => {
     // Check file type - only allow PDF and DOCX
@@ -19,11 +54,13 @@ function FileUpload({ onFileSelect, uploadedFile = null, isUploaded = false, onR
       file.name.toLowerCase().endsWith('.docx')
 
     if (!isValidType) {
-      return { valid: false, error: 'Unsupported file format. Please upload PDF, DOCX files.' }    }
+      return { valid: false, error: 'Unsupported file format. Please upload PDF, DOCX files.' }
+    }
 
     // Check file size
     if (file.size > MAX_FILE_SIZE) {
-      return { valid: false, error: 'File size exceeds 10MB limit. Please upload a smaller file.' }    }
+      return { valid: false, error: 'File size exceeds 10MB limit. Please upload a smaller file.' }
+    }
 
     return { valid: true, error: null }
   }, [])
@@ -69,7 +106,9 @@ function FileUpload({ onFileSelect, uploadedFile = null, isUploaded = false, onR
   }
 
   const handleClick = () => {
-    fileInputRef.current?.click()
+    if (!isUploading) {
+      fileInputRef.current?.click()
+    }
   }
 
   const formatFileSize = (bytes) => {
@@ -78,6 +117,54 @@ function FileUpload({ onFileSelect, uploadedFile = null, isUploaded = false, onR
     const sizes = ['Bytes', 'KB', 'MB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+  }
+
+  // Show loading state during upload
+  if (isUploading) {
+    return (
+      <div className="animate-fade-in">
+        <LoadingState
+          stateType={LoadingStateType.UPLOADING}
+          isLoading={true}
+          progress={uploadProgress}
+          onCancel={onCancelUpload}
+        />
+      </div>
+    )
+  }
+
+  // Show error state
+  if (uploadError && !uploadedFile) {
+    return (
+      <div className="animate-fade-in">
+        <div className="bg-white rounded-lg border border-red-200 p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0">
+              <svg className="w-6 h-6 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-gray-800 mb-1">上传失败</h3>
+              <p className="text-sm text-gray-600">{uploadError}</p>
+              <button
+                onClick={handleClick}
+                className="mt-3 px-4 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              >
+                重新上传
+              </button>
+            </div>
+          </div>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          onChange={handleFileInput}
+          className="hidden"
+        />
+      </div>
+    )
   }
 
   // If file is uploaded/selected, show file info card with green checkmark (only if uploaded)
@@ -113,6 +200,7 @@ function FileUpload({ onFileSelect, uploadedFile = null, isUploaded = false, onR
               onClick={onRemoveFile}
               className="flex-shrink-0 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
               title="Remove file"
+              disabled={isUploading}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -213,6 +301,17 @@ FileUpload.propTypes = {
   }),
   isUploaded: PropTypes.bool,
   onRemoveFile: PropTypes.func.isRequired,
+  isUploading: PropTypes.bool,
+  uploadProgress: PropTypes.number,
+  uploadError: PropTypes.string,
+  onCancelUpload: PropTypes.func,
+}
+
+FileUpload.defaultProps = {
+  isUploading: false,
+  uploadProgress: null,
+  uploadError: null,
+  onCancelUpload: null,
 }
 
 export default FileUpload
