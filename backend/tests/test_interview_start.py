@@ -5,7 +5,13 @@ Tests for mock interview start API.
 from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from app.core.config import settings
+from app.schemas.interview_schema import StartInterviewRequest
+from app.services.interview_service import start_interview
+from app.services.jobs.job_manager import QueueFullError
+from app.services.llm.exceptions import LLMResponseError
 
 
 MOCK_RESUME_TEXT = """Jane Doe
@@ -87,37 +93,68 @@ def _mock_llm_service(content: str):
 
 @patch("app.services.interview_service.get_llm_service")
 @patch("app.services.interview_service.get_resume_content", new_callable=AsyncMock)
-def test_start_interview_success(mock_get_content, mock_get_llm, client):
+@pytest.mark.asyncio
+async def test_start_interview_service_success(mock_get_content, mock_get_llm):
     mock_get_content.return_value = MOCK_RESUME_TEXT
     mock_get_llm.return_value = _mock_llm_service(MOCK_QUESTION_JSON)
 
-    response = client.post(
-        f"{settings.API_PREFIX}/interviews/start",
-        json={
-            "session_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-            "job_description": "We need a Python engineer with API experience.",
-            "job_title": "Software Engineer",
-            "company_name": "Tech Corp",
-            "question_count": 5,
-        },
+    response = await start_interview(
+        StartInterviewRequest(
+            session_id="7c9e6679-7425-40de-944b-e07fc1f90ae7",
+            job_description="We need a Python engineer with API experience.",
+            job_title="Software Engineer",
+            company_name="Tech Corp",
+            question_count=5,
+        )
     )
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["code"] == 200
-    assert payload["status"] == "ok"
-    assert payload["data"]["interview_id"].startswith("mock-")
-    assert len(payload["data"]["questions"]) == 5
-    assert payload["data"]["questions"][0]["id"] == "q1"
-    assert payload["data"]["questions"][0]["type"] == "self_intro"
-    assert "FastAPI services" in payload["data"]["questions"][0]["question"]
-    assert payload["data"]["questions"][0]["resume_evidence"]
-    assert payload["data"]["questions"][0]["jd_evidence"]
+    assert response.code == 200
+    assert response.status == "ok"
+    assert response.data.interview_id.startswith("mock-")
+    assert len(response.data.questions) == 5
+    assert response.data.questions[0].id == "q1"
+    assert response.data.questions[0].type == "self_intro"
+    assert "FastAPI services" in response.data.questions[0].question
+    assert response.data.questions[0].resume_evidence
+    assert response.data.questions[0].jd_evidence
     assert mock_get_content.await_count == 1
     assert mock_get_llm.return_value.generate_text.await_count == 1
     messages = mock_get_llm.return_value.generate_text.await_args.args[0]
     assert len(messages) == 1
     assert "Candidate Resume" in messages[0].content
+
+
+@patch("app.api.routes.interviews.get_job_manager")
+@patch(
+    "app.api.routes.interviews.validate_start_interview_request",
+    new_callable=AsyncMock,
+)
+def test_start_interview_enqueues_job(mock_validate, mock_get_manager, client):
+    manager = MagicMock()
+    manager.enqueue.return_value = "interview-job-123"
+    manager.queue_depth = 1
+    mock_get_manager.return_value = manager
+
+    request_json = {
+        "session_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "job_description": "We need a Python engineer with API experience.",
+        "question_count": 5,
+    }
+    response = client.post(
+        f"{settings.API_PREFIX}/interviews/start",
+        json=request_json,
+    )
+
+    assert response.status_code == 202
+    assert response.json()["data"] == {
+        "job_id": "interview-job-123",
+        "job_type": "interview_start",
+        "status": "pending",
+        "queue_depth": 1,
+    }
+    mock_validate.assert_awaited_once()
+    manager.enqueue.assert_called_once()
+    assert manager.enqueue.call_args.args[0] == "interview_start"
 
 
 @patch("app.services.interview_service.get_resume_content", new_callable=AsyncMock)
@@ -139,33 +176,29 @@ def test_start_interview_rejects_empty_jd(mock_get_content, client):
 
 @patch("app.services.interview_service.get_llm_service")
 @patch("app.services.interview_service.get_resume_content", new_callable=AsyncMock)
-def test_start_interview_invalid_llm_json_returns_502(
+@pytest.mark.asyncio
+async def test_start_interview_invalid_llm_json_fails_job_execution(
     mock_get_content,
     mock_get_llm,
-    client,
 ):
     mock_get_content.return_value = MOCK_RESUME_TEXT
     mock_get_llm.return_value = _mock_llm_service("not json")
 
-    response = client.post(
-        f"{settings.API_PREFIX}/interviews/start",
-        json={
-            "session_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-            "job_description": "We need a Python engineer with API experience.",
-            "question_count": 5,
-        },
+    request = StartInterviewRequest(
+        session_id="7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        job_description="We need a Python engineer with API experience.",
+        question_count=5,
     )
-
-    assert response.status_code == 502
-    assert "invalid response" in response.json()["detail"].lower()
+    with pytest.raises(LLMResponseError):
+        await start_interview(request)
 
 
 @patch("app.services.interview_service.get_llm_service")
 @patch("app.services.interview_service.get_resume_content", new_callable=AsyncMock)
-def test_start_interview_missing_evidence_returns_502(
+@pytest.mark.asyncio
+async def test_start_interview_missing_evidence_fails_job_execution(
     mock_get_content,
     mock_get_llm,
-    client,
 ):
     mock_get_content.return_value = MOCK_RESUME_TEXT
     mock_get_llm.return_value = _mock_llm_service(
@@ -212,6 +245,29 @@ def test_start_interview_missing_evidence_returns_502(
         """
     )
 
+    request = StartInterviewRequest(
+        session_id="7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        job_description="We need a Python engineer with API experience.",
+        question_count=5,
+    )
+    with pytest.raises(LLMResponseError):
+        await start_interview(request)
+
+
+@patch("app.api.routes.interviews.get_job_manager")
+@patch(
+    "app.api.routes.interviews.validate_start_interview_request",
+    new_callable=AsyncMock,
+)
+def test_start_interview_returns_429_when_queue_is_full(
+    mock_validate,
+    mock_get_manager,
+    client,
+):
+    manager = MagicMock()
+    manager.enqueue.side_effect = QueueFullError("full")
+    mock_get_manager.return_value = manager
+
     response = client.post(
         f"{settings.API_PREFIX}/interviews/start",
         json={
@@ -221,5 +277,6 @@ def test_start_interview_missing_evidence_returns_502(
         },
     )
 
-    assert response.status_code == 502
-    assert "invalid response" in response.json()["detail"].lower()
+    assert response.status_code == 429
+    assert response.json()["detail"] == "Queue is full. Please retry later."
+    mock_validate.assert_awaited_once()

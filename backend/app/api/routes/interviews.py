@@ -4,61 +4,63 @@ Mock Interview API Routes
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
 
 from app.core.error_templates import (
-    CONTENT_MODERATION_OUTPUT_BLOCKED,
     INTERNAL_SERVER_ERROR,
-    LLM_GENERIC_ERROR,
-    LLM_INVALID_RESPONSE,
-    LLM_SERVICE_UNAVAILABLE,
 )
 from app.schemas.interview_schema import (
     EvaluateAnswerRequest,
-    EvaluateAnswerResponse,
     StartInterviewRequest,
-    StartInterviewResponse,
 )
-from app.services.interview_service import evaluate_interview_answer, start_interview
-from app.services.llm.exceptions import (
-    LLMException,
-    LLMResponseError,
-    LLMServiceUnavailableError,
+from app.schemas.resume_schema import JobSubmitData, JobSubmitResponse
+from app.services.interview_service import (
+    validate_interview_answer_request,
+    validate_start_interview_request,
 )
-from app.services.validators.content_moderator import ContentModerationError
+from app.services.jobs.job_manager import QueueFullError, get_job_manager
 
 router = APIRouter()
 
 
-@router.post("/start", response_model=StartInterviewResponse)
+def _queue_full_response() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail="Queue is full. Please retry later.",
+    )
+
+
+def _submit_job(job_type: str, request) -> JobSubmitResponse:
+    job_manager = get_job_manager()
+    job_id = job_manager.enqueue(job_type, request)
+    return JobSubmitResponse(
+        code=202,
+        status="ok",
+        data=JobSubmitData(
+            job_id=job_id,
+            job_type=job_type,
+            status="pending",
+            queue_depth=job_manager.queue_depth,
+        ),
+    )
+
+
+@router.post(
+    "/start",
+    response_model=JobSubmitResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def start_mock_interview(request: StartInterviewRequest):
     """
     Generate tailored mock interview questions from uploaded resume and JD.
     """
     try:
-        return await start_interview(request)
+        await validate_start_interview_request(request)
+        return _submit_job("interview_start", request)
     except HTTPException:
         raise
-    except ContentModerationError as exc:
-        raise HTTPException(
-            status_code=CONTENT_MODERATION_OUTPUT_BLOCKED.code,
-            detail=exc.message,
-        ) from exc
-    except LLMServiceUnavailableError as exc:
-        raise HTTPException(
-            status_code=LLM_SERVICE_UNAVAILABLE.code,
-            detail=LLM_SERVICE_UNAVAILABLE.detail,
-        ) from exc
-    except LLMResponseError as exc:
-        raise HTTPException(
-            status_code=LLM_INVALID_RESPONSE.code,
-            detail=LLM_INVALID_RESPONSE.detail,
-        ) from exc
-    except LLMException as exc:
-        raise HTTPException(
-            status_code=LLM_GENERIC_ERROR.code,
-            detail=LLM_GENERIC_ERROR.detail,
-        ) from exc
+    except QueueFullError:
+        raise _queue_full_response()
     except Exception as exc:
         raise HTTPException(
             status_code=INTERNAL_SERVER_ERROR.code,
@@ -66,35 +68,22 @@ async def start_mock_interview(request: StartInterviewRequest):
         ) from exc
 
 
-@router.post("/answer", response_model=EvaluateAnswerResponse)
+@router.post(
+    "/answer",
+    response_model=JobSubmitResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def evaluate_mock_interview_answer(request: EvaluateAnswerRequest):
     """
     Evaluate one mock interview answer and return structured feedback.
     """
     try:
-        return await evaluate_interview_answer(request)
+        await validate_interview_answer_request(request)
+        return _submit_job("interview_answer", request)
     except HTTPException:
         raise
-    except ContentModerationError as exc:
-        raise HTTPException(
-            status_code=CONTENT_MODERATION_OUTPUT_BLOCKED.code,
-            detail=exc.message,
-        ) from exc
-    except LLMServiceUnavailableError as exc:
-        raise HTTPException(
-            status_code=LLM_SERVICE_UNAVAILABLE.code,
-            detail=LLM_SERVICE_UNAVAILABLE.detail,
-        ) from exc
-    except LLMResponseError as exc:
-        raise HTTPException(
-            status_code=LLM_INVALID_RESPONSE.code,
-            detail=LLM_INVALID_RESPONSE.detail,
-        ) from exc
-    except LLMException as exc:
-        raise HTTPException(
-            status_code=LLM_GENERIC_ERROR.code,
-            detail=LLM_GENERIC_ERROR.detail,
-        ) from exc
+    except QueueFullError:
+        raise _queue_full_response()
     except Exception as exc:
         raise HTTPException(
             status_code=INTERNAL_SERVER_ERROR.code,

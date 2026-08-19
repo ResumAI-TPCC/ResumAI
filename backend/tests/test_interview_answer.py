@@ -6,7 +6,12 @@ import json
 from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from app.core.config import settings
+from app.schemas.interview_schema import EvaluateAnswerRequest
+from app.services.interview_service import evaluate_interview_answer
+from app.services.llm.exceptions import LLMResponseError
 
 
 MOCK_RESUME_TEXT = """Jane Doe
@@ -81,24 +86,25 @@ def _answer_payload(answer: str = "I built FastAPI services for analytics workfl
 
 @patch("app.services.interview_service.get_llm_service")
 @patch("app.services.interview_service.get_resume_content", new_callable=AsyncMock)
-def test_evaluate_interview_answer_success(mock_get_content, mock_get_llm, client):
+@pytest.mark.asyncio
+async def test_evaluate_interview_answer_service_success(
+    mock_get_content,
+    mock_get_llm,
+):
     mock_get_content.return_value = MOCK_RESUME_TEXT
     mock_get_llm.return_value = _mock_llm_service(MOCK_FEEDBACK_JSON)
 
-    response = client.post(
-        f"{settings.API_PREFIX}/interviews/answer",
-        json=_answer_payload(),
+    response = await evaluate_interview_answer(
+        EvaluateAnswerRequest(**_answer_payload())
     )
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["code"] == 200
-    assert payload["status"] == "ok"
-    assert payload["data"]["question_id"] == "q2"
-    assert payload["data"]["score"] == 82
-    assert len(payload["data"]["strengths"]) == 2
-    assert "FastAPI" in payload["data"]["improved_answer"]
-    assert payload["data"]["scoring_breakdown"]["relevance"] == 24
+    assert response.code == 200
+    assert response.status == "ok"
+    assert response.data.question_id == "q2"
+    assert response.data.score == 82
+    assert len(response.data.strengths) == 2
+    assert "FastAPI" in response.data.improved_answer
+    assert response.data.scoring_breakdown.relevance == 24
     assert mock_get_content.await_count == 1
     assert mock_get_llm.return_value.generate_text.await_count == 1
     messages = mock_get_llm.return_value.generate_text.await_args.args[0]
@@ -106,12 +112,44 @@ def test_evaluate_interview_answer_success(mock_get_content, mock_get_llm, clien
     assert "Candidate Answer" in messages[0].content
 
 
+@patch("app.api.routes.interviews.get_job_manager")
+@patch(
+    "app.api.routes.interviews.validate_interview_answer_request",
+    new_callable=AsyncMock,
+)
+def test_evaluate_interview_answer_enqueues_job(
+    mock_validate,
+    mock_get_manager,
+    client,
+):
+    manager = MagicMock()
+    manager.enqueue.return_value = "answer-job-123"
+    manager.queue_depth = 2
+    mock_get_manager.return_value = manager
+
+    response = client.post(
+        f"{settings.API_PREFIX}/interviews/answer",
+        json=_answer_payload(),
+    )
+
+    assert response.status_code == 202
+    assert response.json()["data"] == {
+        "job_id": "answer-job-123",
+        "job_type": "interview_answer",
+        "status": "pending",
+        "queue_depth": 2,
+    }
+    mock_validate.assert_awaited_once()
+    manager.enqueue.assert_called_once()
+    assert manager.enqueue.call_args.args[0] == "interview_answer"
+
+
 @patch("app.services.interview_service.get_llm_service")
 @patch("app.services.interview_service.get_resume_content", new_callable=AsyncMock)
-def test_evaluate_interview_answer_empty_feedback_lists_use_fallbacks(
+@pytest.mark.asyncio
+async def test_evaluate_interview_answer_empty_feedback_lists_use_fallbacks(
     mock_get_content,
     mock_get_llm,
-    client,
 ):
     mock_get_content.return_value = MOCK_RESUME_TEXT
     feedback = json.loads(MOCK_FEEDBACK_JSON)
@@ -128,22 +166,21 @@ def test_evaluate_interview_answer_empty_feedback_lists_use_fallbacks(
     }
     mock_get_llm.return_value = _mock_llm_service(json.dumps(feedback))
 
-    response = client.post(
-        f"{settings.API_PREFIX}/interviews/answer",
-        json=_answer_payload(
-            answer=(
-                "I enjoy watching movies on weekends and discussing them with "
-                "friends, but this does not address the interview question."
+    response = await evaluate_interview_answer(
+        EvaluateAnswerRequest(
+            **_answer_payload(
+                answer=(
+                    "I enjoy watching movies on weekends and discussing them with "
+                    "friends, but this does not address the interview question."
+                )
             )
-        ),
+        )
     )
 
-    assert response.status_code == 200
-    payload = response.json()["data"]
-    assert payload["score"] == 5
-    assert payload["strengths"]
-    assert payload["weaknesses"]
-    assert payload["suggestions"]
+    assert response.data.score == 5
+    assert response.data.strengths
+    assert response.data.weaknesses
+    assert response.data.suggestions
 
 
 @patch("app.services.interview_service.get_resume_content", new_callable=AsyncMock)
@@ -161,53 +198,45 @@ def test_evaluate_interview_answer_rejects_empty_answer(mock_get_content, client
 
 @patch("app.services.interview_service.get_llm_service")
 @patch("app.services.interview_service.get_resume_content", new_callable=AsyncMock)
-def test_evaluate_interview_answer_low_signal_answer_returns_feedback(
+@pytest.mark.asyncio
+async def test_evaluate_interview_answer_low_signal_answer_returns_feedback(
     mock_get_content,
     mock_get_llm,
-    client,
 ):
     mock_get_content.return_value = MOCK_RESUME_TEXT
 
-    response = client.post(
-        f"{settings.API_PREFIX}/interviews/answer",
-        json=_answer_payload(answer="123"),
+    response = await evaluate_interview_answer(
+        EvaluateAnswerRequest(**_answer_payload(answer="123"))
     )
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["data"]["question_id"] == "q2"
-    assert payload["data"]["score"] == 8
-    assert payload["data"]["weaknesses"]
-    assert payload["data"]["suggestions"]
-    assert payload["data"]["scoring_breakdown"]["specificity"] == 0
+    assert response.data.question_id == "q2"
+    assert response.data.score == 8
+    assert response.data.weaknesses
+    assert response.data.suggestions
+    assert response.data.scoring_breakdown.specificity == 0
     mock_get_llm.assert_not_called()
 
 
 @patch("app.services.interview_service.get_llm_service")
 @patch("app.services.interview_service.get_resume_content", new_callable=AsyncMock)
-def test_evaluate_interview_answer_invalid_json_returns_502(
+@pytest.mark.asyncio
+async def test_evaluate_interview_answer_invalid_json_fails_job_execution(
     mock_get_content,
     mock_get_llm,
-    client,
 ):
     mock_get_content.return_value = MOCK_RESUME_TEXT
     mock_get_llm.return_value = _mock_llm_service("not json")
 
-    response = client.post(
-        f"{settings.API_PREFIX}/interviews/answer",
-        json=_answer_payload(),
-    )
-
-    assert response.status_code == 502
-    assert "invalid response" in response.json()["detail"].lower()
+    with pytest.raises(LLMResponseError):
+        await evaluate_interview_answer(EvaluateAnswerRequest(**_answer_payload()))
 
 
 @patch("app.services.interview_service.get_llm_service")
 @patch("app.services.interview_service.get_resume_content", new_callable=AsyncMock)
-def test_evaluate_interview_answer_missing_feedback_fields_returns_502(
+@pytest.mark.asyncio
+async def test_evaluate_interview_answer_missing_feedback_fields_fails_job_execution(
     mock_get_content,
     mock_get_llm,
-    client,
 ):
     mock_get_content.return_value = MOCK_RESUME_TEXT
     mock_get_llm.return_value = _mock_llm_service(
@@ -220,10 +249,5 @@ def test_evaluate_interview_answer_missing_feedback_fields_returns_502(
         """
     )
 
-    response = client.post(
-        f"{settings.API_PREFIX}/interviews/answer",
-        json=_answer_payload(),
-    )
-
-    assert response.status_code == 502
-    assert "invalid response" in response.json()["detail"].lower()
+    with pytest.raises(LLMResponseError):
+        await evaluate_interview_answer(EvaluateAnswerRequest(**_answer_payload()))

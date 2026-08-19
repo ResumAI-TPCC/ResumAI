@@ -71,31 +71,16 @@ async def start_interview(
     """
     Generate a five-question mock interview set from resume content and JD.
     """
-    resume_content = await get_resume_content(request.session_id)
-    if not resume_content or not resume_content.strip():
-        raise HTTPException(
-            status_code=RESUME_EMPTY_CONTENT.code,
-            detail=RESUME_EMPTY_CONTENT.detail,
-        )
+    resume_content = await validate_start_interview_request(request)
 
-    _moderate_inputs(
+    builder = get_interview_prompt_builder()
+    prompt = builder.build_question_generation_prompt(
         resume_content=resume_content,
         job_description=request.job_description,
         job_title=request.job_title,
         company_name=request.company_name,
+        question_count=request.question_count,
     )
-
-    builder = get_interview_prompt_builder()
-    try:
-        prompt = builder.build_question_generation_prompt(
-            resume_content=resume_content,
-            job_description=request.job_description,
-            job_title=request.job_title,
-            company_name=request.company_name,
-            question_count=request.question_count,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     llm = get_llm_service()
     response = await llm.generate_text([HumanMessage(content=prompt)])
@@ -117,12 +102,91 @@ async def start_interview(
     )
 
 
+async def validate_start_interview_request(
+    request: StartInterviewRequest,
+) -> str:
+    """Validate cheap request concerns before an interview job is enqueued."""
+    resume_content = await get_resume_content(request.session_id)
+    if not resume_content or not resume_content.strip():
+        raise HTTPException(
+            status_code=RESUME_EMPTY_CONTENT.code,
+            detail=RESUME_EMPTY_CONTENT.detail,
+        )
+
+    _moderate_inputs(
+        resume_content=resume_content,
+        job_description=request.job_description,
+        job_title=request.job_title,
+        company_name=request.company_name,
+    )
+
+    try:
+        get_interview_prompt_builder().build_question_generation_prompt(
+            resume_content=resume_content,
+            job_description=request.job_description,
+            job_title=request.job_title,
+            company_name=request.company_name,
+            question_count=request.question_count,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return resume_content
+
+
 async def evaluate_interview_answer(
     request: EvaluateAnswerRequest,
 ) -> EvaluateAnswerResponse:
     """
     Evaluate one mock interview answer with LLM-generated coaching feedback.
     """
+    resume_content = await validate_interview_answer_request(request)
+
+    if _is_low_signal_answer(request.answer):
+        return EvaluateAnswerResponse(
+            code=200,
+            status="ok",
+            data=_build_low_signal_feedback(request.question_id),
+        )
+
+    builder = get_interview_prompt_builder()
+    prompt = builder.build_answer_evaluation_prompt(
+        resume_content=resume_content,
+        job_description=request.job_description,
+        job_title=request.job_title,
+        company_name=request.company_name,
+        question_id=request.question_id,
+        question_type=request.question_type,
+        question=request.question,
+        resume_evidence=request.resume_evidence,
+        jd_evidence=request.jd_evidence,
+        focus_areas=request.focus_areas,
+        answer=request.answer,
+    )
+
+    llm = get_llm_service()
+    response = await llm.generate_text([HumanMessage(content=prompt)])
+
+    moderator = get_content_moderator()
+    is_safe, reason = moderator.check_output(response.content)
+    if not is_safe:
+        raise ContentModerationError(reason)
+
+    feedback = _parse_answer_feedback(
+        content=response.content,
+        question_id=request.question_id,
+    )
+
+    return EvaluateAnswerResponse(
+        code=200,
+        status="ok",
+        data=feedback,
+    )
+
+
+async def validate_interview_answer_request(
+    request: EvaluateAnswerRequest,
+) -> str:
+    """Validate cheap request concerns before an answer job is enqueued."""
     resume_content = await get_resume_content(request.session_id)
     if not resume_content or not resume_content.strip():
         raise HTTPException(
@@ -144,49 +208,24 @@ async def evaluate_interview_answer(
         focus_areas=request.focus_areas,
     )
 
-    if _is_low_signal_answer(request.answer):
-        return EvaluateAnswerResponse(
-            code=200,
-            status="ok",
-            data=_build_low_signal_feedback(request.question_id),
-        )
-
-    builder = get_interview_prompt_builder()
-    try:
-        prompt = builder.build_answer_evaluation_prompt(
-            resume_content=resume_content,
-            job_description=request.job_description,
-            job_title=request.job_title,
-            company_name=request.company_name,
-            question_id=request.question_id,
-            question_type=request.question_type,
-            question=request.question,
-            resume_evidence=request.resume_evidence,
-            jd_evidence=request.jd_evidence,
-            focus_areas=request.focus_areas,
-            answer=request.answer,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    llm = get_llm_service()
-    response = await llm.generate_text([HumanMessage(content=prompt)])
-
-    moderator = get_content_moderator()
-    is_safe, reason = moderator.check_output(response.content)
-    if not is_safe:
-        raise ContentModerationError(reason)
-
-    feedback = _parse_answer_feedback(
-        content=response.content,
-        question_id=request.question_id,
-    )
-
-    return EvaluateAnswerResponse(
-        code=200,
-        status="ok",
-        data=feedback,
-    )
+    if not _is_low_signal_answer(request.answer):
+        try:
+            get_interview_prompt_builder().build_answer_evaluation_prompt(
+                resume_content=resume_content,
+                job_description=request.job_description,
+                job_title=request.job_title,
+                company_name=request.company_name,
+                question_id=request.question_id,
+                question_type=request.question_type,
+                question=request.question,
+                resume_evidence=request.resume_evidence,
+                jd_evidence=request.jd_evidence,
+                focus_areas=request.focus_areas,
+                answer=request.answer,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return resume_content
 
 
 def _moderate_inputs(
@@ -288,9 +327,7 @@ def _parse_questions(content: str, expected_count: int) -> list[InterviewQuestio
             raise LLMResponseError("Interview question item must be an object")
 
         expected_type, expected_label = QUESTION_TYPES[index]
-        question_text = str(
-            item.get("question") or item.get("prompt") or ""
-        ).strip()
+        question_text = str(item.get("question") or item.get("prompt") or "").strip()
         if not question_text:
             raise LLMResponseError("Interview question text cannot be empty")
 
@@ -310,9 +347,7 @@ def _parse_questions(content: str, expected_count: int) -> list[InterviewQuestio
         if not isinstance(focus_areas, list):
             focus_areas = []
         normalized_focus_areas = [
-            str(area).strip()
-            for area in focus_areas
-            if str(area).strip()
+            str(area).strip() for area in focus_areas if str(area).strip()
         ][:4]
 
         questions.append(
@@ -396,9 +431,7 @@ def _normalize_text_list(
         raise LLMResponseError(f"Interview feedback field {field_name} must be a list")
 
     items = [
-        str(item).strip()
-        for item in value
-        if item is not None and str(item).strip()
+        str(item).strip() for item in value if item is not None and str(item).strip()
     ][:max_items]
     if len(items) < min_items:
         if not items and empty_fallback:
@@ -417,7 +450,9 @@ def _parse_score(value: Any, field_name: str, min_value: int, max_value: int) ->
     try:
         score = int(round(float(value)))
     except (TypeError, ValueError) as exc:
-        raise LLMResponseError(f"Interview feedback field {field_name} is invalid") from exc
+        raise LLMResponseError(
+            f"Interview feedback field {field_name} is invalid"
+        ) from exc
 
     if score < min_value or score > max_value:
         raise LLMResponseError(
@@ -456,10 +491,7 @@ def _parse_answer_feedback(content: str, question_id: str) -> EvaluateAnswerData
         or data.get("scoringBreakdown")
         or data.get("breakdown")
     )
-    breakdown_total = sum(
-        getattr(breakdown, field)
-        for field in BREAKDOWN_LIMITS
-    )
+    breakdown_total = sum(getattr(breakdown, field) for field in BREAKDOWN_LIMITS)
 
     score = _parse_score(data.get("score"), "score", 0, 100)
     if abs(score - breakdown_total) > 10:

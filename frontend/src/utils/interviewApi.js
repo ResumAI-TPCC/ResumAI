@@ -3,6 +3,7 @@ import {
   REPORT_ACTION_LIBRARY,
 } from '../mocks/interviewFixtures'
 import { ENV } from '../config/env.js'
+import { pollJobResult } from './api.js'
 
 const interviewStore = new Map()
 const API_BASE_URL = ENV.API_BASE_URL
@@ -149,7 +150,12 @@ export async function startInterview(payload) {
     )
   }
 
-  const data = result?.data || result
+  const jobId = result?.data?.job_id
+  if (!jobId) {
+    throw new Error('Invalid mock interview submission response from server.')
+  }
+
+  const data = await pollJobResult(jobId)
   const interviewId = data?.interview_id
   const questions = Array.isArray(data?.questions)
     ? data.questions.map(normalizeBackendQuestion)
@@ -219,8 +225,13 @@ export async function submitInterviewAnswer(payload) {
     )
   }
 
+  const jobId = result?.data?.job_id
+  if (!jobId) {
+    throw new Error('Invalid answer evaluation submission response from server.')
+  }
+
   const feedback = normalizeAnswerFeedback(
-    result?.data || result,
+    await pollJobResult(jobId),
     payload.question_id
   )
 
