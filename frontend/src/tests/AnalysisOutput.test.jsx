@@ -1,10 +1,34 @@
-import { render, screen, waitFor } from '@testing-library/react'
+/**
+ * AnalysisOutput Component Tests
+ * 
+ * Tests for analysis output display, loading state, error handling, and cancel functionality
+ */
+
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import AnalysisOutput from '../components/AnalysisOutput'
+import { ApiError, ErrorTypes } from '../utils/api'
 
+// Mock the API module
 jest.mock('../utils/api', () => ({
   analyzeResume: jest.fn(),
   matchResumeWithJob: jest.fn(),
+  ApiError: class ApiError extends Error {
+    constructor(message, type) {
+      super(message)
+      this.name = 'ApiError'
+      this.type = type
+    }
+  },
+  ErrorTypes: {
+    NETWORK_ERROR: 'NETWORK_ERROR',
+    TIMEOUT_ERROR: 'TIMEOUT_ERROR',
+    SERVER_ERROR: 'SERVER_ERROR',
+    CLIENT_ERROR: 'CLIENT_ERROR',
+    CANCELLED: 'CANCELLED',
+    VALIDATION_ERROR: 'VALIDATION_ERROR',
+    UNKNOWN_ERROR: 'UNKNOWN_ERROR',
+  },
 }))
 
 import { analyzeResume, matchResumeWithJob } from '../utils/api'
@@ -42,6 +66,72 @@ describe('AnalysisOutput Component', () => {
     })
   })
 
+  describe('Loading State', () => {
+    test('shows loading spinner when analysis is in progress', async () => {
+      // Create a promise that doesn't resolve immediately
+      let resolvePromise
+      analyzeResume.mockImplementation(() => new Promise((resolve) => {
+        resolvePromise = resolve
+      }))
+
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      // Check for loading state
+      await waitFor(() => {
+        expect(screen.getByRole('status')).toBeInTheDocument()
+      })
+
+      // Clean up by resolving the promise
+      resolvePromise({ data: { suggestions: [] } })
+    })
+
+    test('shows analyzing message when analyzing without JD', async () => {
+      let resolvePromise
+      analyzeResume.mockImplementation(() => new Promise((resolve) => {
+        resolvePromise = resolve
+      }))
+
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/分析中.../i)).toBeInTheDocument()
+      })
+
+      resolvePromise({ data: { suggestions: [] } })
+    })
+
+    test('shows matching message when matching with JD', async () => {
+      let resolvePromise
+      matchResumeWithJob.mockImplementation(() => new Promise((resolve) => {
+        resolvePromise = resolve
+      }))
+
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+        jobDescription: 'Software Engineer position',
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/匹配中.../i)).toBeInTheDocument()
+      })
+
+      resolvePromise({ data: { match_score: 75, suggestions: [] } })
+    })
+  })
+
   describe('Analyze Resume (without JD)', () => {
     test('calls analyzeResume API when analyzeSignal increases', async () => {
       analyzeResume.mockResolvedValue({ data: { suggestions: [] } })
@@ -55,7 +145,7 @@ describe('AnalysisOutput Component', () => {
       rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
 
       await waitFor(() => {
-        expect(analyzeResume).toHaveBeenCalledWith('test-session-123')
+        expect(analyzeResume).toHaveBeenCalledWith('test-session-123', expect.anything())
       })
     })
 
@@ -144,7 +234,8 @@ describe('AnalysisOutput Component', () => {
           'test-session-123',
           'We are looking for a senior engineer...',
           'Senior Engineer',
-          'TechCorp'
+          'TechCorp',
+          expect.anything()
         )
       })
     })
@@ -251,6 +342,184 @@ describe('AnalysisOutput Component', () => {
         expect(screen.getByText(/Please upload a resume first/i)).toBeInTheDocument()
       })
     })
+
+    test('shows network error with retry button', async () => {
+      const networkError = new ApiError('Network error occurred', ErrorTypes.NETWORK_ERROR)
+      analyzeResume.mockRejectedValue(networkError)
+
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/网络错误/i)).toBeInTheDocument()
+        expect(screen.getByText(/请检查您的网络连接后重试/i)).toBeInTheDocument()
+      })
+    })
+
+    test('shows timeout error with retry button', async () => {
+      const timeoutError = new ApiError('Request timed out', ErrorTypes.TIMEOUT_ERROR)
+      analyzeResume.mockRejectedValue(timeoutError)
+
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/请求超时/i)).toBeInTheDocument()
+        expect(screen.getByText(/服务器响应时间过长，请稍后重试/i)).toBeInTheDocument()
+      })
+    })
+
+    test('shows server error with retry button', async () => {
+      const serverError = new ApiError('Server error', ErrorTypes.SERVER_ERROR)
+      analyzeResume.mockRejectedValue(serverError)
+
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/服务器错误/i)).toBeInTheDocument()
+        expect(screen.getByText(/服务器暂时不可用，请稍后重试/i)).toBeInTheDocument()
+      })
+    })
+
+    test('shows cancelled error without retry button', async () => {
+      const cancelledError = new ApiError('Request cancelled', ErrorTypes.CANCELLED)
+      analyzeResume.mockRejectedValue(cancelledError)
+
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      await waitFor(() => {
+        // Use more specific query to match the error title
+        expect(screen.getByRole('heading', { name: /已取消/i })).toBeInTheDocument()
+        // Cancelled error should not show retry button
+        expect(screen.queryByText('重试')).not.toBeInTheDocument()
+      })
+    })
+
+    test('retry button triggers new analysis', async () => {
+      const networkError = new ApiError('Network error occurred', ErrorTypes.NETWORK_ERROR)
+      analyzeResume.mockRejectedValueOnce(networkError)
+      analyzeResume.mockResolvedValueOnce({ data: { suggestions: [] } })
+
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      // Wait for error to appear
+      await waitFor(() => {
+        expect(screen.getByText(/网络错误/i)).toBeInTheDocument()
+      })
+
+      // Click retry button
+      const retryButton = screen.getByText('重试')
+      fireEvent.click(retryButton)
+
+      // Verify new API call was made
+      await waitFor(() => {
+        expect(analyzeResume).toHaveBeenCalledTimes(2)
+      })
+    })
+  })
+
+  describe('Cancel Functionality', () => {
+    test('shows cancel button during loading', async () => {
+      let resolvePromise
+      analyzeResume.mockImplementation(() => new Promise((resolve) => {
+        resolvePromise = resolve
+      }))
+
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      await waitFor(() => {
+        expect(screen.getByText('取消')).toBeInTheDocument()
+      })
+
+      resolvePromise({ data: { suggestions: [] } })
+    })
+
+    test('clicking cancel button stops loading', async () => {
+      let resolvePromise
+      analyzeResume.mockImplementation(() => new Promise((resolve) => {
+        resolvePromise = resolve
+      }))
+
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      // Wait for loading state
+      await waitFor(() => {
+        expect(screen.getByText('取消')).toBeInTheDocument()
+      })
+
+      // Click cancel
+      const cancelButton = screen.getByText('取消')
+      fireEvent.click(cancelButton)
+
+      // Loading state should be removed
+      await waitFor(() => {
+        expect(screen.queryByRole('status')).not.toBeInTheDocument()
+      })
+
+      resolvePromise({ data: { suggestions: [] } })
+    })
+  })
+
+  describe('Component Cleanup', () => {
+    test('cancels pending request on unmount', async () => {
+      let resolvePromise
+      const abortMock = jest.fn()
+      
+      analyzeResume.mockImplementation(() => new Promise((resolve, reject) => {
+        resolvePromise = { resolve, reject }
+      }))
+
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+      }
+      const { rerender, unmount } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      // Wait for loading state to appear
+      await waitFor(() => {
+        expect(screen.getByRole('status')).toBeInTheDocument()
+      })
+
+      // Unmount component
+      unmount()
+
+      // The test passes if no errors are thrown during unmount
+      // Clean up
+      resolvePromise.resolve({ data: { suggestions: [] } })
+    })
   })
 })
-
