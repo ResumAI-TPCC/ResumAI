@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Sidebar from '../components/Sidebar'
 import AnalysisOutput from '../components/AnalysisOutput'
 import ResumePreview from '../components/ResumePreview'
-import { uploadResume, optimizeResume } from '../utils/api'
+import { uploadResume, optimizeResume, ApiError, ErrorTypes } from '../utils/api'
 import { saveSession, clearSession as clearStorageSession } from '../utils/storage'
 
 /**
@@ -19,7 +19,9 @@ function ResumeAnalysisPage() {
   const [selectedFile, setSelectedFile] = useState(null)
   const [uploadedFile, setUploadedFile] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(null)
   const [uploadError, setUploadError] = useState(null)
+  const uploadAbortControllerRef = useRef(null)
   
   // Optimize resume states
   const [optimizedData, setOptimizedData] = useState(null)
@@ -49,6 +51,7 @@ function ResumeAnalysisPage() {
 
   const handleFileSelect = (file) => {
     setUploadError(null)
+    setUploadProgress(null)
     setSelectedFile(file)
     // Reset uploaded file when new file is selected
     setUploadedFile(null)
@@ -60,14 +63,29 @@ function ResumeAnalysisPage() {
     setAnalyzeSignal(0)
   }
 
+  const handleCancelUpload = () => {
+    if (uploadAbortControllerRef.current) {
+      uploadAbortControllerRef.current.abort()
+      uploadAbortControllerRef.current = null
+    }
+    setIsUploading(false)
+    setUploadProgress(null)
+  }
+
   const handleUpload = async () => {
     if (!selectedFile) return
-    
+
     setUploadError(null)
-    
+    setUploadProgress(0)
+    uploadAbortControllerRef.current = new AbortController()
+
     try {
       setIsUploading(true)
-      const response = await uploadResume(selectedFile)
+      const response = await uploadResume(
+        selectedFile,
+        (percent) => setUploadProgress(percent),
+        uploadAbortControllerRef.current
+      )
       
       if (response.status === 'ok' && response.data) {
         const newSessionId = response.data.session_id
@@ -88,13 +106,24 @@ function ResumeAnalysisPage() {
       }
     } catch (error) {
       console.error('Upload error:', error)
+      if (error instanceof ApiError && error.type === ErrorTypes.CANCELLED) {
+        return
+      }
       setUploadError(error.message || 'Failed to upload resume')
     } finally {
       setIsUploading(false)
+      setUploadProgress(null)
+      uploadAbortControllerRef.current = null
     }
   }
 
   const handleRemoveFile = () => {
+    if (uploadAbortControllerRef.current) {
+      uploadAbortControllerRef.current.abort()
+      uploadAbortControllerRef.current = null
+    }
+    setIsUploading(false)
+    setUploadProgress(null)
     setSelectedFile(null)
     setUploadedFile(null)
     setSessionId(null)
@@ -266,6 +295,7 @@ function ResumeAnalysisPage() {
         selectedFile={selectedFile}
         uploadedFile={uploadedFile}
         isUploading={isUploading}
+        uploadProgress={uploadProgress}
         isAnalyzing={isAnalyzing}
         isAnalyzeLoading={isAnalyzing && analyzeLoadingSource === 'sidebar'}
         uploadError={uploadError}
@@ -276,6 +306,7 @@ function ResumeAnalysisPage() {
         onFileSelect={handleFileSelect}
         onRemoveFile={handleRemoveFile}
         onUpload={handleUpload}
+        onCancelUpload={handleCancelUpload}
         onAnalyze={() => triggerAnalyze('sidebar')}
         onClearSession={handleClearSession}
         isOpen={leftSidebarOpen}
