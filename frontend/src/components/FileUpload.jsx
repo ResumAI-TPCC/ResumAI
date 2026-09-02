@@ -28,7 +28,7 @@ function FileUpload({
   onCancelUpload = null,
 }) {
   const [isDragging, setIsDragging] = useState(false)
-  const [error, setError] = useState(null)
+  const [validationError, setValidationError] = useState(null)
   const fileInputRef = useRef(null)
   
   // Track if component is mounted
@@ -39,13 +39,25 @@ function FileUpload({
       isMountedRef.current = false
     }
   }, [])
+
+  // Track previous uploadError to detect changes
+  const prevUploadErrorRef = useRef(uploadError)
   
-  // Clear local error when external error changes
+  // Reset validation error when uploadError changes
+  // Use setTimeout to avoid calling setState synchronously in effect
   useEffect(() => {
-    if (uploadError) {
-      setError(null)
+    if (uploadError !== prevUploadErrorRef.current && uploadError) {
+      // Schedule clearing validation error on next tick
+      const timer = setTimeout(() => {
+        setValidationError(null)
+      }, 0)
+      return () => clearTimeout(timer)
     }
+    prevUploadErrorRef.current = uploadError
   }, [uploadError])
+
+  // Display either upload error or validation error
+  const displayError = uploadError || validationError
 
   const validateFile = useCallback((file) => {
     // Check file type - only allow PDF and DOCX
@@ -67,7 +79,7 @@ function FileUpload({
 
   const handleFile = useCallback((file) => {
     const result = validateFile(file)
-    setError(result.error)
+    setValidationError(result.error)
     if (result.valid) {
       onFileSelect(file)
     }
@@ -279,13 +291,13 @@ function FileUpload({
       </div>
 
       {/* Error Message */}
-      {error && (
+      {displayError && (
         <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg animate-fade-in">
           <div className="flex items-start gap-2">
             <svg className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-xs text-red-700">{error}</p>
+            <p className="text-xs text-red-700">{displayError}</p>
           </div>
         </div>
       )}
