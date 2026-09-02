@@ -150,6 +150,7 @@ function AnalysisOutput({
   
   // Ref for AbortController to enable cancellation
   const abortControllerRef = useRef(null)
+  const isAnalyzingRef = useRef(false)
   
   // Track if component is mounted
   const isMountedRef = useRef(true)
@@ -167,6 +168,7 @@ function AnalysisOutput({
       abortControllerRef.current.abort()
       abortControllerRef.current = null
     }
+    isAnalyzingRef.current = false
     setIsAnalyzing(false)
     onAnalyzeStatusChange?.(false)
   }, [onAnalyzeStatusChange])
@@ -184,8 +186,8 @@ function AnalysisOutput({
     }
   }, [])
 
-  const handleAnalyze = async () => {
-    if (isAnalyzing) return
+  const handleAnalyze = useCallback(async () => {
+    if (isAnalyzingRef.current) return
 
     if (!sessionId) {
       setError(new ApiError('Please upload a resume first', ErrorTypes.VALIDATION_ERROR))
@@ -195,6 +197,7 @@ function AnalysisOutput({
     // Create new AbortController for this request
     abortControllerRef.current = new AbortController()
     
+    isAnalyzingRef.current = true
     setIsAnalyzing(true)
     onAnalyzeStatusChange?.(true)
     setError(null)
@@ -283,18 +286,27 @@ function AnalysisOutput({
       }
     } finally {
       if (isMountedRef.current) {
+        isAnalyzingRef.current = false
         setIsAnalyzing(false)
         onAnalyzeStatusChange?.(false)
         abortControllerRef.current = null
       }
     }
-  }
+  }, [
+    sessionId,
+    shouldUseMatch,
+    jobDescription,
+    jobTitle,
+    companyName,
+    onAnalyzeStatusChange,
+    onMatchScoreUpdate,
+  ])
 
   useEffect(() => {
     if (analyzeSignal > 0) {
       handleAnalyze()
     }
-  }, [analyzeSignal])
+  }, [analyzeSignal, handleAnalyze])
 
   return (
     <main className="flex-1 p-6 bg-gray-50 overflow-y-auto">

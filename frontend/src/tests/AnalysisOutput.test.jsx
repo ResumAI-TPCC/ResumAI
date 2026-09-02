@@ -33,6 +33,22 @@ jest.mock('../utils/api', () => ({
 
 import { analyzeResume, matchResumeWithJob } from '../utils/api'
 
+function mockPendingApiCall(mockFn, resolveValue) {
+  let resolvePromise
+  mockFn.mockImplementation((...args) => {
+    const controller = args[args.length - 1]
+    return new Promise((resolve, reject) => {
+      if (controller?.signal) {
+        controller.signal.addEventListener('abort', () => {
+          reject(new ApiError('Request cancelled', ErrorTypes.CANCELLED))
+        }, { once: true })
+      }
+      resolvePromise = resolve
+    })
+  })
+  return (value = resolveValue) => resolvePromise(value)
+}
+
 describe('AnalysisOutput Component', () => {
   beforeEach(() => {
     jest.clearAllMocks()
@@ -68,11 +84,7 @@ describe('AnalysisOutput Component', () => {
 
   describe('Loading State', () => {
     test('shows loading spinner when analysis is in progress', async () => {
-      // Create a promise that doesn't resolve immediately
-      let resolvePromise
-      analyzeResume.mockImplementation(() => new Promise((resolve) => {
-        resolvePromise = resolve
-      }))
+      const finishRequest = mockPendingApiCall(analyzeResume, { data: { suggestions: [] } })
 
       const props = {
         sessionId: 'test-session-123',
@@ -87,14 +99,11 @@ describe('AnalysisOutput Component', () => {
       })
 
       // Clean up by resolving the promise
-      resolvePromise({ data: { suggestions: [] } })
+      finishRequest()
     })
 
     test('shows analyzing message when analyzing without JD', async () => {
-      let resolvePromise
-      analyzeResume.mockImplementation(() => new Promise((resolve) => {
-        resolvePromise = resolve
-      }))
+      const finishRequest = mockPendingApiCall(analyzeResume, { data: { suggestions: [] } })
 
       const props = {
         sessionId: 'test-session-123',
@@ -107,14 +116,11 @@ describe('AnalysisOutput Component', () => {
         expect(screen.getByText(/分析中.../i)).toBeInTheDocument()
       })
 
-      resolvePromise({ data: { suggestions: [] } })
+      finishRequest()
     })
 
     test('shows matching message when matching with JD', async () => {
-      let resolvePromise
-      matchResumeWithJob.mockImplementation(() => new Promise((resolve) => {
-        resolvePromise = resolve
-      }))
+      const finishRequest = mockPendingApiCall(matchResumeWithJob, { data: { match_score: 75, suggestions: [] } })
 
       const props = {
         sessionId: 'test-session-123',
@@ -128,7 +134,7 @@ describe('AnalysisOutput Component', () => {
         expect(screen.getByText(/匹配中.../i)).toBeInTheDocument()
       })
 
-      resolvePromise({ data: { match_score: 75, suggestions: [] } })
+      finishRequest()
     })
   })
 
@@ -443,10 +449,7 @@ describe('AnalysisOutput Component', () => {
 
   describe('Cancel Functionality', () => {
     test('shows cancel button during loading', async () => {
-      let resolvePromise
-      analyzeResume.mockImplementation(() => new Promise((resolve) => {
-        resolvePromise = resolve
-      }))
+      const finishRequest = mockPendingApiCall(analyzeResume, { data: { suggestions: [] } })
 
       const props = {
         sessionId: 'test-session-123',
@@ -459,14 +462,11 @@ describe('AnalysisOutput Component', () => {
         expect(screen.getByText('取消')).toBeInTheDocument()
       })
 
-      resolvePromise({ data: { suggestions: [] } })
+      finishRequest()
     })
 
     test('clicking cancel button stops loading', async () => {
-      let resolvePromise
-      analyzeResume.mockImplementation(() => new Promise((resolve) => {
-        resolvePromise = resolve
-      }))
+      const finishRequest = mockPendingApiCall(analyzeResume, { data: { suggestions: [] } })
 
       const props = {
         sessionId: 'test-session-123',
@@ -489,18 +489,18 @@ describe('AnalysisOutput Component', () => {
         expect(screen.queryByRole('status')).not.toBeInTheDocument()
       })
 
-      resolvePromise({ data: { suggestions: [] } })
+      finishRequest()
     })
   })
 
   describe('Component Cleanup', () => {
     test('cancels pending request on unmount', async () => {
-      let resolvePromise
-      const abortMock = jest.fn()
-      
-      analyzeResume.mockImplementation(() => new Promise((resolve, reject) => {
-        resolvePromise = { resolve, reject }
-      }))
+      let capturedController
+
+      analyzeResume.mockImplementation((_sessionId, controller) => {
+        capturedController = controller
+        return new Promise(() => {})
+      })
 
       const props = {
         sessionId: 'test-session-123',
@@ -517,9 +517,7 @@ describe('AnalysisOutput Component', () => {
       // Unmount component
       unmount()
 
-      // The test passes if no errors are thrown during unmount
-      // Clean up
-      resolvePromise.resolve({ data: { suggestions: [] } })
+      expect(capturedController.signal.aborted).toBe(true)
     })
   })
 })
