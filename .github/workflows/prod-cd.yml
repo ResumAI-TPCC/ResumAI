@@ -17,7 +17,14 @@ on:
         default: 'true'
 
 permissions:
-  contents: 'write'
+  contents: read
+  id-token: write
+
+env:
+  PROD_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.PROD_WORKLOAD_IDENTITY_PROVIDER }}
+  PROD_DEPLOY_SERVICE_ACCOUNT: ${{ vars.PROD_DEPLOY_SERVICE_ACCOUNT }}
+  PROD_RUNTIME_SERVICE_ACCOUNT: cloud-run-prod-runtime@resumai-platform.iam.gserviceaccount.com
+  PROD_GEMINI_SECRET: prod-gemini-api-key
 
 jobs:
   validate-branch:
@@ -33,9 +40,31 @@ jobs:
             exit 1;
           fi
 
+  verify-wif:
+    name: Verify production WIF authentication
+    needs: validate-branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate deployment configuration
+        run: |
+          test -n "${PROD_WORKLOAD_IDENTITY_PROVIDER}" || (echo "Missing repository variable PROD_WORKLOAD_IDENTITY_PROVIDER" && exit 1)
+          test -n "${PROD_DEPLOY_SERVICE_ACCOUNT}" || (echo "Missing repository variable PROD_DEPLOY_SERVICE_ACCOUNT" && exit 1)
+
+      - name: 'Google auth'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: ${{ env.PROD_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.PROD_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v2'
+
+      - name: Verify project access
+        run: gcloud projects describe resumai-platform --format='value(projectId)'
+
   deploy-backend:
     name: Deploy Backend to Cloud Run (prod)
-    needs: validate-branch
+    needs: [validate-branch, verify-wif]
     if: ${{ github.event.inputs.deploy_backend == 'true' }}
     runs-on: ubuntu-latest
     defaults:
@@ -45,17 +74,23 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Validate deployment configuration
+        run: |
+          test -n "${PROD_WORKLOAD_IDENTITY_PROVIDER}" || (echo "Missing repository variable PROD_WORKLOAD_IDENTITY_PROVIDER" && exit 1)
+          test -n "${PROD_DEPLOY_SERVICE_ACCOUNT}" || (echo "Missing repository variable PROD_DEPLOY_SERVICE_ACCOUNT" && exit 1)
+
       - name: 'Google auth'
         uses: 'google-github-actions/auth@v2'
         with:
-          credentials_json: '${{ secrets.PROD_GCP_SA_KEY }}'
+          workload_identity_provider: ${{ env.PROD_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.PROD_DEPLOY_SERVICE_ACCOUNT }}
 
       - name: 'Set up Cloud SDK'
         uses: 'google-github-actions/setup-gcloud@v2'
 
       - name: 'Configure Docker'
         run: |
-          gcloud auth configure-docker --quiet
+          gcloud auth configure-docker gcr.io --quiet
 
       - name: 'Build and Push Container'
         run: |
@@ -66,7 +101,6 @@ jobs:
         env:
           ALLOWED_ORIGINS: ${{ secrets.PROD_ALLOWED_ORIGINS }}
           LLM_PROVIDER: ${{ secrets.PROD_LLM_PROVIDER }}
-          GEMINI_API_KEY: ${{ secrets.PROD_GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ secrets.PROD_GEMINI_MODEL }}
           GCP_PROJECT_ID: ${{ secrets.PROD_GCP_PROJECT_ID }}
           GCS_BUCKET_NAME: ${{ secrets.PROD_GCS_BUCKET_NAME }}
@@ -77,25 +111,37 @@ jobs:
             --image gcr.io/${{ secrets.PROD_GCP_PROJECT_ID }}/backend-prod:${{ github.sha }} \
             --region asia-southeast1 \
             --platform managed \
+            --service-account "${PROD_RUNTIME_SERVICE_ACCOUNT}" \
             --port 8000 \
             --allow-unauthenticated \
             --update-env-vars "LLM_PROVIDER=$LLM_PROVIDER" \
-            --update-env-vars "GEMINI_API_KEY=$GEMINI_API_KEY" \
             --update-env-vars "GEMINI_MODEL=$GEMINI_MODEL" \
             --update-env-vars "GCP_PROJECT_ID=$GCP_PROJECT_ID" \
             --update-env-vars "GCS_BUCKET_NAME=$GCS_BUCKET_NAME" \
             --update-env-vars "GCS_OBJECT_PREFIX=$GCS_OBJECT_PREFIX" \
             --update-env-vars "ALLOWED_ORIGINS=$ALLOWED_ORIGINS" \
-            --update-env-vars "APP_VERSION=$APP_VERSION"
+            --update-env-vars "APP_VERSION=$APP_VERSION" \
+            --update-secrets "GEMINI_API_KEY=${PROD_GEMINI_SECRET}:latest"
 
   deploy-frontend:
     name: Deploy Frontend to Firebase (prod)
-    needs: validate-branch
+    needs: [validate-branch, verify-wif]
     if: ${{ github.event.inputs.deploy_frontend == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Validate deployment configuration
+        run: |
+          test -n "${PROD_WORKLOAD_IDENTITY_PROVIDER}" || (echo "Missing repository variable PROD_WORKLOAD_IDENTITY_PROVIDER" && exit 1)
+          test -n "${PROD_DEPLOY_SERVICE_ACCOUNT}" || (echo "Missing repository variable PROD_DEPLOY_SERVICE_ACCOUNT" && exit 1)
+
+      - name: 'Google auth'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: ${{ env.PROD_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.PROD_DEPLOY_SERVICE_ACCOUNT }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -114,11 +160,9 @@ jobs:
           VITE_APP_VERSION: ${{ github.event.inputs.version }}
 
       - name: Deploy to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.PROD_GCP_SA_KEY }}
-          projectId: resumai-platform
-          target: app_site
-          channelId: live
-          entryPoint: frontend
+        working-directory: frontend
+        run: >-
+          npx --yes firebase-tools@14.22.0 deploy
+          --only hosting:app_site
+          --project resumai-platform
+          --non-interactive
