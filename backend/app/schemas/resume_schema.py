@@ -155,7 +155,7 @@ class ResumeOptimizeResponse(BaseModel):
 class JobSubmitData(BaseModel):
     """Inner data returned immediately after a job is enqueued"""
     job_id: str = Field(..., description="Unique job identifier (UUID4)")
-    job_type: str = Field(..., description="One of: analyze, match, optimize")
+    job_type: str = Field(..., description="One of: analyze, match, optimize, interview_start, interview_answer")
     status: str = Field("pending", description="Always 'pending' on submit")
     queue_depth: int = Field(..., description="Number of jobs currently waiting in queue")
 

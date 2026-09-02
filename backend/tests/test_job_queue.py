@@ -9,24 +9,53 @@ Covers:
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
+from app.core.error_templates import (
+    CONTENT_MODERATION_OUTPUT_BLOCKED,
+    INTERNAL_SERVER_ERROR,
+    LLM_AUTHENTICATION_ERROR,
+    LLM_GENERIC_ERROR,
+    LLM_INVALID_RESPONSE,
+    LLM_RATE_LIMIT,
+    LLM_SERVICE_UNAVAILABLE,
+    LLM_TIMEOUT,
+)
 from app.services.jobs.result_manager import ResultManager
-from app.services.jobs.job_manager import JobManager, QueueFullError
+from app.services.jobs.job_manager import (
+    JOB_TYPES,
+    Job,
+    JobManager,
+    QueueFullError,
+    _public_job_error,
+)
+from app.services.llm.exceptions import (
+    LLMAuthenticationError,
+    LLMException,
+    LLMRateLimitError,
+    LLMResponseError,
+    LLMServiceUnavailableError,
+    LLMTimeoutError,
+)
+from app.services.validators.content_moderator import ContentModerationError
 
 
 # ===========================================================================
 # Helpers
 # ===========================================================================
 
+
 def make_result_manager() -> ResultManager:
     """Return a fresh ResultManager (bypasses lru_cache singleton)."""
     return ResultManager(ttl_seconds=3600)
 
 
-def make_job_manager(result_manager: ResultManager, max_queue_size: int = 5) -> JobManager:
+def make_job_manager(
+    result_manager: ResultManager, max_queue_size: int = 5
+) -> JobManager:
     """Return a fresh JobManager wired to the given ResultManager."""
     with patch(
         "app.services.jobs.job_manager.get_result_manager",
@@ -38,6 +67,7 @@ def make_job_manager(result_manager: ResultManager, max_queue_size: int = 5) -> 
 # ===========================================================================
 # ResultManager Tests
 # ===========================================================================
+
 
 class TestResultManager:
     """Tests for in-memory result store with lazy TTL expiry."""
@@ -99,8 +129,8 @@ class TestResultManager:
         rm.create("job-5", "analyze")
 
         # Backdate created_at to simulate passage of time
-        rm._store["job-5"]["created_at"] = (
-            datetime.now(timezone.utc) - timedelta(seconds=2)
+        rm._store["job-5"]["created_at"] = datetime.now(timezone.utc) - timedelta(
+            seconds=2
         )
 
         assert rm.get("job-5") is None
@@ -125,6 +155,7 @@ class TestResultManager:
 # JobManager Tests
 # ===========================================================================
 
+
 class TestJobManager:
     """Tests for async job queue — enqueue, depth, capacity, worker lifecycle."""
 
@@ -146,9 +177,13 @@ class TestJobManager:
         assert entry["job_type"] == "analyze"
 
     def test_enqueue_accepts_all_job_types(self):
-        for job_type in ("analyze", "match", "optimize"):
+        for job_type in JOB_TYPES:
             job_id = self.jm.enqueue(job_type, MagicMock())
             assert self.rm.get(job_id)["job_type"] == job_type
+
+    def test_enqueue_rejects_unknown_job_type(self):
+        with pytest.raises(ValueError, match="Unknown job type"):
+            self.jm.enqueue("unknown", MagicMock())
 
     # --- queue_depth ---
 
@@ -251,4 +286,65 @@ class TestJobManager:
         entry = self.rm.get(job_id)
         assert entry is not None
         assert entry["status"] == "failed"
-        assert "LLM error" in entry["error"]
+        assert entry["error"] == INTERNAL_SERVER_ERROR.detail
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("job_type", "service_name"),
+        (
+            ("interview_start", "start_interview"),
+            ("interview_answer", "evaluate_interview_answer"),
+        ),
+    )
+    async def test_execute_interview_job_returns_response_data(
+        self,
+        job_type,
+        service_name,
+    ):
+        response = MagicMock()
+        response.data.model_dump.return_value = {"value": job_type}
+        service = AsyncMock(return_value=response)
+
+        with patch(
+            f"app.services.interview_service.{service_name}",
+            service,
+        ):
+            result = await self.jm._execute_job(
+                Job("job-1", job_type, MagicMock()),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+            )
+
+        assert result == {"value": job_type}
+        service.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    ("exception", "expected"),
+    (
+        (
+            HTTPException(status_code=400, detail="Safe validation error"),
+            "Safe validation error",
+        ),
+        (
+            ContentModerationError("provider moderation detail"),
+            CONTENT_MODERATION_OUTPUT_BLOCKED.detail,
+        ),
+        (
+            LLMAuthenticationError("provider auth detail"),
+            LLM_AUTHENTICATION_ERROR.detail,
+        ),
+        (LLMRateLimitError("provider rate detail"), LLM_RATE_LIMIT.detail),
+        (LLMTimeoutError("provider timeout detail"), LLM_TIMEOUT.detail),
+        (
+            LLMServiceUnavailableError("provider unavailable detail"),
+            LLM_SERVICE_UNAVAILABLE.detail,
+        ),
+        (LLMResponseError("raw malformed response"), LLM_INVALID_RESPONSE.detail),
+        (LLMException("provider internal detail"), LLM_GENERIC_ERROR.detail),
+        (ValueError("sensitive internal detail"), INTERNAL_SERVER_ERROR.detail),
+    ),
+)
+def test_public_job_error_returns_safe_message(exception, expected):
+    assert _public_job_error(exception) == expected

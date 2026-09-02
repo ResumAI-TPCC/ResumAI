@@ -56,9 +56,9 @@ class GeminiProvider(BaseLLMProvider):
       _match_chain    = ChatGoogleGenerativeAI(temp=0.2)
                           .with_structured_output(MatchResult)
                           .with_retry(...)
-      _optimize_llm   = ChatGoogleGenerativeAI.with_retry(...)
+      _text_llm       = ChatGoogleGenerativeAI.with_retry(...)
 
-    All three accept List[BaseMessage] via .ainvoke(messages).
+    All provider operations accept List[BaseMessage] via .ainvoke(messages).
     """
 
     def __init__(self, api_key: Optional[str] = None):
@@ -68,7 +68,7 @@ class GeminiProvider(BaseLLMProvider):
             logger.warning("GEMINI_API_KEY is not set. LLM features will not work.")
             self._analyze_chain = None
             self._match_chain = None
-            self._optimize_llm = None
+            self._text_llm = None
             return
 
         base_llm = ChatGoogleGenerativeAI(
@@ -94,7 +94,7 @@ class GeminiProvider(BaseLLMProvider):
         self._match_chain = match_llm.with_structured_output(MatchResult).with_retry(
             stop_after_attempt=settings.GEMINI_MAX_RETRIES
         )
-        self._optimize_llm = base_llm.with_retry(
+        self._text_llm = base_llm.with_retry(
             stop_after_attempt=settings.GEMINI_MAX_RETRIES
         )
 
@@ -153,6 +153,10 @@ class GeminiProvider(BaseLLMProvider):
             logger.error(f"Gemini match error: {exc}")
             raise _map_exception(exc)
 
+    async def generate(self, messages: List[BaseMessage]) -> LLMResponse:
+        """Generate raw text for a feature-specific prompt."""
+        return await self._generate_text(messages, operation="generate")
+
     async def optimize(self, messages: List[BaseMessage]) -> LLMResponse:
         """
         Optimize resume and return free-text Markdown content.
@@ -163,13 +167,21 @@ class GeminiProvider(BaseLLMProvider):
         Returns:
             LLMResponse: Raw Markdown string for downstream cleaning and PDF render.
         """
-        if not self._optimize_llm:
+        return await self._generate_text(messages, operation="optimize")
+
+    async def _generate_text(
+        self,
+        messages: List[BaseMessage],
+        operation: str,
+    ) -> LLMResponse:
+        """Invoke the shared raw-text Gemini chain."""
+        if not self._text_llm:
             raise LLMAuthenticationError("Gemini API key not configured")
         try:
-            response = await self._optimize_llm.ainvoke(messages)
+            response = await self._text_llm.ainvoke(messages)
             content: str = response.content
-            logger.debug(f"optimize: received {len(content)} chars")
+            logger.debug("%s: received %s chars", operation, len(content))
             return LLMResponse(content=content, model=settings.GEMINI_MODEL)
         except Exception as exc:
-            logger.error(f"Gemini optimize error: {exc}")
+            logger.error("Gemini %s error: %s", operation, exc)
             raise _map_exception(exc)

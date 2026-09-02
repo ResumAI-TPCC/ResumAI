@@ -236,7 +236,7 @@ export async function optimizeResume(sessionId, jobDescription = '', template = 
  * @returns {Promise<Object>} The `result` payload from the completed job
  * @throws {Error} On job failure, timeout, or network error
  */
-async function pollJobResult(jobId) {
+export async function pollJobResult(jobId) {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
 
   while (Date.now() < deadline) {

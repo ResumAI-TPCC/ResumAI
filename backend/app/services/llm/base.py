@@ -2,9 +2,9 @@
 LLM Provider Abstract Base Class
 Defines the interface that all LLM Providers must implement.
 
-Provider methods now accept List[BaseMessage] (assembled by PromptBuilder
-via ChatPromptTemplate) and return typed Pydantic models instead of raw
-strings, eliminating manual JSON parsing in the service layer.
+Provider methods accept List[BaseMessage] assembled by prompt builders.
+Structured resume operations return typed Pydantic models, while generic
+generation and optimization return raw text responses.
 """
 
 from abc import ABC, abstractmethod
@@ -68,6 +68,19 @@ class BaseLLMProvider(ABC):
 
         Returns:
             MatchResult: Score, breakdown, and suggestions via Function Calling.
+        """
+        pass
+
+    @abstractmethod
+    async def generate(self, messages: List[BaseMessage]) -> LLMResponse:
+        """
+        Generate raw text for a feature-specific prompt.
+
+        Args:
+            messages: Formatted messages from a feature prompt builder.
+
+        Returns:
+            LLMResponse: Raw text for feature-specific parsing.
         """
         pass
 
