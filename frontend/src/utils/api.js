@@ -8,12 +8,20 @@
  * - Timeout control (60 seconds)
  * - AbortController support for cancellation
  * - Better error classification
+ *
+ * RA-82: LLM endpoints (/analyze, /match, /optimize) return a job_id
+ * immediately (202 Accepted). Callers use pollJobResult() to wait for
+ * completion. The three public functions encapsulate submit + poll internally.
  */
 
 import { ENV } from '../config/env.js'
 
 const API_BASE_URL = ENV.API_BASE_URL;
 const DEFAULT_TIMEOUT = 60000; // 60 seconds
+
+// RA-82: Polling configuration
+const POLL_INTERVAL_MS = 2000;   // check every 2 seconds
+const POLL_TIMEOUT_MS  = 120000; // give up after 2 minutes
 
 /**
  * Custom error class for API errors with classification
@@ -110,6 +118,101 @@ async function handleErrorResponse(response) {
 }
 
 /**
+ * Map fetch/abort errors to ApiError and throw
+ * @param {Error} error - Original error
+ * @param {string} fallbackMessage - Message for unknown errors
+ * @throws {ApiError}
+ */
+function handleFetchError(error, fallbackMessage) {
+  if (error instanceof ApiError) {
+    throw error;
+  }
+
+  if (error.name === 'AbortError') {
+    throw new ApiError('Request cancelled', ErrorTypes.CANCELLED);
+  }
+
+  if (error.name === 'TypeError' && error.message.includes('fetch')) {
+    throw new ApiError('Network error. Please check your internet connection.', ErrorTypes.NETWORK_ERROR);
+  }
+
+  throw new ApiError(fallbackMessage, ErrorTypes.UNKNOWN_ERROR, error);
+}
+
+/**
+ * @param {number} ms
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<void>}
+ */
+function sleep(ms, signal = null) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new ApiError('Request cancelled', ErrorTypes.CANCELLED));
+      return;
+    }
+
+    const timeoutId = setTimeout(resolve, ms);
+
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        clearTimeout(timeoutId);
+        reject(new ApiError('Request cancelled', ErrorTypes.CANCELLED));
+      }, { once: true });
+    }
+  });
+}
+
+/**
+ * Poll GET /jobs/{jobId} until the job reaches a terminal state.
+ *
+ * @param {string} jobId - The job_id returned by a submit endpoint
+ * @param {AbortController} [controller] - Optional AbortController for cancellation
+ * @returns {Promise<Object>} The `result` payload from the completed job
+ * @throws {ApiError} On job failure, timeout, or network error
+ */
+async function pollJobResult(jobId, controller = null) {
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  const signal = controller?.signal ?? null;
+
+  while (Date.now() < deadline) {
+    if (signal?.aborted) {
+      throw new ApiError('Request cancelled', ErrorTypes.CANCELLED);
+    }
+
+    await sleep(POLL_INTERVAL_MS, signal);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/jobs/${jobId}`, { signal });
+
+      if (res.status === 404) {
+        throw new ApiError('Job not found or result has expired. Please try again.', ErrorTypes.CLIENT_ERROR);
+      }
+      if (!res.ok) {
+        throw new ApiError(`Polling error: ${res.status}`, ErrorTypes.SERVER_ERROR);
+      }
+
+      const body = await res.json();
+      const { status, result, error } = body?.data ?? {};
+
+      if (status === 'completed') {
+        return result;
+      }
+      if (status === 'failed') {
+        throw new ApiError(error || 'Job processing failed. Please try again.', ErrorTypes.SERVER_ERROR);
+      }
+      // status === 'pending' or 'processing' — keep polling
+    } catch (error) {
+      handleFetchError(error, `Polling error for job ${jobId}`);
+    }
+  }
+
+  throw new ApiError(
+    'Request timed out. The server is taking too long. Please try again.',
+    ErrorTypes.TIMEOUT_ERROR
+  );
+}
+
+/**
  * Upload resume file to backend with progress tracking
  * 
  * Endpoint: POST /api/resumes
@@ -125,8 +228,9 @@ export async function uploadResume(file, onProgress = null, externalController =
   const formData = new FormData();
   formData.append('file', file);
 
-  // Use external controller if provided, otherwise create internal one
-  const controller = externalController || new AbortController();
+  // Use external controller if provided
+  // Note: XMLHttpRequest doesn't use AbortController directly
+  // We handle abort through event listeners instead
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -253,37 +357,25 @@ export async function analyzeResume(sessionId, controller = null) {
       );
     }
 
+    if (response.status === 429) {
+      throw new ApiError('Server is busy. Please try again in a moment.', ErrorTypes.SERVER_ERROR);
+    }
+
     if (!response.ok) {
       await handleErrorResponse(response);
     }
 
-    const result = await response.json();
-
-    // Validate response structure
-    if (!result || typeof result !== 'object') {
+    const submitResult = await response.json();
+    const jobId = submitResult?.data?.job_id;
+    if (!jobId) {
       throw new ApiError('Invalid response format from server', ErrorTypes.SERVER_ERROR);
     }
 
-    return result;
+    const jobResult = await pollJobResult(jobId, internalController);
+    return { status: 'ok', data: jobResult };
   } catch (error) {
-    // Re-throw ApiError instances
-    if (error instanceof ApiError) {
-      throw error;
-    }
-
-    // Handle abort errors
-    if (error.name === 'AbortError') {
-      throw new ApiError('Request cancelled', ErrorTypes.CANCELLED);
-    }
-
-    // Handle network errors
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new ApiError('Network error. Please check your internet connection.', ErrorTypes.NETWORK_ERROR);
-    }
-
-    // Handle other unexpected errors
     console.error('Unexpected error in analyzeResume:', error);
-    throw new ApiError('An unexpected error occurred. Please try again.', ErrorTypes.UNKNOWN_ERROR, error);
+    handleFetchError(error, 'An unexpected error occurred. Please try again.');
   }
 }
 
@@ -317,28 +409,24 @@ export async function matchResumeWithJob(sessionId, jobDescription, jobTitle = '
       internalController
     );
 
+    if (response.status === 429) {
+      throw new ApiError('Server is busy. Please try again in a moment.', ErrorTypes.SERVER_ERROR);
+    }
+
     if (!response.ok) {
       await handleErrorResponse(response);
     }
 
-    return await response.json();
+    const submitResult = await response.json();
+    const jobId = submitResult?.data?.job_id;
+    if (!jobId) {
+      throw new ApiError('Invalid response format from server', ErrorTypes.SERVER_ERROR);
+    }
+
+    const jobResult = await pollJobResult(jobId, internalController);
+    return { status: 'ok', data: jobResult };
   } catch (error) {
-    // Re-throw ApiError instances
-    if (error instanceof ApiError) {
-      throw error;
-    }
-
-    // Handle abort errors
-    if (error.name === 'AbortError') {
-      throw new ApiError('Request cancelled', ErrorTypes.CANCELLED);
-    }
-
-    // Handle network errors
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new ApiError('Network error. Please check your internet connection.', ErrorTypes.NETWORK_ERROR);
-    }
-
-    throw new ApiError('Match request failed. Please try again.', ErrorTypes.UNKNOWN_ERROR, error);
+    handleFetchError(error, 'Match request failed. Please try again.');
   }
 }
 
@@ -370,27 +458,23 @@ export async function optimizeResume(sessionId, jobDescription = '', template = 
       internalController
     );
 
+    if (response.status === 429) {
+      throw new ApiError('Server is busy. Please try again in a moment.', ErrorTypes.SERVER_ERROR);
+    }
+
     if (!response.ok) {
       await handleErrorResponse(response);
     }
 
-    return await response.json();
+    const submitResult = await response.json();
+    const jobId = submitResult?.data?.job_id;
+    if (!jobId) {
+      throw new ApiError('Invalid response format from server', ErrorTypes.SERVER_ERROR);
+    }
+
+    const jobResult = await pollJobResult(jobId, internalController);
+    return { status: 'ok', data: jobResult };
   } catch (error) {
-    // Re-throw ApiError instances
-    if (error instanceof ApiError) {
-      throw error;
-    }
-
-    // Handle abort errors
-    if (error.name === 'AbortError') {
-      throw new ApiError('Request cancelled', ErrorTypes.CANCELLED);
-    }
-
-    // Handle network errors
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new ApiError('Network error. Please check your internet connection.', ErrorTypes.NETWORK_ERROR);
-    }
-
-    throw new ApiError('Optimization request failed. Please try again.', ErrorTypes.UNKNOWN_ERROR, error);
+    handleFetchError(error, 'Optimization request failed. Please try again.');
   }
 }
