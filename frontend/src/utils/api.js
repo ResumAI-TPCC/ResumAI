@@ -52,11 +52,13 @@ export const ErrorTypes = {
  * Create a timeout promise that rejects after specified milliseconds
  * @param {number} ms - Timeout in milliseconds
  * @param {AbortController} controller - AbortController to cancel the request
- * @returns {Promise} - Promise that rejects on timeout
+ * @returns {{ promise: Promise<never>, clear: () => void }}
  */
 function createTimeoutPromise(ms, controller) {
-  return new Promise((_, reject) => {
-    const timeoutId = setTimeout(() => {
+  let timeoutId;
+
+  const promise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
       controller.abort();
       reject(new ApiError(
         `Request timed out after ${ms / 1000} seconds`,
@@ -64,11 +66,15 @@ function createTimeoutPromise(ms, controller) {
       ));
     }, ms);
 
-    // Clear timeout if controller is aborted externally
     controller.signal.addEventListener('abort', () => {
       clearTimeout(timeoutId);
     });
   });
+
+  return {
+    promise,
+    clear: () => clearTimeout(timeoutId),
+  };
 }
 
 /**
@@ -80,15 +86,19 @@ function createTimeoutPromise(ms, controller) {
  * @returns {Promise<Response>} - Fetch response
  */
 async function fetchWithTimeout(url, options, controller, timeout = DEFAULT_TIMEOUT) {
-  const fetchPromise = fetch(url, {
-    ...options,
-    signal: controller.signal,
-  });
+  const { promise: timeoutPromise, clear } = createTimeoutPromise(timeout, controller);
 
-  return Promise.race([
-    fetchPromise,
-    createTimeoutPromise(timeout, controller),
-  ]);
+  try {
+    return await Promise.race([
+      fetch(url, {
+        ...options,
+        signal: controller.signal,
+      }),
+      timeoutPromise,
+    ]);
+  } finally {
+    clear();
+  }
 }
 
 /**
@@ -234,14 +244,11 @@ export async function uploadResume(file, onProgress = null, externalController =
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    
-    // Set up timeout
+    let timedOut = false;
+
     const timeoutId = setTimeout(() => {
+      timedOut = true;
       xhr.abort();
-      reject(new ApiError(
-        `Upload timed out after ${DEFAULT_TIMEOUT / 1000} seconds`,
-        ErrorTypes.TIMEOUT_ERROR
-      ));
     }, DEFAULT_TIMEOUT);
 
     // Track upload progress
@@ -288,7 +295,14 @@ export async function uploadResume(file, onProgress = null, externalController =
 
     xhr.addEventListener('abort', () => {
       clearTimeout(timeoutId);
-      reject(new ApiError('Upload cancelled', ErrorTypes.CANCELLED));
+      if (timedOut) {
+        reject(new ApiError(
+          `Upload timed out after ${DEFAULT_TIMEOUT / 1000} seconds`,
+          ErrorTypes.TIMEOUT_ERROR
+        ));
+      } else {
+        reject(new ApiError('Upload cancelled', ErrorTypes.CANCELLED));
+      }
     });
 
     // Listen to external abort signal
