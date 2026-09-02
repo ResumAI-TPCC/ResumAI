@@ -295,7 +295,7 @@ describe('LoadingState Component', () => {
     })
 
     test('ignores progress values outside 0-100 range', () => {
-      const { container } = render(
+      render(
         <LoadingState 
           isLoading={true}
           progress={-1}
