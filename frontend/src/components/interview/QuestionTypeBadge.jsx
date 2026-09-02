@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types'
-import { QUESTION_TYPE_META } from '../../mocks/interviewFixtures'
+import { QUESTION_TYPE_META } from '../../constants/interview'
 
 const ACCENT_STYLES = {
   blue: 'bg-blue-100 text-blue-700 border-blue-200',

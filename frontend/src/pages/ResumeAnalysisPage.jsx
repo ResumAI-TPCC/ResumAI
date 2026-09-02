@@ -246,6 +246,7 @@ function ResumeAnalysisPage() {
 
   const canStartMockInterview = Boolean(
     canAnalyze &&
+    jobDescription.trim() &&
     matchScore !== null &&
     matchScore !== undefined
   )
@@ -266,24 +267,21 @@ function ResumeAnalysisPage() {
 
     setPageMode('mockInterview')
 
-    try {
-      await interview.startInterviewSession({
-        session_id: sessionId,
-        job_description: jobDescription || '',
-        job_title: jobTitle || '',
-        company_name: companyName || '',
-        question_count: 5,
-        match_score: matchScore,
-        resume_file_name: uploadedFile?.name || '',
-      })
-    } catch (error) {
-      console.error('Mock interview start error:', error)
-    }
+    await interview.startInterviewSession({
+      session_id: sessionId,
+      job_description: jobDescription,
+      job_title: jobTitle || '',
+      company_name: companyName || '',
+      question_count: 5,
+      match_score: matchScore,
+      resume_file_name: uploadedFile?.name || '',
+    })
   }
 
-  if (pageMode === 'mockInterview') {
-    return (
-      <MockInterviewShell
+  return (
+    <>
+      {pageMode === 'mockInterview' && (
+        <MockInterviewShell
         uploadedFile={uploadedFile}
         companyName={companyName}
         jobTitle={jobTitle}
@@ -297,12 +295,10 @@ function ResumeAnalysisPage() {
         onOpenRightSidebar={() => setRightSidebarOpen(true)}
         onCloseRightSidebar={() => setRightSidebarOpen(false)}
         onBackToMatch={handleBackToMatch}
-      />
-    )
-  }
+        />
+      )}
 
-  return (
-    <div className={`h-screen bg-gray-50 flex ${leftSidebarOpen || rightSidebarOpen ? 'overflow-hidden' : 'overflow-auto'} md:overflow-hidden`}>
+      <div className={`${pageMode === 'analysis' ? 'flex' : 'hidden'} h-screen bg-gray-50 ${leftSidebarOpen || rightSidebarOpen ? 'overflow-hidden' : 'overflow-auto'} md:overflow-hidden`}>
       {/* Mobile left menu button (underneath the drawer when opened) */}
       <button
         className="md:hidden fixed top-4 left-4 z-10 p-2 bg-white rounded-md shadow"
@@ -380,6 +376,7 @@ function ResumeAnalysisPage() {
         isStartingMockInterview={interview.isStarting}
         actionsEnabled={canAnalyze}
         canStartMockInterview={canStartMockInterview}
+        mockInterviewDisabledReason={jobDescription.trim() ? null : 'Add a job description to start a mock interview.'}
         optimizedData={optimizedData}
         onOptimize={handleOptimize}
         onDownload={handleDownloadResume}
@@ -389,7 +386,8 @@ function ResumeAnalysisPage() {
         onClose={() => setRightSidebarOpen(false)}
       />
 
-    </div>
+      </div>
+    </>
   )
 }
 

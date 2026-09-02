@@ -1,7 +1,7 @@
 import {
   DEFAULT_QUESTION_COUNT,
   REPORT_ACTION_LIBRARY,
-} from '../mocks/interviewFixtures'
+} from '../constants/interview'
 import { ENV } from '../config/env.js'
 import { pollJobResult } from './api.js'
 

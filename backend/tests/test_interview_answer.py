@@ -112,6 +112,27 @@ async def test_evaluate_interview_answer_service_success(
     assert "Candidate Answer" in messages[0].content
 
 
+@patch("app.services.interview_service.get_interview_prompt_builder")
+@patch("app.services.interview_service.get_llm_service")
+@patch("app.services.interview_service.get_resume_content", new_callable=AsyncMock)
+@pytest.mark.asyncio
+async def test_evaluate_interview_answer_formats_prompt_once(
+    mock_get_content,
+    mock_get_llm,
+    mock_get_builder,
+):
+    mock_get_content.return_value = MOCK_RESUME_TEXT
+    mock_get_llm.return_value = _mock_llm_service(MOCK_FEEDBACK_JSON)
+    builder = MagicMock()
+    builder.build_answer_evaluation_prompt.return_value = "answer prompt"
+    mock_get_builder.return_value = builder
+
+    await evaluate_interview_answer(EvaluateAnswerRequest(**_answer_payload()))
+
+    builder.validate_answer_evaluation_inputs.assert_called_once()
+    builder.build_answer_evaluation_prompt.assert_called_once()
+
+
 @patch("app.api.routes.interviews.get_job_manager")
 @patch(
     "app.api.routes.interviews.validate_interview_answer_request",

@@ -86,6 +86,20 @@ function InterviewQuestionPanel({
                 {error}
               </div>
             )}
+            <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+              <button
+                onClick={onBackToMatch}
+                className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                Back to Match
+              </button>
+              <button
+                onClick={onRestartInterview}
+                className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                Retry
+              </button>
+            </div>
           </div>
         </div>
       </main>

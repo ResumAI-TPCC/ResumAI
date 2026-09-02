@@ -121,12 +121,9 @@ async def validate_start_interview_request(
     )
 
     try:
-        get_interview_prompt_builder().build_question_generation_prompt(
+        get_interview_prompt_builder().validate_question_generation_inputs(
             resume_content=resume_content,
             job_description=request.job_description,
-            job_title=request.job_title,
-            company_name=request.company_name,
-            question_count=request.question_count,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -210,17 +207,10 @@ async def validate_interview_answer_request(
 
     if not _is_low_signal_answer(request.answer):
         try:
-            get_interview_prompt_builder().build_answer_evaluation_prompt(
+            get_interview_prompt_builder().validate_answer_evaluation_inputs(
                 resume_content=resume_content,
                 job_description=request.job_description,
-                job_title=request.job_title,
-                company_name=request.company_name,
-                question_id=request.question_id,
-                question_type=request.question_type,
                 question=request.question,
-                resume_evidence=request.resume_evidence,
-                jd_evidence=request.jd_evidence,
-                focus_areas=request.focus_areas,
                 answer=request.answer,
             )
         except ValueError as exc:

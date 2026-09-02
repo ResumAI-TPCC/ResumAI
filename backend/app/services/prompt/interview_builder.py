@@ -18,6 +18,34 @@ from app.services.prompt.templates import SAFETY_INSTRUCTION
 class InterviewPromptBuilder:
     """Constructs prompts for mock interview workflows."""
 
+    def validate_question_generation_inputs(
+        self,
+        resume_content: str,
+        job_description: str,
+    ) -> None:
+        """Validate question-generation inputs without formatting the prompt."""
+        if not resume_content or not resume_content.strip():
+            raise ValueError("resume_content cannot be empty")
+        if not job_description or not job_description.strip():
+            raise ValueError("job_description cannot be empty")
+
+    def validate_answer_evaluation_inputs(
+        self,
+        resume_content: str,
+        job_description: str,
+        question: str,
+        answer: str,
+    ) -> None:
+        """Validate answer-evaluation inputs without formatting the prompt."""
+        if not resume_content or not resume_content.strip():
+            raise ValueError("resume_content cannot be empty")
+        if not job_description or not job_description.strip():
+            raise ValueError("job_description cannot be empty")
+        if not question or not question.strip():
+            raise ValueError("question cannot be empty")
+        if not answer or not answer.strip():
+            raise ValueError("answer cannot be empty")
+
     def build_question_generation_prompt(
         self,
         resume_content: str,
@@ -27,10 +55,7 @@ class InterviewPromptBuilder:
         question_count: int = 5,
     ) -> str:
         """Build a prompt that asks the LLM to generate interview questions."""
-        if not resume_content or not resume_content.strip():
-            raise ValueError("resume_content cannot be empty")
-        if not job_description or not job_description.strip():
-            raise ValueError("job_description cannot be empty")
+        self.validate_question_generation_inputs(resume_content, job_description)
 
         return INTERVIEW_QUESTION_GENERATION_TEMPLATE.format(
             safety_instruction=SAFETY_INSTRUCTION,
@@ -56,14 +81,12 @@ class InterviewPromptBuilder:
         company_name: Optional[str] = None,
     ) -> str:
         """Build a prompt that asks the LLM to evaluate one answer."""
-        if not resume_content or not resume_content.strip():
-            raise ValueError("resume_content cannot be empty")
-        if not job_description or not job_description.strip():
-            raise ValueError("job_description cannot be empty")
-        if not question or not question.strip():
-            raise ValueError("question cannot be empty")
-        if not answer or not answer.strip():
-            raise ValueError("answer cannot be empty")
+        self.validate_answer_evaluation_inputs(
+            resume_content,
+            job_description,
+            question,
+            answer,
+        )
 
         normalized_focus_areas = ", ".join(
             area.strip()

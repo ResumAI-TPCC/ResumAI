@@ -83,7 +83,7 @@ export function useMockInterview() {
         status: 'idle',
         error: error.message || 'Failed to start mock interview.',
       }))
-      throw error
+      return null
     }
   }
 
@@ -134,7 +134,7 @@ export function useMockInterview() {
         status: 'questionReady',
         error: error.message || 'Failed to evaluate your answer.',
       }))
-      throw error
+      return null
     }
   }
 
@@ -184,7 +184,7 @@ export function useMockInterview() {
         status: 'feedbackReady',
         error: error.message || 'Failed to generate the interview report.',
       }))
-      throw error
+      return null
     }
   }
 

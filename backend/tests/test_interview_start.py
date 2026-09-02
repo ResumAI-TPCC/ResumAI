@@ -124,6 +124,33 @@ async def test_start_interview_service_success(mock_get_content, mock_get_llm):
     assert "Candidate Resume" in messages[0].content
 
 
+@patch("app.services.interview_service.get_interview_prompt_builder")
+@patch("app.services.interview_service.get_llm_service")
+@patch("app.services.interview_service.get_resume_content", new_callable=AsyncMock)
+@pytest.mark.asyncio
+async def test_start_interview_formats_prompt_once(
+    mock_get_content,
+    mock_get_llm,
+    mock_get_builder,
+):
+    mock_get_content.return_value = MOCK_RESUME_TEXT
+    mock_get_llm.return_value = _mock_llm_service(MOCK_QUESTION_JSON)
+    builder = MagicMock()
+    builder.build_question_generation_prompt.return_value = "question prompt"
+    mock_get_builder.return_value = builder
+
+    await start_interview(
+        StartInterviewRequest(
+            session_id="7c9e6679-7425-40de-944b-e07fc1f90ae7",
+            job_description="We need a Python engineer with API experience.",
+            question_count=5,
+        )
+    )
+
+    builder.validate_question_generation_inputs.assert_called_once()
+    builder.build_question_generation_prompt.assert_called_once()
+
+
 @patch("app.api.routes.interviews.get_job_manager")
 @patch(
     "app.api.routes.interviews.validate_start_interview_request",
