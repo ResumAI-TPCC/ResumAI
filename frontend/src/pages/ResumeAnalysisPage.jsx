@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Sidebar from '../components/Sidebar'
 import AnalysisOutput from '../components/AnalysisOutput'
 import ResumePreview from '../components/ResumePreview'
@@ -233,18 +233,18 @@ function ResumeAnalysisPage() {
    * Track match score from analysis output
    * This is called by AnalysisOutput when match analysis completes
    */
-  const handleAnalysisComplete = (score) => {
+  const handleAnalysisComplete = useCallback((score) => {
     setMatchScore(score)
-  }
+  }, [])
 
   const canAnalyze = Boolean(sessionId && uploadedFile)
 
-  const handleAnalyzeStatusChange = (status) => {
+  const handleAnalyzeStatusChange = useCallback((status) => {
     setIsAnalyzing(status)
     if (!status) {
       setAnalyzeLoadingSource(null)
     }
-  }
+  }, [])
 
   const triggerAnalyze = (source) => {
     if (!canAnalyze || isAnalyzing) return
