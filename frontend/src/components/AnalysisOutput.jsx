@@ -151,6 +151,8 @@ function AnalysisOutput({
   // Ref for AbortController to enable cancellation
   const abortControllerRef = useRef(null)
   const isAnalyzingRef = useRef(false)
+  // Only fire when analyzeSignal increases; ignore handleAnalyze identity changes
+  const lastHandledSignalRef = useRef(0)
   
   // Track if component is mounted
   const isMountedRef = useRef(true)
@@ -303,7 +305,13 @@ function AnalysisOutput({
   ])
 
   useEffect(() => {
-    if (analyzeSignal > 0) {
+    // Explicit reset so we do not rely on remount when parent clears the signal
+    if (analyzeSignal === 0) {
+      lastHandledSignalRef.current = 0
+      return
+    }
+    if (analyzeSignal !== lastHandledSignalRef.current) {
+      lastHandledSignalRef.current = analyzeSignal
       handleAnalyze()
     }
   }, [analyzeSignal, handleAnalyze])
