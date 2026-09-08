@@ -493,6 +493,101 @@ describe('AnalysisOutput Component', () => {
     })
   })
 
+  describe('Analyze signal gating (regression)', () => {
+    test('one Match click + JD keystrokes + cancel yields a single matchResumeWithJob call', async () => {
+      mockPendingApiCall(matchResumeWithJob, {
+        data: { match_score: 80, suggestions: [] },
+      })
+
+      let props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+        jobDescription: 'Engineer',
+        onAnalyzeStatusChange: () => {},
+        onMatchScoreUpdate: () => {},
+      }
+
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      await waitFor(() => {
+        expect(matchResumeWithJob).toHaveBeenCalledTimes(1)
+      })
+
+      // Simulate typing into JD without a new analyzeSignal
+      for (const suffix of [' ', 'r', 'o', 'l', 'e']) {
+        props = {
+          ...props,
+          jobDescription: props.jobDescription + suffix,
+          onAnalyzeStatusChange: () => {},
+          onMatchScoreUpdate: () => {},
+        }
+        rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+      }
+
+      expect(matchResumeWithJob).toHaveBeenCalledTimes(1)
+
+      fireEvent.click(screen.getByText('取消'))
+
+      await waitFor(() => {
+        expect(screen.queryByRole('status')).not.toBeInTheDocument()
+      })
+
+      // Cancel must not restart analysis (same signal, unstable parent callbacks)
+      props = {
+        ...props,
+        onAnalyzeStatusChange: () => {},
+        onMatchScoreUpdate: () => {},
+      }
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      expect(matchResumeWithJob).toHaveBeenCalledTimes(1)
+    })
+
+    test('a new analyzeSignal fires another request', async () => {
+      analyzeResume.mockResolvedValue({ data: { suggestions: [] } })
+
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      await waitFor(() => {
+        expect(analyzeResume).toHaveBeenCalledTimes(1)
+      })
+
+      rerender(<AnalysisOutput {...props} analyzeSignal={2} />)
+
+      await waitFor(() => {
+        expect(analyzeResume).toHaveBeenCalledTimes(2)
+      })
+    })
+
+    test('resetting analyzeSignal to 0 allows the next 0→1 click to fire', async () => {
+      analyzeResume.mockResolvedValue({ data: { suggestions: [] } })
+
+      const props = {
+        sessionId: 'test-session-123',
+        canAnalyze: true,
+      }
+      const { rerender } = render(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      await waitFor(() => {
+        expect(analyzeResume).toHaveBeenCalledTimes(1)
+      })
+
+      rerender(<AnalysisOutput {...props} analyzeSignal={0} />)
+      rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
+
+      await waitFor(() => {
+        expect(analyzeResume).toHaveBeenCalledTimes(2)
+      })
+    })
+  })
+
   describe('Component Cleanup', () => {
     test('cancels pending request on unmount', async () => {
       let capturedController

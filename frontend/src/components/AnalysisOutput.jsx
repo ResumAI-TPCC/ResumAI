@@ -305,8 +305,9 @@ function AnalysisOutput({
   ])
 
   useEffect(() => {
-    // Explicit reset so we do not rely on remount when parent clears the signal
-    if (analyzeSignal === 0) {
+    // Explicit reset so we do not rely on remount when parent clears the signal.
+    // Treat 0 / undefined / null as "no click" (prop is optional).
+    if (!analyzeSignal) {
       lastHandledSignalRef.current = 0
       return
     }
