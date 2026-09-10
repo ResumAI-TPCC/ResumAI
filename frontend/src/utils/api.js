@@ -454,7 +454,7 @@ export async function matchResumeWithJob(sessionId, jobDescription, jobTitle = '
  */
 export async function optimizeResume(sessionId, jobDescription = '', template = 'modern', controller = null) {
   const internalController = controller || new AbortController();
-
+  
   try {
     const response = await fetchWithTimeout(
       `${API_BASE_URL}/resumes/optimize`,

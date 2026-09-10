@@ -27,21 +27,45 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
+from fastapi import HTTPException
+
 from app.core.config import settings
+from app.core.error_templates import (
+    CONTENT_MODERATION_OUTPUT_BLOCKED,
+    INTERNAL_SERVER_ERROR,
+    LLM_AUTHENTICATION_ERROR,
+    LLM_GENERIC_ERROR,
+    LLM_INVALID_RESPONSE,
+    LLM_RATE_LIMIT,
+    LLM_SERVICE_UNAVAILABLE,
+    LLM_TIMEOUT,
+)
 from app.services.jobs.result_manager import get_result_manager
+from app.services.llm.exceptions import (
+    LLMAuthenticationError,
+    LLMException,
+    LLMRateLimitError,
+    LLMResponseError,
+    LLMServiceUnavailableError,
+    LLMTimeoutError,
+)
+from app.services.validators.content_moderator import ContentModerationError
 
 logger = logging.getLogger(__name__)
 
 # Valid job types
-JOB_TYPES = frozenset({"analyze", "match", "optimize"})
+JOB_TYPES = frozenset(
+    {"analyze", "match", "optimize", "interview_start", "interview_answer"}
+)
 
 
 @dataclass
 class Job:
     """A single unit of work placed on the queue."""
+
     job_id: str
-    job_type: str          # "analyze" | "match" | "optimize"
-    payload: Any           # The validated request object (ResumeAnalyzeRequest, etc.)
+    job_type: str
+    payload: Any
 
 
 class JobManager:
@@ -90,7 +114,7 @@ class JobManager:
         Add a job to the queue and return its job_id.
 
         Args:
-            job_type: One of "analyze", "match", "optimize"
+            job_type: One of the values declared in JOB_TYPES
             payload:  The validated request object from the route handler
 
         Returns:
@@ -99,6 +123,9 @@ class JobManager:
         Raises:
             QueueFullError: If the queue has reached MAX_QUEUE_SIZE
         """
+        if job_type not in JOB_TYPES:
+            raise ValueError(f"Unknown job type: {job_type}")
+
         if self._queue.full():
             raise QueueFullError(
                 f"Queue is full ({settings.MAX_QUEUE_SIZE} jobs). Please retry later."
@@ -147,13 +174,16 @@ class JobManager:
                 self._result_manager.set_processing(job.job_id)
 
                 try:
-                    result = await self._execute_job(job, get_llm_service, get_prompt_builder, get_resume_content)
+                    result = await self._execute_job(
+                        job, get_llm_service, get_prompt_builder, get_resume_content
+                    )
                     self._result_manager.set_completed(job.job_id, result)
                 except Exception as exc:
-                    logger.error(
-                        f"Job {job.job_id} failed: {exc}", exc_info=True
+                    logger.error(f"Job {job.job_id} failed: {exc}", exc_info=True)
+                    self._result_manager.set_failed(
+                        job.job_id,
+                        _public_job_error(exc),
                     )
-                    self._result_manager.set_failed(job.job_id, str(exc))
                 finally:
                     self._queue.task_done()
 
@@ -166,7 +196,9 @@ class JobManager:
 
         logger.info("Job worker loop exited.")
 
-    async def _execute_job(self, job: Job, get_llm_service, get_prompt_builder, get_resume_content) -> dict:
+    async def _execute_job(
+        self, job: Job, get_llm_service, get_prompt_builder, get_resume_content
+    ) -> dict:
         """
         Dispatch to the appropriate LLM service method based on job_type.
 
@@ -176,11 +208,27 @@ class JobManager:
         Returns a plain dict matching the original endpoint's `data` field shape,
         so GET /jobs/{job_id} can return it directly.
         """
-        from app.services.validators.content_moderator import get_content_moderator, ContentModerationError
+        from app.services.validators.content_moderator import (
+            get_content_moderator,
+            ContentModerationError,
+        )
         from app.services.pdf_service import markdown_to_pdf
         import base64
 
         payload = job.payload
+
+        if job.job_type == "interview_start":
+            from app.services.interview_service import start_interview
+
+            response = await start_interview(payload)
+            return response.data.model_dump()
+
+        if job.job_type == "interview_answer":
+            from app.services.interview_service import evaluate_interview_answer
+
+            response = await evaluate_interview_answer(payload)
+            return response.data.model_dump()
+
         llm = get_llm_service()
         builder = get_prompt_builder()
 
@@ -288,6 +336,27 @@ class JobManager:
 
 class QueueFullError(Exception):
     """Raised by JobManager.enqueue() when the queue has reached capacity."""
+
+
+def _public_job_error(exc: Exception) -> str:
+    """Return a stable, user-safe error message for a failed background job."""
+    if isinstance(exc, HTTPException) and isinstance(exc.detail, str):
+        return exc.detail
+    if isinstance(exc, ContentModerationError):
+        return CONTENT_MODERATION_OUTPUT_BLOCKED.detail
+    if isinstance(exc, LLMAuthenticationError):
+        return LLM_AUTHENTICATION_ERROR.detail
+    if isinstance(exc, LLMRateLimitError):
+        return LLM_RATE_LIMIT.detail
+    if isinstance(exc, LLMTimeoutError):
+        return LLM_TIMEOUT.detail
+    if isinstance(exc, LLMServiceUnavailableError):
+        return LLM_SERVICE_UNAVAILABLE.detail
+    if isinstance(exc, LLMResponseError):
+        return LLM_INVALID_RESPONSE.detail
+    if isinstance(exc, LLMException):
+        return LLM_GENERIC_ERROR.detail
+    return INTERNAL_SERVER_ERROR.detail
 
 
 @lru_cache

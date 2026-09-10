@@ -2,7 +2,7 @@
 LLM Service - Middle layer between API routes and the LLM provider.
 
 Responsibilities:
-  - Call provider.analyze / match / optimize with the messages assembled
+  - Call provider.analyze / match / generate / optimize with messages assembled
     by PromptBuilder (List[BaseMessage]).
   - Apply business rules that live above the LLM layer:
       * Content moderation on LLM output (RA-62)
@@ -24,7 +24,7 @@ from typing import List, Optional
 from langchain_core.messages import BaseMessage
 
 from .factory import get_llm_provider
-from .base import BaseLLMProvider
+from .base import BaseLLMProvider, LLMResponse
 from .schemas import (
     AnalyzeResult,
     MatchResult,
@@ -132,6 +132,16 @@ class LLMService:
 
         cleaned = self._clean_optimize_output(response.content)
         return OptimizeResult(optimized_content=cleaned)
+
+    async def generate_text(self, messages: List[BaseMessage]) -> LLMResponse:
+        """Generate raw text for feature-specific prompts."""
+        try:
+            return await self.provider.generate(messages)
+        except LLMException:
+            raise
+        except Exception as exc:
+            logger.error("Unexpected error in generate_text: %s", exc)
+            raise LLMException(str(exc)) from exc
 
     # ------------------------------------------------------------------
     # Output cleaning (optimize only — free-text path)
