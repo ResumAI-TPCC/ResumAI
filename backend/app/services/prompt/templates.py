@@ -36,6 +36,7 @@ SAFETY_INSTRUCTION = (
 # ---------------------------------------------------------------------------
 # Analyze Resume
 # with_structured_output() enforces AnalyzeResult schema via Function Calling.
+# {retrieved_context} injects optional RAG resume guidance (empty when disabled).
 # ---------------------------------------------------------------------------
 ANALYZE_PROMPT = ChatPromptTemplate.from_messages([
     (
@@ -44,7 +45,8 @@ ANALYZE_PROMPT = ChatPromptTemplate.from_messages([
     ),
     (
         "human",
-        "## Resume Content:\n{resume_content}\n\n"
+        "## Resume Content:\n{resume_content}\n"
+        "{retrieved_context}\n"
         "## Instructions:\n"
         "Analyze the resume thoroughly. Focus on:\n"
         "1. Content quality and relevance\n"
@@ -60,7 +62,7 @@ ANALYZE_PROMPT = ChatPromptTemplate.from_messages([
         "- description: a detailed explanation of why this matters\n"
         "- example: a specific \"Before vs After\" example\n",
     ),
-])
+]).partial(retrieved_context="")
 
 # ---------------------------------------------------------------------------
 # Match Resume

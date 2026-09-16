@@ -245,7 +245,15 @@ class JobManager:
             if not is_safe:
                 raise ContentModerationError(reason)
 
-            prompt = builder.build_analyze_prompt(resume_content)
+            # RAG is an enhancement for analyze jobs: retrieval failures
+            # degrade to the existing prompt instead of failing the job.
+            from app.services.rag import retrieve as retrieve_rag_context
+
+            retrieved_context = await retrieve_rag_context(resume_content)
+            prompt = builder.build_analyze_prompt(
+                resume_content,
+                retrieved_context=retrieved_context,
+            )
             result = await llm.analyze_resume(prompt)
 
             return {
