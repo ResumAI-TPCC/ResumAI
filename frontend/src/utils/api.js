@@ -180,7 +180,7 @@ function sleep(ms, signal = null) {
  * @returns {Promise<Object>} The `result` payload from the completed job
  * @throws {ApiError} On job failure, timeout, or network error
  */
-async function pollJobResult(jobId, controller = null) {
+export async function pollJobResult(jobId, controller = null) {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   const signal = controller?.signal ?? null;
 
