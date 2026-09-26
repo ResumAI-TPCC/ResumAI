@@ -179,6 +179,7 @@ function AnalysisOutput({
    * Cleanup on unmount
    */
   useEffect(() => {
+    isMountedRef.current = true
     return () => {
       isMountedRef.current = false
       // Cancel any pending request on unmount
