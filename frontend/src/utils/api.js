@@ -128,28 +128,6 @@ async function handleErrorResponse(response) {
 }
 
 /**
- * Map fetch/abort errors to ApiError and throw
- * @param {Error} error - Original error
- * @param {string} fallbackMessage - Message for unknown errors
- * @throws {ApiError}
- */
-function handleFetchError(error, fallbackMessage) {
-  if (error instanceof ApiError) {
-    throw error;
-  }
-
-  if (error.name === 'AbortError') {
-    throw new ApiError('Request cancelled', ErrorTypes.CANCELLED);
-  }
-
-  if (error.name === 'TypeError' && error.message.includes('fetch')) {
-    throw new ApiError('Network error. Please check your internet connection.', ErrorTypes.NETWORK_ERROR);
-  }
-
-  throw new ApiError(fallbackMessage, ErrorTypes.UNKNOWN_ERROR, error);
-}
-
-/**
  * @param {number} ms
  * @param {AbortSignal} [signal]
  * @returns {Promise<void>}
