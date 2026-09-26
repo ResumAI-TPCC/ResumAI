@@ -189,8 +189,6 @@ export async function pollJobResult(jobId, controller = null) {
       throw new ApiError('Request cancelled', ErrorTypes.CANCELLED);
     }
 
-    await sleep(POLL_INTERVAL_MS, signal);
-
     try {
       const res = await fetch(`${API_BASE_URL}/jobs/${jobId}`, { signal });
 
@@ -212,8 +210,15 @@ export async function pollJobResult(jobId, controller = null) {
       }
       // status === 'pending' or 'processing' — keep polling
     } catch (error) {
-      handleFetchError(error, `Polling error for job ${jobId}`);
+      // If it's a terminal error (404, failed job), rethrow immediately
+      if (error instanceof ApiError && (error.type === ErrorTypes.CLIENT_ERROR || error.message.includes('failed'))) {
+        throw error;
+      }
+      // Otherwise log and continue polling (network blip, etc.)
+      console.warn(`Polling attempt failed for job ${jobId}, retrying...`, error);
     }
+
+    await sleep(POLL_INTERVAL_MS, signal);
   }
 
   throw new ApiError(
