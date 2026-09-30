@@ -9,9 +9,33 @@ on:
     branches:
       - develop
 
+env:
+  DEPLOY_BRANCH: develop
+
 jobs:
+  validate-workflow-run:
+    name: Validate workflow_run source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless CI completed on deploy branch
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "Frontend CI did not complete successfully. Conclusion: ${{ github.event.workflow_run.conclusion }}"
+            exit 1
+          fi
+
+          if [ "${{ github.event.workflow_run.event }}" != "push" ]; then
+            echo "Deployment only runs for push-triggered CI runs. Event: ${{ github.event.workflow_run.event }}"
+            exit 1
+          fi
+
+          if [ "${{ github.event.workflow_run.head_branch }}" != "${DEPLOY_BRANCH}" ]; then
+            echo "Deployment only runs from ${DEPLOY_BRANCH}. Head branch: ${{ github.event.workflow_run.head_branch }}"
+            exit 1
+          fi
+
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    needs: validate-workflow-run
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -19,6 +43,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

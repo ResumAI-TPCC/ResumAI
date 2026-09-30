@@ -2,146 +2,83 @@
 Response schemas for LLM Service
 
 Defines the structured data formats for LLM provider responses.
-These dataclasses are used internally to parse and validate LLM outputs
+These Pydantic models are used internally to parse and validate LLM outputs
 before converting to API response schemas defined in resume_schema.py.
 
-Usage Example:
-    from app.services.llm.schemas import AnalyzeResult, Suggestion
-    
-    # Parse LLM response into structured format
-    result = AnalyzeResult(
-        suggestions=[
-            Suggestion(
-                category="content",
-                priority="high",
-                title="Add quantifiable metrics",
-                description="Include specific numbers...",
-                example="Increased performance by 40%"
-            )
-        ]
-    )
+Using pydantic.BaseModel (instead of dataclass) enables with_structured_output()
+in LangChain, which generates a JSON Schema from the model and passes it to
+Gemini's Function Calling API to guarantee structured output.
 """
 
-from dataclasses import dataclass, field
 from typing import List, Optional
+from pydantic import BaseModel, Field
 
 
-@dataclass
-class Suggestion:
+class Suggestion(BaseModel):
     """
     Single improvement suggestion from LLM analysis.
-    
+
     Attributes:
         category: Type of suggestion (e.g., "content", "skills", "formatting")
         priority: Importance level - "high", "medium", or "low"
         title: Brief summary of the suggestion
         description: Detailed explanation of what to improve and why
-        example: Optional example text showing the improvement (for analyze)
+        example: Optional Before/After example (for analyze)
         action: Optional specific action to take (for match)
-        
-    Example:
-        >>> suggestion = Suggestion(
-        ...     category="skills",
-        ...     priority="high",
-        ...     title="Highlight Python experience",
-        ...     description="Python is mentioned in the JD but not prominent in resume",
-        ...     action="Move Python to top of skills section"
-        ... )
     """
-    category: str
-    priority: str
-    title: str
-    description: str
-    example: Optional[str] = None
-    action: Optional[str] = None
+
+    category: str = Field(description="Type of suggestion, e.g. content/skills/format/language")
+    priority: str = Field(description="Importance level: high, medium, or low")
+    title: str = Field(description="Brief title, max 10 words")
+    description: str = Field(description="Detailed explanation of the improvement")
+    example: Optional[str] = Field(default=None, description="Before vs After example (for analyze)")
+    action: Optional[str] = Field(default=None, description="Specific action to take (for match)")
 
 
-@dataclass
-class AnalyzeResult:
+class AnalyzeResult(BaseModel):
     """
     Result from resume analysis operation.
-    
+
     Contains a list of suggestions for improving the resume's overall quality,
     independent of any specific job description.
-    
-    Attributes:
-        suggestions: List of improvement suggestions
-        
-    Example:
-        >>> result = AnalyzeResult(suggestions=[
-        ...     Suggestion(category="content", priority="high", ...)
-        ... ])
     """
-    suggestions: List[Suggestion] = field(default_factory=list)
+
+    suggestions: List[Suggestion] = Field(default_factory=list)
 
 
-@dataclass
-class MatchBreakdown:
+class MatchBreakdown(BaseModel):
     """
     Detailed breakdown of resume-JD match score by category.
-    
-    Each score is a percentage (0-100) indicating how well the resume
-    matches the job description in that specific category.
-    
-    Attributes:
-        skills_match: Match score for technical and soft skills (0-100)
-        experience_match: Match score for work experience relevance (0-100)
-        education_match: Match score for education requirements (0-100)
-        keywords_match: Match score for JD keywords presence (0-100)
-        
-    Example:
-        >>> breakdown = MatchBreakdown(
-        ...     skills_match=85,
-        ...     experience_match=75,
-        ...     education_match=90,
-        ...     keywords_match=70
-        ... )
+
+    Each score is a percentage (0-100). Field constraints replace the manual
+    max(0, min(100, ...)) clamp that was previously done in _parse_match_score.
     """
-    skills_match: int = 0
-    experience_match: int = 0
-    education_match: int = 0
-    keywords_match: int = 0
+
+    skills_match: int = Field(default=0, ge=0, le=100)
+    experience_match: int = Field(default=0, ge=0, le=100)
+    education_match: int = Field(default=0, ge=0, le=100)
+    keywords_match: int = Field(default=0, ge=0, le=100)
 
 
-@dataclass
-class MatchResult:
+class MatchResult(BaseModel):
     """
     Result from resume-JD matching operation.
-    
+
     Contains overall match score, detailed breakdown by category,
     and suggestions for improving alignment with the job description.
-    
-    Attributes:
-        match_score: Overall match percentage (0-100)
-        match_breakdown: Detailed scores by category
-        suggestions: List of improvement suggestions specific to the JD
-        
-    Example:
-        >>> result = MatchResult(
-        ...     match_score=78,
-        ...     match_breakdown=MatchBreakdown(skills_match=85, ...),
-        ...     suggestions=[Suggestion(category="skills", ...)]
-        ... )
     """
-    match_score: int = 0
-    match_breakdown: MatchBreakdown = field(default_factory=MatchBreakdown)
-    suggestions: List[Suggestion] = field(default_factory=list)
+
+    match_score: int = Field(default=0, ge=0, le=100)
+    match_breakdown: MatchBreakdown = Field(default_factory=MatchBreakdown)
+    suggestions: List[Suggestion] = Field(default_factory=list)
 
 
-@dataclass
-class OptimizeResult:
+class OptimizeResult(BaseModel):
     """
     Result from resume optimization operation.
-    
+
     Contains the optimized resume content generated by the LLM,
-    typically in Markdown format ready for download.
-    
-    Attributes:
-        optimized_content: The rewritten resume text (Markdown format)
-        
-    Example:
-        >>> result = OptimizeResult(
-        ...     optimized_content="# John Doe\n\n## Experience\n..."
-        ... )
+    in Markdown format ready for PDF conversion.
     """
+
     optimized_content: str = ""
