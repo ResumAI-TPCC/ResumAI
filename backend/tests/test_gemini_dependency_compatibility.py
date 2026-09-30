@@ -1,6 +1,6 @@
 """Exercise real LangChain chains with only the Gemini transport mocked."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
@@ -34,7 +34,7 @@ async def test_structured_chains_parse_gemini_tool_calls(operation, schema, payl
         content="",
         tool_calls=[{"name": schema.__name__, "args": payload, "id": "test-call"}],
     ))])
-    with patch.object(ChatGoogleGenerativeAI, "_agenerate", new_callable=AsyncMock) as api:
+    with patch.object(ChatGoogleGenerativeAI, "_agenerate", autospec=True) as api:
         api.return_value = response
         provider = GeminiProvider(api_key="test-key-not-a-real-credential")
         result = await getattr(provider, operation)([HumanMessage(content="Resume")])
@@ -49,7 +49,7 @@ async def test_structured_chains_parse_gemini_tool_calls(operation, schema, payl
 async def test_text_chain_preserves_markdown():
     markdown = "# Resume\n\nImproved latency by 40%."
     response = ChatResult(generations=[ChatGeneration(message=AIMessage(content=markdown))])
-    with patch.object(ChatGoogleGenerativeAI, "_agenerate", new_callable=AsyncMock) as api:
+    with patch.object(ChatGoogleGenerativeAI, "_agenerate", autospec=True) as api:
         api.return_value = response
         provider = GeminiProvider(api_key="test-key-not-a-real-credential")
         result = await provider.optimize([HumanMessage(content="Resume")])
