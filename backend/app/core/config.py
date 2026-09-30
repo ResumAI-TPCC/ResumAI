@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     # Gemini settings
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
     GEMINI_TEMPERATURE: float = 0.7
     GEMINI_MAX_TOKENS: int = 8192
     GEMINI_TIMEOUT: float = 60.0
@@ -61,6 +62,9 @@ class Settings(BaseSettings):
     # Job queue settings (RA-82)
     MAX_QUEUE_SIZE: int = 20
     RESULT_TTL_SECONDS: int = 1800  # 30 minutes
+
+    # RAG retrieval timeout (seconds). Stalls must not block the serial job worker.
+    RAG_RETRIEVAL_TIMEOUT_SECONDS: float = 10.0
 
 @lru_cache
 def get_settings() -> Settings:
