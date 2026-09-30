@@ -108,6 +108,8 @@ jobs:
           APP_VERSION: ${{ github.event.inputs.version }}
         run: |
           gcloud run deploy prod-service \
+            --min-instances=1 \
+            --max-instances=1 \
             --image gcr.io/${{ secrets.PROD_GCP_PROJECT_ID }}/backend-prod:${{ github.sha }} \
             --region asia-southeast1 \
             --platform managed \
