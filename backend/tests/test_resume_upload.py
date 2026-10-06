@@ -3,11 +3,14 @@ Tests for Resume Upload Endpoint (RA-24)
 """
 
 import io
+import logging
 import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
+from google.api_core.exceptions import Forbidden, NotFound
 from app.main import create_app
 from app.core.config import settings
+from app.core.error_templates import GCS_BUCKET_NOT_FOUND, GCS_UPLOAD_FAILED
 
 
 @pytest.fixture
@@ -87,10 +90,6 @@ class FakeBucket:
 
     def blob(self, name):
         return FakeBlob(name, self)
-    
-    def exists(self):
-        """Mock bucket.exists() to return True"""
-        return True
 
 
 class FakeBlob:
@@ -183,3 +182,69 @@ def test_upload_resume_file_too_large(monkeypatch):
     
     assert response.status_code == 400
     assert "too large" in response.json()["detail"].lower()
+
+
+class _FailingBlob(FakeBlob):
+    """Blob whose upload raises, to exercise the error classification paths."""
+
+    def __init__(self, name, bucket, error):
+        super().__init__(name, bucket)
+        self._error = error
+
+    def upload_from_string(self, content, content_type=None):
+        raise self._error
+
+
+class FailingBucket(FakeBucket):
+    def __init__(self, error):
+        super().__init__()
+        self._error = error
+
+    def blob(self, name):
+        return _FailingBlob(name, self, self._error)
+
+
+class FailingClient(FakeClient):
+    def __init__(self, error):
+        super().__init__()
+        self.bucket_obj = FailingBucket(error)
+
+
+def _upload_pdf_with_client(fake_client):
+    app = create_app()
+    client = TestClient(app)
+
+    with patch("app.services.storage.gcs_service.get_gcs_client", return_value=fake_client), \
+         patch("app.services.resume_service.validate_pdf_content", return_value=None), \
+         patch.object(settings, "GCS_BUCKET_NAME", "test-bucket"), \
+         patch.object(settings, "GCS_OBJECT_PREFIX", "resumes"), \
+         patch.object(settings, "GCP_PROJECT_ID", "test-project"):
+
+        files = {"file": ("test.pdf", b"%PDF-1.4\nfake\n", "application/pdf")}
+        return client.post(f"{settings.API_PREFIX}/resumes/", files=files)
+
+
+def test_upload_reports_missing_bucket_as_configuration_error():
+    """A missing bucket is detected from the upload itself, not a pre-flight probe."""
+    response = _upload_pdf_with_client(FailingClient(NotFound("bucket gone")))
+
+    assert response.status_code == GCS_BUCKET_NOT_FOUND.code
+    assert response.json()["detail"] == GCS_BUCKET_NOT_FOUND.detail
+
+
+def test_upload_reports_other_failures_as_upload_error():
+    response = _upload_pdf_with_client(FailingClient(Forbidden("no access")))
+
+    assert response.status_code == GCS_UPLOAD_FAILED.code
+    assert response.json()["detail"] == GCS_UPLOAD_FAILED.detail
+
+
+def test_upload_failure_is_logged_with_traceback(caplog):
+    """The root cause must reach the logs; it used to be swallowed silently."""
+    with caplog.at_level(logging.ERROR, logger="app.services.storage.gcs_service"):
+        _upload_pdf_with_client(FailingClient(Forbidden("no access")))
+
+    records = [r for r in caplog.records if r.name == "app.services.storage.gcs_service"]
+    assert records, "upload failure was not logged"
+    assert records[0].exc_info is not None
+    assert "no access" in caplog.text

@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException, status
+from google.api_core.exceptions import NotFound
 from google.cloud import storage
 from google.oauth2 import service_account
 
@@ -21,6 +23,8 @@ from app.core.error_templates import (
     GCS_BUCKET_NOT_FOUND,
     GCS_UPLOAD_FAILED,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def get_gcs_client() -> storage.Client:
@@ -66,14 +70,6 @@ def upload_file_to_gcs(
     try:
         client = get_gcs_client()
         bucket = client.bucket(settings.GCS_BUCKET_NAME)
-        
-        # Check if bucket exists
-        if not bucket.exists():
-            raise HTTPException(
-                status_code=GCS_BUCKET_NOT_FOUND.code,
-                detail=GCS_BUCKET_NOT_FOUND.detail,
-            )
-        
         blob = bucket.blob(object_name)
         
         # Set expiration metadata if not provided
@@ -89,7 +85,27 @@ def upload_file_to_gcs(
         )
     except HTTPException:
         raise
+    except NotFound as exc:
+        # The upload itself reports a missing bucket, so no pre-flight probe is
+        # needed to tell a misconfigured bucket apart from a failed write.
+        logger.error(
+            "GCS bucket '%s' not found while uploading %s",
+            settings.GCS_BUCKET_NAME,
+            object_name,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=GCS_BUCKET_NOT_FOUND.code,
+            detail=GCS_BUCKET_NOT_FOUND.detail,
+        ) from exc
     except Exception as exc:
+        logger.error(
+            "GCS upload to '%s/%s' failed: %s",
+            settings.GCS_BUCKET_NAME,
+            object_name,
+            exc,
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=GCS_UPLOAD_FAILED.code,
             detail=GCS_UPLOAD_FAILED.detail,
