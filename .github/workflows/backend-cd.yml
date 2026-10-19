@@ -91,7 +91,11 @@ jobs:
 
     - name: 'Deploy to Cloud Run'
       run: |
+        # The job queue and results live in process memory, so the service must
+        # run as a single instance with CPU kept on for the background worker.
         gcloud run deploy ${SERVICE_NAME} \
+          --max-instances=1 \
+          --no-cpu-throttling \
           --image gcr.io/${PROJECT_ID}/${IMAGE_NAME}:${{ github.event.workflow_run.head_sha }} \
           --region ${REGION} \
           --platform managed \
