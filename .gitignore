@@ -235,3 +235,5 @@ frontend/build/
 # Coding Assistants
 copilot-instructions.md
 CLAUDE.md
+# Local tool output
+lint-output.txt

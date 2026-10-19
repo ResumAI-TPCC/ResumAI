@@ -93,14 +93,4 @@ export default [
             'react/react-in-jsx-scope': 'off',
         },
     },
-
-    // 4) Node.js 脚本 (lint-summary.js 等)
-    {
-        files: ['lint-summary.js'],
-        languageOptions: {
-            globals: {
-                ...globals.node,
-            },
-        },
-    },
 ]
