@@ -8,7 +8,7 @@
         "build": "vite build",
         "preview": "vite preview",
         "test": "jest --ci",
-        "lint": "node lint-summary.js"
+        "lint": "eslint ."
     },
     "dependencies": {
         "react": "^18.2.0",
