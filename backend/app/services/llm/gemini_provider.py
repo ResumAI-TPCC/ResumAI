@@ -4,7 +4,8 @@ Google Gemini LLM Provider — LangChain-based implementation.
 Replaces the direct google-genai SDK with langchain-google-genai so that:
   - with_structured_output() drives schema enforcement via Function Calling
     for analyze and match, eliminating all manual JSON parsing.
-  - with_retry() replaces the hand-written retry loop with exponential backoff.
+  - with_retry() replaces the hand-written retry loop with exponential backoff;
+    only transient errors (rate limit, 5xx, timeout) are retried.
   - Messages assembled by PromptBuilder (List[BaseMessage]) are passed
     directly to ainvoke(), keeping the provider interface clean.
 
@@ -12,9 +13,11 @@ optimize uses plain ainvoke() because its result is free-text Markdown
 fed into the PDF renderer — no structured output is needed.
 """
 
+import asyncio
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple, Type
 
+from google.api_core import exceptions as google_exceptions
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import BaseMessage
 from langchain_core.exceptions import OutputParserException
@@ -29,13 +32,48 @@ from .exceptions import (
     LLMRateLimitError,
     LLMResponseError,
     LLMServiceUnavailableError,
+    LLMTimeoutError,
 )
 
 logger = logging.getLogger(__name__)
 
 
+# Errors worth retrying: rate limits, server-side failures and timeouts.
+# Anything else (bad API key, invalid request, ...) fails on the first attempt.
+_TRANSIENT_ERRORS: Tuple[Type[BaseException], ...] = (
+    google_exceptions.TooManyRequests,
+    google_exceptions.ResourceExhausted,
+    google_exceptions.InternalServerError,
+    google_exceptions.ServiceUnavailable,
+    google_exceptions.DeadlineExceeded,
+    asyncio.TimeoutError,
+    TimeoutError,
+)
+
+
+def _build_chat_model(api_key: str, temperature: float) -> ChatGoogleGenerativeAI:
+    """Create a Gemini chat model with a per-request timeout.
+
+    The client's built-in retry (default 6 attempts on any Google API error,
+    including auth errors) is disabled with max_retries=1; retries are handled
+    once, by the with_retry() policy in GeminiProvider.
+    """
+    return ChatGoogleGenerativeAI(
+        model=settings.GEMINI_MODEL,
+        google_api_key=api_key,
+        temperature=temperature,
+        max_output_tokens=settings.GEMINI_MAX_TOKENS,
+        timeout=settings.GEMINI_TIMEOUT,
+        max_retries=1,
+    )
+
+
 def _map_exception(exc: Exception) -> LLMException:
     """Map a generic / LangChain exception to the appropriate LLMException."""
+    if isinstance(
+        exc, (google_exceptions.DeadlineExceeded, asyncio.TimeoutError, TimeoutError)
+    ):
+        return LLMTimeoutError()
     msg = str(exc).lower()
     if "api key" in msg or "unauthenticated" in msg or "permission" in msg:
         return LLMAuthenticationError()
@@ -71,31 +109,30 @@ class GeminiProvider(BaseLLMProvider):
             self._text_llm = None
             return
 
-        base_llm = ChatGoogleGenerativeAI(
-            model=settings.GEMINI_MODEL,
-            google_api_key=resolved_key,
-            temperature=settings.GEMINI_TEMPERATURE,
-            max_output_tokens=settings.GEMINI_MAX_TOKENS,
-        )
+        base_llm = _build_chat_model(resolved_key, settings.GEMINI_TEMPERATURE)
 
         # match scoring uses low temperature for consistent, reproducible scores
-        match_llm = ChatGoogleGenerativeAI(
-            model=settings.GEMINI_MODEL,
-            google_api_key=resolved_key,
-            temperature=0.2,
-            max_output_tokens=settings.GEMINI_MAX_TOKENS,
-        )
+        match_llm = _build_chat_model(resolved_key, 0.2)
 
         # with_structured_output must be called on the bare LLM before with_retry
         # because RunnableRetry does not expose with_structured_output.
+        # Structured chains also retry parse failures: a malformed tool call is
+        # usually fixed by asking again.
+        structured_retry = {
+            "retry_if_exception_type": _TRANSIENT_ERRORS + (OutputParserException,),
+            "wait_exponential_jitter": True,
+            "stop_after_attempt": settings.GEMINI_MAX_RETRIES,
+        }
         self._analyze_chain = base_llm.with_structured_output(AnalyzeResult).with_retry(
-            stop_after_attempt=settings.GEMINI_MAX_RETRIES
+            **structured_retry
         )
         self._match_chain = match_llm.with_structured_output(MatchResult).with_retry(
-            stop_after_attempt=settings.GEMINI_MAX_RETRIES
+            **structured_retry
         )
         self._text_llm = base_llm.with_retry(
-            stop_after_attempt=settings.GEMINI_MAX_RETRIES
+            retry_if_exception_type=_TRANSIENT_ERRORS,
+            wait_exponential_jitter=True,
+            stop_after_attempt=settings.GEMINI_MAX_RETRIES,
         )
 
     @property
