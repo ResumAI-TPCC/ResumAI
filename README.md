@@ -21,7 +21,7 @@ Users upload a resume and can:
                                   Storage          LangChain)
 ```
 
-- **Backend** (`backend/`): FastAPI, Python 3.10+, Poetry. Uploads go to GCS keyed by a `session_id` (no user accounts; sessions expire after 24 h). LLM work runs asynchronously: endpoints return `202 Accepted` with a `job_id`, and the client polls `GET /api/jobs/{job_id}`.
+- **Backend** (`backend/`): FastAPI, Python 3.11+, Poetry. Uploads go to GCS keyed by a `session_id` (no user accounts; sessions expire after 24 h). LLM work runs asynchronously: endpoints return `202 Accepted` with a `job_id`, and the client polls `GET /api/jobs/{job_id}`.
 - **Frontend** (`frontend/`): React 18, Vite, Tailwind CSS 3. Single-page layout; state lives in `pages/ResumeAnalysisPage.jsx` and is persisted to `localStorage`.
 - **Docs** (`doc/`): design doc and QA reports.
 
