@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    # 0 keeps routine version-update PRs off (same as before this file existed).
+    # Security updates are not affected by this limit.
+    open-pull-requests-limit: 0
+    ignore:
+      # Tailwind v4 changes the config format (tailwind.config.js, postcss.config.js,
+      # @tailwind directives) and needs a manual migration plus a visual check.
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
