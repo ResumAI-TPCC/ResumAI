@@ -4,47 +4,42 @@ ResumAI Backend Service - An AI-powered resume optimization assistant API built 
 
 ## Tech Stack
 
-- **Framework**: FastAPI 0.109.0
-- **Server**: Uvicorn
-- **Configuration**: Pydantic Settings
-- **HTTP Client**: HTTPX
+- **Framework**: FastAPI + Uvicorn
+- **Configuration**: Pydantic Settings (`app/core/config.py`, read from `.env`)
+- **LLM**: Google Gemini via LangChain (`langchain-google-genai`)
+- **Storage**: Google Cloud Storage
+- **Document parsing**: pypdf, python-docx
+- **Tooling**: Poetry, Ruff, pytest (+ pytest-asyncio)
 
 ## Project Structure
 
 ```
 backend/
 ├── app/
-│   ├── __init__.py
-│   ├── main.py                 # FastAPI application entry point
-│   │
-│   ├── api/                    # API layer
-│   │   ├── __init__.py
-│   │   └── routes/             # Route modules (implemented by RA-12)
-│   │       └── __init__.py
-│   │
-│   ├── core/                   # Core configuration
-│   │   ├── __init__.py
-│   │   └── config.py           # Application settings (env variables)
-│   │
-│   ├── models/                 # Database models (reserved)
-│   │   └── __init__.py
-│   │
-│   ├── schemas/                # Pydantic schemas (implemented by RA-12)
-│   │   └── __init__.py
-│   │
-│   └── services/               # Business service layer
-│       ├── __init__.py
-│       └── llm/                # LLM service
-│           ├── __init__.py
-│           ├── base.py         # Abstract provider base class
-│           └── factory.py      # Provider factory
-│
-├── venv/                       # Python virtual environment
-├── poetry.lock                 # Locked dependency list and details
-├── pyproject.toml              # Dependencies
-├── run.py                      # Development server script
-├── env.example                 # Environment variables template
-└── README.md
+│   ├── main.py                 # FastAPI app, CORS, lifespan (starts job worker)
+│   ├── api/routes/             # HTTP layer
+│   │   ├── resumes.py          # upload / analyze / match / optimize
+│   │   ├── interviews.py       # mock interview start / answer
+│   │   └── jobs.py             # poll async job status
+│   ├── core/
+│   │   ├── config.py           # Application settings (env variables)
+│   │   └── error_templates.py  # User-facing error messages
+│   ├── schemas/                # Pydantic request/response schemas
+│   └── services/
+│       ├── resume_service.py   # Upload + retrieve resume content
+│       ├── interview_service.py
+│       ├── pdf_service.py      # Markdown → PDF
+│       ├── jobs/               # In-memory job queue + result store
+│       ├── llm/                # Provider base class, factory, Gemini provider, LLM service
+│       ├── parsers/            # PDF / DOCX / DOC / TXT parsing
+│       ├── prompt/             # Prompt templates and builders
+│       ├── storage/            # GCS helpers
+│       └── validators/         # File, session and content moderation checks
+├── tests/                      # pytest suite
+├── Dockerfile                  # Image used by Cloud Run
+├── pyproject.toml / poetry.lock
+├── run.py                      # Development server (hot reload)
+└── env.example                 # Environment variables template
 ```
 
 ## Quick Start
@@ -67,7 +62,7 @@ poetry install --no-root # Install dependencies from poetry.lock file
 
 ### 3. Configure Environment Variables
 
-Rename the `env.exmaple` file to `.env` file or run below command
+Rename the `env.example` file to `.env` file or run below command
 ```bash
 cp env.example .env
 ```
@@ -98,7 +93,7 @@ python run.py
 
 Server runs at http://localhost:8000 by default.
 
-### 5. Add a new package
+### 6. Add a new package
 
 If any new package needs to be added to this project, please
 ```bash
@@ -107,14 +102,29 @@ poetry add <package-name>
 # and also install the package to your environment
 ```
 
+## Running Tests and Lint
+
+```bash
+pytest          # all tests
+ruff check .    # lint
+```
+
 ## API Endpoints
 
-| Endpoint               | Method | Description                                    |
-| ---------------------- | ------ | ---------------------------------------------- |
-| `/api/resume`          | POST   | Upload & parse resume file, initialize session |
-| `/api/resume/analyze`  | POST   | Analyze resume and generate suggestions        |
-| `/api/resume/match`    | POST   | Calculate resume-job match score               |
-| `/api/resume/optimize` | POST   | Optimize and rewrite resume                    |
+Interactive docs: http://localhost:8000/api/docs
+
+| Endpoint                  | Method | Description                                         |
+| ------------------------- | ------ | --------------------------------------------------- |
+| `/api/resumes/`           | POST   | Upload resume file, returns `session_id`            |
+| `/api/resumes/analyze`    | POST   | Queue analysis job, returns `job_id` (202)          |
+| `/api/resumes/match`      | POST   | Queue resume–job match job, returns `job_id` (202)  |
+| `/api/resumes/optimize`   | POST   | Queue optimization job, returns `job_id` (202)      |
+| `/api/interviews/start`   | POST   | Queue mock interview question generation (202)     |
+| `/api/interviews/answer`  | POST   | Queue evaluation of one answer (202)               |
+| `/api/jobs/{job_id}`      | GET    | Poll job status / result                            |
+| `/health`                 | GET    | Health check                                        |
+
+LLM work runs on a single background worker. The queue and results live in process memory (results kept for 30 minutes), so the service is designed to run as a single instance.
 
 ### Directory Responsibilities
 
@@ -122,6 +132,5 @@ poetry add <package-name>
 | ------------- | ----------------------------------------------------- |
 | `api/routes/` | HTTP routing, request validation, response formatting |
 | `core/`       | Application configuration, common dependencies        |
-| `models/`     | Database ORM models (reserved)                        |
 | `schemas/`    | Pydantic request/response schema definitions          |
 | `services/`   | Business logic, external service integrations         |

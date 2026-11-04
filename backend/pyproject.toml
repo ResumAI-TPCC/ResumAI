@@ -9,7 +9,7 @@ authors = [
     {name = "ResumAI-TPCC",email = "resumaitpcc@gmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.10,<4.0"
+requires-python = ">=3.11,<4.0"
 dependencies = [
     "fastapi (>=0.128.0)",
     "uvicorn[standard] (>=0.27.0)",
@@ -20,7 +20,7 @@ dependencies = [
     "python-dotenv (>=1.0.0)",
     "pydantic-settings (>=2.14.2)",
     "python-multipart (>=0.0.31)",
-    "pypdf (>=6.16.1,<7.0.0)",
+    "pypdf (>=6.21.4,<7.0.0)",
     "python-docx (>=1.1.2,<2.0.0)",
     "pytest (>=9.0.3,<10.0.0)",
     "pytest-asyncio (>=1.0.0)",

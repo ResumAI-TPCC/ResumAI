@@ -33,38 +33,38 @@ const PRIORITY_CONFIG = {
  */
 const ERROR_CONFIG = {
   [ErrorTypes.NETWORK_ERROR]: {
-    title: '网络错误',
-    suggestion: '请检查您的网络连接后重试',
+    title: 'Network Error',
+    suggestion: 'Please check your network connection and try again.',
     retryable: true,
   },
   [ErrorTypes.TIMEOUT_ERROR]: {
-    title: '请求超时',
-    suggestion: '服务器响应时间过长，请稍后重试',
+    title: 'Request Timed Out',
+    suggestion: 'The server took too long to respond. Please try again later.',
     retryable: true,
   },
   [ErrorTypes.SERVER_ERROR]: {
-    title: '服务器错误',
-    suggestion: '服务器暂时不可用，请稍后重试',
+    title: 'Server Error',
+    suggestion: 'The server is temporarily unavailable. Please try again later.',
     retryable: true,
   },
   [ErrorTypes.CLIENT_ERROR]: {
-    title: '请求错误',
-    suggestion: '请检查您的输入后重试',
+    title: 'Request Error',
+    suggestion: 'Please check your input and try again.',
     retryable: false,
   },
   [ErrorTypes.CANCELLED]: {
-    title: '已取消',
-    suggestion: '操作已取消',
+    title: 'Cancelled',
+    suggestion: 'The operation was cancelled.',
     retryable: false,
   },
   [ErrorTypes.VALIDATION_ERROR]: {
-    title: '验证错误',
-    suggestion: '请提供有效的输入',
+    title: 'Validation Error',
+    suggestion: 'Please provide valid input.',
     retryable: false,
   },
   [ErrorTypes.UNKNOWN_ERROR]: {
-    title: '未知错误',
-    suggestion: '发生了意外错误，请重试',
+    title: 'Unexpected Error',
+    suggestion: 'Something went wrong. Please try again.',
     retryable: true,
   },
 }
@@ -119,7 +119,7 @@ function ErrorDisplay({ error, onRetry }) {
               onClick={onRetry}
               className="mt-4 px-4 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
             >
-              重试
+              Retry
             </button>
           )}
         </div>

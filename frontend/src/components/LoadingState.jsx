@@ -18,28 +18,28 @@ export const LoadingStateType = {
  */
 const LOADING_CONFIG = {
   [LoadingStateType.UPLOADING]: {
-    title: '上传中...',
-    description: '正在上传您的简历文件',
+    title: 'Uploading...',
+    description: 'Uploading your resume file',
     icon: 'upload',
   },
   [LoadingStateType.PROCESSING]: {
-    title: '处理中...',
-    description: '正在处理您的请求',
+    title: 'Processing...',
+    description: 'Processing your request',
     icon: 'process',
   },
   [LoadingStateType.ANALYZING]: {
-    title: '分析中...',
-    description: 'AI 正在分析您的简历',
+    title: 'Analyzing...',
+    description: 'AI is analyzing your resume',
     icon: 'analyze',
   },
   [LoadingStateType.MATCHING]: {
-    title: '匹配中...',
-    description: '正在计算简历与职位的匹配度',
+    title: 'Matching...',
+    description: 'Calculating how well your resume matches the job',
     icon: 'match',
   },
   [LoadingStateType.OPTIMIZING]: {
-    title: '优化中...',
-    description: 'AI 正在优化您的简历',
+    title: 'Optimizing...',
+    description: 'AI is optimizing your resume',
     icon: 'optimize',
   },
 }
@@ -116,9 +116,9 @@ function LoadingState({
         <button
           onClick={onCancel}
           className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-300"
-          aria-label="取消当前操作"
+          aria-label="Cancel current operation"
         >
-          取消
+          Cancel
         </button>
       )}
     </div>

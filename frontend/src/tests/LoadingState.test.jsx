@@ -44,7 +44,7 @@ describe('LoadingState Component', () => {
         />
       )
       
-      expect(screen.getByText('处理中...')).toBeInTheDocument()
+      expect(screen.getByText('Processing...')).toBeInTheDocument()
     })
 
     test('renders default description when isLoading is true', () => {
@@ -54,7 +54,7 @@ describe('LoadingState Component', () => {
         />
       )
       
-      expect(screen.getByText('正在处理您的请求')).toBeInTheDocument()
+      expect(screen.getByText('Processing your request')).toBeInTheDocument()
     })
   })
 
@@ -68,8 +68,8 @@ describe('LoadingState Component', () => {
         />
       )
       
-      expect(screen.getByText('上传中...')).toBeInTheDocument()
-      expect(screen.getByText('正在上传您的简历文件')).toBeInTheDocument()
+      expect(screen.getByText('Uploading...')).toBeInTheDocument()
+      expect(screen.getByText('Uploading your resume file')).toBeInTheDocument()
     })
 
     test('displays processing state correctly', () => {
@@ -80,8 +80,8 @@ describe('LoadingState Component', () => {
         />
       )
       
-      expect(screen.getByText('处理中...')).toBeInTheDocument()
-      expect(screen.getByText('正在处理您的请求')).toBeInTheDocument()
+      expect(screen.getByText('Processing...')).toBeInTheDocument()
+      expect(screen.getByText('Processing your request')).toBeInTheDocument()
     })
 
     test('displays analyzing state correctly', () => {
@@ -92,8 +92,8 @@ describe('LoadingState Component', () => {
         />
       )
       
-      expect(screen.getByText('分析中...')).toBeInTheDocument()
-      expect(screen.getByText('AI 正在分析您的简历')).toBeInTheDocument()
+      expect(screen.getByText('Analyzing...')).toBeInTheDocument()
+      expect(screen.getByText('AI is analyzing your resume')).toBeInTheDocument()
     })
 
     test('displays matching state correctly', () => {
@@ -104,8 +104,8 @@ describe('LoadingState Component', () => {
         />
       )
       
-      expect(screen.getByText('匹配中...')).toBeInTheDocument()
-      expect(screen.getByText('正在计算简历与职位的匹配度')).toBeInTheDocument()
+      expect(screen.getByText('Matching...')).toBeInTheDocument()
+      expect(screen.getByText('Calculating how well your resume matches the job')).toBeInTheDocument()
     })
 
     test('displays optimizing state correctly', () => {
@@ -116,8 +116,8 @@ describe('LoadingState Component', () => {
         />
       )
       
-      expect(screen.getByText('优化中...')).toBeInTheDocument()
-      expect(screen.getByText('AI 正在优化您的简历')).toBeInTheDocument()
+      expect(screen.getByText('Optimizing...')).toBeInTheDocument()
+      expect(screen.getByText('AI is optimizing your resume')).toBeInTheDocument()
     })
   })
 
@@ -127,11 +127,11 @@ describe('LoadingState Component', () => {
       render(
         <LoadingState 
           isLoading={true}
-          customMessage="正在准备数据..."
+          customMessage="Preparing data..."
         />
       )
       
-      expect(screen.getByText('正在准备数据...')).toBeInTheDocument()
+      expect(screen.getByText('Preparing data...')).toBeInTheDocument()
     })
 
     test('custom message overrides default title', () => {
@@ -139,13 +139,13 @@ describe('LoadingState Component', () => {
         <LoadingState 
           isLoading={true}
           stateType={LoadingStateType.ANALYZING}
-          customMessage="自定义消息"
+          customMessage="Custom message"
         />
       )
       
-      expect(screen.getByText('自定义消息')).toBeInTheDocument()
+      expect(screen.getByText('Custom message')).toBeInTheDocument()
       // Description should still show the default
-      expect(screen.getByText('AI 正在分析您的简历')).toBeInTheDocument()
+      expect(screen.getByText('AI is analyzing your resume')).toBeInTheDocument()
     })
   })
 
@@ -216,7 +216,7 @@ describe('LoadingState Component', () => {
         />
       )
       
-      expect(screen.queryByText('取消')).not.toBeInTheDocument()
+      expect(screen.queryByText('Cancel')).not.toBeInTheDocument()
     })
 
     test('shows cancel button when onCancel is provided', () => {
@@ -227,7 +227,7 @@ describe('LoadingState Component', () => {
         />
       )
       
-      expect(screen.getByText('取消')).toBeInTheDocument()
+      expect(screen.getByText('Cancel')).toBeInTheDocument()
     })
 
     test('calls onCancel when cancel button is clicked', () => {
@@ -238,7 +238,7 @@ describe('LoadingState Component', () => {
         />
       )
       
-      const cancelButton = screen.getByText('取消')
+      const cancelButton = screen.getByText('Cancel')
       fireEvent.click(cancelButton)
       
       expect(mockOnCancel).toHaveBeenCalledTimes(1)
@@ -275,8 +275,8 @@ describe('LoadingState Component', () => {
         />
       )
       
-      const cancelButton = screen.getByText('取消')
-      expect(cancelButton).toHaveAttribute('aria-label', '取消当前操作')
+      const cancelButton = screen.getByText('Cancel')
+      expect(cancelButton).toHaveAttribute('aria-label', 'Cancel current operation')
     })
   })
 
@@ -291,7 +291,7 @@ describe('LoadingState Component', () => {
       )
       
       // Should fall back to processing state
-      expect(screen.getByText('处理中...')).toBeInTheDocument()
+      expect(screen.getByText('Processing...')).toBeInTheDocument()
     })
 
     test('ignores progress values outside 0-100 range', () => {
