@@ -157,13 +157,13 @@ function FileUpload({
               </svg>
             </div>
             <div className="flex-1">
-              <h3 className="text-sm font-semibold text-gray-800 mb-1">上传失败</h3>
+              <h3 className="text-sm font-semibold text-gray-800 mb-1">Upload Failed</h3>
               <p className="text-sm text-gray-600">{uploadError}</p>
               <button
                 onClick={handleClick}
                 className="mt-3 px-4 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
               >
-                重新上传
+                Upload Again
               </button>
             </div>
           </div>
