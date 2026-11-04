@@ -113,7 +113,7 @@ describe('AnalysisOutput Component', () => {
       rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
 
       await waitFor(() => {
-        expect(screen.getByText(/分析中.../i)).toBeInTheDocument()
+        expect(screen.getByText('Analyzing...')).toBeInTheDocument()
       })
 
       finishRequest()
@@ -131,7 +131,7 @@ describe('AnalysisOutput Component', () => {
       rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
 
       await waitFor(() => {
-        expect(screen.getByText(/匹配中.../i)).toBeInTheDocument()
+        expect(screen.getByText('Matching...')).toBeInTheDocument()
       })
 
       finishRequest()
@@ -361,8 +361,8 @@ describe('AnalysisOutput Component', () => {
       rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
 
       await waitFor(() => {
-        expect(screen.getByText(/网络错误/i)).toBeInTheDocument()
-        expect(screen.getByText(/请检查您的网络连接后重试/i)).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'Network Error' })).toBeInTheDocument()
+        expect(screen.getByText('Please check your network connection and try again.')).toBeInTheDocument()
       })
     })
 
@@ -378,8 +378,8 @@ describe('AnalysisOutput Component', () => {
       rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
 
       await waitFor(() => {
-        expect(screen.getByText(/请求超时/i)).toBeInTheDocument()
-        expect(screen.getByText(/服务器响应时间过长，请稍后重试/i)).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'Request Timed Out' })).toBeInTheDocument()
+        expect(screen.getByText('The server took too long to respond. Please try again later.')).toBeInTheDocument()
       })
     })
 
@@ -395,8 +395,8 @@ describe('AnalysisOutput Component', () => {
       rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
 
       await waitFor(() => {
-        expect(screen.getByText(/服务器错误/i)).toBeInTheDocument()
-        expect(screen.getByText(/服务器暂时不可用，请稍后重试/i)).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'Server Error' })).toBeInTheDocument()
+        expect(screen.getByText('The server is temporarily unavailable. Please try again later.')).toBeInTheDocument()
       })
     })
 
@@ -413,9 +413,9 @@ describe('AnalysisOutput Component', () => {
 
       await waitFor(() => {
         // Use more specific query to match the error title
-        expect(screen.getByRole('heading', { name: /已取消/i })).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'Cancelled' })).toBeInTheDocument()
         // Cancelled error should not show retry button
-        expect(screen.queryByText('重试')).not.toBeInTheDocument()
+        expect(screen.queryByText('Retry')).not.toBeInTheDocument()
       })
     })
 
@@ -433,11 +433,11 @@ describe('AnalysisOutput Component', () => {
 
       // Wait for error to appear
       await waitFor(() => {
-        expect(screen.getByText(/网络错误/i)).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'Network Error' })).toBeInTheDocument()
       })
 
       // Click retry button
-      const retryButton = screen.getByText('重试')
+      const retryButton = screen.getByText('Retry')
       fireEvent.click(retryButton)
 
       // Verify new API call was made
@@ -459,7 +459,7 @@ describe('AnalysisOutput Component', () => {
       rerender(<AnalysisOutput {...props} analyzeSignal={1} />)
 
       await waitFor(() => {
-        expect(screen.getByText('取消')).toBeInTheDocument()
+        expect(screen.getByText('Cancel')).toBeInTheDocument()
       })
 
       finishRequest()
@@ -477,11 +477,11 @@ describe('AnalysisOutput Component', () => {
 
       // Wait for loading state
       await waitFor(() => {
-        expect(screen.getByText('取消')).toBeInTheDocument()
+        expect(screen.getByText('Cancel')).toBeInTheDocument()
       })
 
       // Click cancel
-      const cancelButton = screen.getByText('取消')
+      const cancelButton = screen.getByText('Cancel')
       fireEvent.click(cancelButton)
 
       // Loading state should be removed
@@ -527,7 +527,7 @@ describe('AnalysisOutput Component', () => {
 
       expect(matchResumeWithJob).toHaveBeenCalledTimes(1)
 
-      fireEvent.click(screen.getByText('取消'))
+      fireEvent.click(screen.getByText('Cancel'))
 
       await waitFor(() => {
         expect(screen.queryByRole('status')).not.toBeInTheDocument()
